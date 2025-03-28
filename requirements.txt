@@ -1,0 +1,16 @@
+absl-py==2.1.0
+astunparse==1.6.3
+flatbuffers==24.3.25
+gast==0.6.0
+google-pasta==0.2.0
+keras==3.7.0
+libclang==18.1.1
+ml-dtypes==0.4.1
+namex==0.0.8
+opt_einsum==3.4.0
+optree==0.13.1
+tensorboard==2.18.0
+tensorboard-data-server==0.7.2
+tensorflow==2.18.0
+tensorflow_intel==2.18.0
+termcolor==2.5.0
