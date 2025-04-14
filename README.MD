@@ -1,7 +1,7 @@
 # NYP FYP CNC Chatbot
 1. Git Clone the repository (Branch: **main**)
 
-2. Install [Python Version 3.12.9](https://www.python.org/downloads/release/python-3129/)
+2. Install [Python Version 3.11.9](https://www.python.org/downloads/release/python-3119/)
 
    1. Open the installer and ensure to check the box (add to PATH) on the bottom of the installer screen.
    2. Once done, open the cloned GitHub repository.

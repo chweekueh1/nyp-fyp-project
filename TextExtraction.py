@@ -3,9 +3,12 @@ from unstructured.partition.common import UnsupportedFileFormatError
 from langchain_community.document_transformers.openai_functions import create_metadata_tagger
 from langchain.schema import Document
 from langchain_openai import ChatOpenAI
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_chroma import Chroma
 import openai
 import os
-import shutil
 from glob import glob
 from dotenv import load_dotenv
 import magic
@@ -24,74 +27,64 @@ load_dotenv()
 CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
 CLASSIFICATION_DATA_PATH = os.getenv("CLASSIFICATION_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
+DATABASE_PATH = os.getenv('DATABASE_PATH')
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
 client = openai.OpenAI(api_key=openai.api_key)
 
-def main(file):
+classification_db = Chroma(
+    collection_name = 'classification',
+    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
+    persist_directory=DATABASE_PATH
+)
+
+chat_db = Chroma(
+    collection_name = 'chat',
+    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
+    persist_directory=DATABASE_PATH
+)
+
+def dataProcessing(file, collection=chat_db):
 
     # extract text from file
-    try:
-        document = ExtractText(file)
-    except UnsupportedFileFormatError:
-        directory = os.path.join(CHAT_DATA_PATH, 'error files')
-        os.makedirs(directory, exist_ok=True)
-        shutil.move(file, directory)
+    document = ExtractText(file)
 
     # metadata keyword tagging for document
     document = OpenAIMetadataTagger(document)
-    print(document[0].metadata)
-    print('\n')
+    #print(document[0].metadata)
+    #print('\n')
 
-    document[0].metadata['keywords'] = KeyBERTMetadataTagger(document[0].page_content)
+    #These are put in here for posterity but are weaker and less useful than OpenAIMetadataTagger and thus removed
+    '''document[0].metadata['keywords'] = KeyBERTMetadataTagger(document[0].page_content)
     print(document[0].metadata)
     print('\n')
 
     document[0].metadata['keywords'] = KeyBERTOpenAIMetadataTagger(document[0].page_content)
     print(document[0].metadata)
-    print('\n')
+    print('\n')'''
 
-    # semantic chunking
+    # chunking
 
-    # metadata keyword tagging for chunk
+        # recursive
+    '''recursiveChunker(document)'''
+
+        # semantic
+    chunks = semanticChunker(document)
 
     # batching for efficient processing
+    batches = batching(chunks,166)
 
     # create and populate the vector database with document embeddings
-    
-
-# function to detect file type using magic and mimetypes
-def detectFileType(file_path):
-    mime = magic.Magic(mime=True)
-    mime_type = mime.from_file(file_path)
-    file_extension = mimetypes.guess_extension(mime_type)
-
-    # fix for Office files detected as zip
-    if file_extension == ".zip":
-        try:
-            with zipfile.ZipFile(file_path, "r") as z:
-                zip_contents = z.namelist()
-
-                if any(f.startswith("ppt") for f in zip_contents):
-                    file_extension = ".pptx" 
-                elif any(f.startswith("word") for f in zip_contents):
-                    file_extension = ".docx"  
-                elif any(f.startswith("xl") for f in zip_contents):
-                    file_extension = ".xlsx"
-
-        except zipfile.BadZipFile:
-            pass
-
-    return file_extension
-
+    databaseInsertion(batches=batches, collection=collection)
 
 # function to load files using an extension of unstructured partition with langchain's document loaders
-def ExtractText(path):
+def ExtractText(path: str):
     loader = UnstructuredFileLoader(path, encoding='utf-8')
     documents = loader.load()
     return documents
 
 
 # function to create metadata keyword tags for document and chunk using OpenAI
-def OpenAIMetadataTagger(document):
+def OpenAIMetadataTagger(document: list[Document]):
     
     schema = { 
         "properties": {
@@ -142,12 +135,64 @@ def KeyBERTOpenAIMetadataTagger(document):
     return keywords
 
 
-# function to split documents into smaller chunks for better processing
+# function to split documents into set smaller chunks for better retrieval processing
 # includes overlap to maintain context between chunks
-def chunking(document):
-    pass
+def recursiveChunker(documents: list[Document]):
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=400,
+        length_function=len,
+        add_start_index=True
+    )
 
+    chunks = text_splitter.split_documents(documents)
 
-files = glob(CHAT_DATA_PATH + '/**/*.*', recursive=True)
+    print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
-main("modelling\\data\\pdf_files\\CyberSecurity - Home.pdf")
+    # print sample chunks for verification
+    print('Example Chunks:')
+    print(chunks[0])
+    print('='*100)
+    print(chunks[1])
+    print('='*100)
+    print(chunks[2])
+
+    return chunks
+
+# function to split documents into semantic smaller chunks for better retrieval processing
+def semanticChunker(documents: list[Document]):
+    text_splitter = SemanticChunker(OpenAIEmbeddings())
+
+    chunks = text_splitter.split_documents(documents)
+
+    print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
+
+    # print sample chunks for verification
+    print('Example Chunks:')
+    print(chunks[0])
+    print('='*100)
+    print(chunks[1])
+    print('='*100)
+    print(chunks[2])
+
+    return chunks
+
+# function to split chunks into batches for efficient processing
+def batching(chunks, batch_size):
+    for i in range(0, len(chunks), batch_size):
+        yield chunks[i:i + batch_size]
+
+#Adding documents to the appropriate collection
+def databaseInsertion(batches, collection: Chroma):
+    for chunk in batches:
+        collection.add_documents(documents=chunk)
+
+if __name__ == "__main__":
+    chat_files = glob(CHAT_DATA_PATH + '/**/*.*', recursive=True)
+    for file in chat_files:
+        dataProcessing(file, collection=chat_db)
+    classification_files = glob(CLASSIFICATION_DATA_PATH + '/**/*.*', recursive=True)
+    for file in classification_files:
+        dataProcessing(file, collection=classification_db)
+    chat_db.persist()
+    classification_db.persist()
