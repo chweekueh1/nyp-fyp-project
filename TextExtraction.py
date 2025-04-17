@@ -1,5 +1,4 @@
 from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
-from unstructured.partition.common import UnsupportedFileFormatError
 from langchain_community.document_transformers.openai_functions import create_metadata_tagger
 from langchain.schema import Document
 from langchain_openai import ChatOpenAI
@@ -11,12 +10,9 @@ import openai
 import os
 from glob import glob
 from dotenv import load_dotenv
-import magic
 from keybert import KeyBERT
 from keybert.llm import OpenAI
 from keybert import KeyLLM
-import zipfile
-import mimetypes
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -134,10 +130,10 @@ def KeyBERTOpenAIMetadataTagger(document):
 
     return keywords
 
-
 # function to split documents into set smaller chunks for better retrieval processing
 # includes overlap to maintain context between chunks
 def recursiveChunker(documents: list[Document]):
+
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=400,
@@ -161,6 +157,7 @@ def recursiveChunker(documents: list[Document]):
 
 # function to split documents into semantic smaller chunks for better retrieval processing
 def semanticChunker(documents: list[Document]):
+
     text_splitter = SemanticChunker(OpenAIEmbeddings())
 
     chunks = text_splitter.split_documents(documents)
@@ -179,20 +176,25 @@ def semanticChunker(documents: list[Document]):
 
 # function to split chunks into batches for efficient processing
 def batching(chunks, batch_size):
+
     for i in range(0, len(chunks), batch_size):
         yield chunks[i:i + batch_size]
 
 #Adding documents to the appropriate collection
 def databaseInsertion(batches, collection: Chroma):
+
     for chunk in batches:
         collection.add_documents(documents=chunk)
 
 if __name__ == "__main__":
+
     chat_files = glob(CHAT_DATA_PATH + '/**/*.*', recursive=True)
     for file in chat_files:
         dataProcessing(file, collection=chat_db)
+
     classification_files = glob(CLASSIFICATION_DATA_PATH + '/**/*.*', recursive=True)
     for file in classification_files:
         dataProcessing(file, collection=classification_db)
+        
     chat_db.persist()
     classification_db.persist()
