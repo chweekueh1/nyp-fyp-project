@@ -25,7 +25,6 @@ CLASSIFICATION_DATA_PATH = os.getenv("CLASSIFICATION_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DATABASE_PATH = os.getenv('DATABASE_PATH')
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
-client = openai.OpenAI(api_key=openai.api_key)
 
 classification_db = Chroma(
     collection_name = 'classification',
@@ -111,11 +110,11 @@ def KeyBERTMetadataTagger(document):
     keywords = kw_model.extract_keywords(document, keyphrase_ngram_range=(1, 2), use_maxsum=True, nr_candidates=20, top_n=5, stop_words='english')
     return keywords
 
-
 # function to create metadata keyword tags for document and chunk using keyBERT library extended with openAI through langchain
 # This function outputs the same results as OpenAIMetadataTagger except it seems to have an issue of counting punctuation as a keyword
 # This is likely due to the how the KeyLLM is implemented in the keyBERT library
 # This function is kept here as an archive and for future reference but will not be used in the final implementation
+client = openai.OpenAI(api_key=openai.api_key)
 def KeyBERTOpenAIMetadataTagger(document):
 
     # Create your LLM
