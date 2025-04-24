@@ -6,12 +6,22 @@ import mimetypes
 import magic
 from fastapi import FastAPI, File, UploadFile
 from unstructured.partition.common import UnsupportedFileFormatError
-from TextExtraction import dataProcessing
+from langchain_chroma import Chroma
+from langchain_openai.embeddings import OpenAIEmbeddings
+from TextExtraction import dataProcessing, initialiseDatabase
 
 load_dotenv()
 
 CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
+DATABASE_PATH = os.getenv('DATABASE_PATH')
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
 app = FastAPI()
+
+db = Chroma(
+    collection_name = 'classification',
+    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
+    persist_directory=DATABASE_PATH
+)
 
 # function to detect file type using magic and mimetypes
 def detectFileType(file_path):
@@ -65,4 +75,5 @@ async def upload(file: UploadFile = File(...)):
         #raise HTTPException(status_code=500, error=True, detail=f'File upload error: {str(e)}')
 
 if __name__ == '__main__':
-    pass
+    if len(db.get()['classification']) == 0:
+        initialiseDatabase()

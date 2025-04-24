@@ -185,8 +185,7 @@ def databaseInsertion(batches, collection: Chroma):
     for chunk in batches:
         collection.add_documents(documents=chunk)
 
-if __name__ == "__main__":
-
+def initialiseDatabase():
     chat_files = glob(CHAT_DATA_PATH + '/**/*.*', recursive=True)
     for file in chat_files:
         dataProcessing(file, collection=chat_db)
@@ -197,3 +196,6 @@ if __name__ == "__main__":
         
     chat_db.persist()
     classification_db.persist()
+
+if __name__ == "__main__":
+    pass
