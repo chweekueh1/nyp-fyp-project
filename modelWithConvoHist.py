@@ -122,7 +122,7 @@ app = workflow.compile(checkpointer=memory)
 
 config = {"configurable": {"thread_id": "abc123"}}
 
-async def transform(question, config=config):
+def get_convo_hist_answer(question, config=config):
     state = {"input": question, "chat_history": [], "context": "", "answer": ""}
     response = app.invoke(state, config=config)
     return response

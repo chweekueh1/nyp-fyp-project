@@ -42,11 +42,11 @@ def dataProcessing(file, collection=chat_db):
 
     # extract text from file
     document = ExtractText(file)
-    print(document)
+    #print(document)
 
     # metadata keyword tagging for document
     document = OpenAIMetadataTagger(document)
-    print(document[0].metadata)
+    #print(document[0].metadata)
     #print('\n')
     
     for doc in document:
@@ -75,7 +75,6 @@ def dataProcessing(file, collection=chat_db):
 
     # create and populate the vector database with document embeddings
     databaseInsertion(batches=batches, collection=collection)
-    print('done')
 
 # function to load files using an extension of unstructured partition with langchain's document loaders
 def ExtractText(path: str):
@@ -170,8 +169,8 @@ def semanticChunker(documents: list[Document]):
     print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
     # print sample chunks for verification
-    print('Example Chunks:')
-    print(chunks[0])
+    #print('Example Chunks:')
+    #print(chunks[0])
     #print('='*100)
     #print(chunks[1])
     #print('='*100)

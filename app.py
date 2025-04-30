@@ -37,7 +37,7 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 CHAT_DATA_PATH = os.getenv('CHAT_DATA_PATH')
-DATBASE_PATH = os.getenv("CHROMA_PATH", "./chroma_db")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "./chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 app = Flask(__name__)
@@ -409,6 +409,8 @@ def process_text():
         return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == '__main__':
+    if not os.path.exists(DATABASE_PATH):
+        initialiseDatabase()
     logging.info("Starting Flask application on port 5001.")
     app.run(port=5001, debug=False)
     print(app.url_map)

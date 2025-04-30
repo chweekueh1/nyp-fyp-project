@@ -15,7 +15,10 @@ llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
 embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
 db = Chroma(
-            collection_name="chat",
+            collection_name="chat", 
             embedding_function=embedding,
             persist_directory=DATABASE_PATH,
         )
+
+
+
