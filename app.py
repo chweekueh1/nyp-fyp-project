@@ -19,9 +19,10 @@ from openai import OpenAI
 import mimetypes
 import json
 from unstructured.partition.common import UnsupportedFileFormatError
-from dataProcessing import dataProcessing, initialiseDatabase
+from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
 from datetime import datetime
 import shutil
+from classificationModel import classify_text
 
 from modelWithConvoHist import get_convo_hist_answer
 
@@ -216,16 +217,15 @@ def upload_file():
 
         if file.filename == '':
             logging.warning("Empty filename: %s", file.filename)
-            return jsonify({'error': 'Invalid filename'}), 400
+            return jsonify({'error': 'Invalid Filename: Filename cannot be empty'}), 400
+        elif '_' in file.filename:
+            return jsonify({'error': 'Invalid Filename: Underscore are not allowed'}), 400
         
-        contents = file.read()
         filename = secure_filename(file.filename)
         temp_directory = os.path.join(CHAT_DATA_PATH, 'temp', str(uuid.uuid4()))
         os.makedirs(temp_directory, exist_ok=True)
         file_path = os.path.join(temp_directory, filename)
-        with open(file_path, 'wb') as f:
-            f.write(contents)
-            f.close()
+        file.save(file_path)
 
         try:
             dataProcessing(file_path)
@@ -245,6 +245,42 @@ def upload_file():
 
         return jsonify({'status': 'File uploaded and text extracted'}), 200
     
+    except Exception as e:
+        logging.error("Error in /upload endpoint: %s", traceback.format_exc())
+        return jsonify({'error': 'Internal server error'}), 500
+    
+# Route for data classification
+@app.route('/classify', methods=['POST'])
+def data_classification():
+    try:
+        if 'file' not in request.files:
+            logging.warning("No file part in the request.")
+            return jsonify({'error': 'No file part'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            logging.warning("Empty filename: %s", file.filename)
+            return jsonify({'error': 'Invalid Filename: Filename cannot be empty'}), 400
+        
+        filename = secure_filename(file.filename)
+        temp_directory = os.path.join(CHAT_DATA_PATH, 'temp', 'classification', str(uuid.uuid4()))
+        os.makedirs(temp_directory, exist_ok=True)
+        file_path = os.path.join(temp_directory, filename)
+        file.save(file_path)
+
+        try:
+            document = ExtractText(file_path)
+        except UnsupportedFileFormatError:
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        content = document[0].page_content
+        response = classify_text(content)
+        print(response)
+
+        shutil.rmtree(temp_directory)
+
+        return jsonify({'answer': response['answer']}), 200
+
     except Exception as e:
         logging.error("Error in /upload endpoint: %s", traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500

@@ -103,7 +103,7 @@ class State(TypedDict):
     context: str
     answer: str
 
-def get_convo_hist_answer(state: State):
+def call_model(state: State):
     response = rag_chain.invoke(state)
     return {
         "chat_history": [
@@ -116,7 +116,7 @@ def get_convo_hist_answer(state: State):
 
 workflow = StateGraph(state_schema=State)
 workflow.add_edge(START, "model")
-workflow.add_node("model", get_convo_hist_answer)
+workflow.add_node("model", call_model)
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
 

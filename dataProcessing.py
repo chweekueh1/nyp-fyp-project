@@ -42,8 +42,7 @@ def dataProcessing(file, collection=chat_db):
 
     # extract text from file
     document = ExtractText(file)
-    #print(document)
-
+    
     # metadata keyword tagging for document
     document = OpenAIMetadataTagger(document)
     #print(document[0].metadata)

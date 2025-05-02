@@ -6,7 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from typing_extensions import TypedDict
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
 from langchain.retrievers.multi_query import MultiQueryRetriever
@@ -46,24 +46,6 @@ multiquery_retriever = MultiQueryRetriever.from_llm(
     prompt=multi_query_template
 )
 
-contextualize_q_system_prompt = (
-    "Given the text content of a file, "
-    "formulate a standalone section which can be understood "
-    "without additional context. Do NOT classify the section, "
-    "just reformulate it if needed and otherwise return it as is."
-)
-
-contextualize_q_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", "Reformulate standalone sections from the text content."),
-        ("human", "{input}"),
-    ]
-)
-
-history_aware_retriever = create_history_aware_retriever(
-    llm, multiquery_retriever, contextualize_q_prompt
-)
-
 # Adjusted system prompt to include the context variable
 system_prompt = (
     "You are an assistant for classifying the security level and sensitivity of text content. "
@@ -91,7 +73,7 @@ classification_prompt = ChatPromptTemplate.from_messages(
 
 # Create the classification chain with multi-query retriever
 classification_chain = create_stuff_documents_chain(llm, classification_prompt)
-rag_chain = create_retrieval_chain(history_aware_retriever, classification_chain)
+rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
 
 class State(TypedDict):
     input: str
@@ -113,7 +95,7 @@ classify = workflow.compile(checkpointer=memory)
 
 config = {"configurable": {"thread_id": "Classification"}}
 
-async def classify_text(text, config=config):
-    state = {"input": text, "chat_history": [], "context": "", "answer": ""}
+def classify_text(text, config=config):
+    state = {"input": text, "context": "", "answer": ""}
     response = classify.invoke(state, config=config)
     return response

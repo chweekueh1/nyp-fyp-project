@@ -3,7 +3,8 @@ import requests
 from st_audiorec import st_audiorec
 import io
 import time
-import base64
+import json
+import re
 from audio_recorder_streamlit import audio_recorder
 from app import load_history, save_message, clear_conversation
 
@@ -393,11 +394,11 @@ def upload_file(file):
         
         return True
 
-
 def file_upload_section():
     failure = 0
 
     """Handle file upload"""
+
     with st.form('Upload file(s)', clear_on_submit=True):
         uploaded_files = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
@@ -408,13 +409,42 @@ def file_upload_section():
     
         submitted = st.form_submit_button('Upload')
 
-        if submitted and uploaded_files is not None:
+        if submitted and uploaded_files != []:
             for uploaded_file in uploaded_files:
                 if not upload_file(uploaded_file):
                     failure += 1
             success = len(uploaded_files) - failure
             st.success(f'Uploaded {success} file(s) successfully, {failure} file(s) failed')
 
+def file_classification_section():
+        
+    """Handle file classification"""
+
+    with st.form('Classify file', clear_on_submit=True):
+        uploaded_file = st.file_uploader("Choose a file", type=[
+        'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
+        'jpeg', 'jpg', 'png', 'md', 'msg', 'odt', 'org', 'p7s', 'pdf',
+        'ppt', 'pptx', 'rst', 'rtf', 'tiff', 'txt', 'tsv', 'xls', 'xlsx', 'xml'])
+    
+        submitted = st.form_submit_button('Classify')
+
+        if submitted and uploaded_file != None:
+            
+            files = {"file": uploaded_file}
+            response = requests.post("http://127.0.0.1:5001/classify", files=files)
+    if response.status_code == 200:
+        json_str = response.json().get("answer")
+        cleaned = re.sub(r"^```json\s*|\s*```$", "",json_str)
+        data = json.loads(cleaned)
+        st.markdown("### 🧾 Result")
+        st.markdown(f"**🔐 Classification:** `{data.get('classification')}`")
+        st.markdown(f"**🔒 Sensitivity:** `{data.get('sensitivity')}`")
+        st.markdown("**🧠 Reasoning:**")
+        st.markdown(f"> {data.get('reasoning')}")
+
+    else:
+        st.error(f"Data classification failed: {response.json().get('error')}")
+            
 
 def audio_input_section():
     """Audio recording section with automatic recording and transcript correction"""
@@ -517,7 +547,6 @@ def display_chat_history():
                 <div class="message-time">{bot_message["time"]}</div>
             </div>
             """, unsafe_allow_html=True)
-            
         # if st.button("Back to All Messages"):
         #     st.session_state.selected_message_index = -1
         #     st.rerun()
@@ -620,13 +649,17 @@ def main():
     st.sidebar.markdown(f"**Session ID:** {st.session_state.session_id}")
     st.sidebar.markdown(f"**User:** {st.session_state.username}")
 
-    tab1, tab2 = st.tabs(["Ask Questions", "File Upload"])
+    tab1, tab2, tab3 = st.tabs(["Ask Questions", "File Upload","Data Classification"])
     
     with tab1:
         combined_input_section()
     
     with tab2:
         file_upload_section()
+
+    with tab3:
+        file_classification_section()
+
 
 if __name__ == "__main__":
     main()
