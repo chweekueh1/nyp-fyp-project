@@ -1,0 +1,12 @@
+[
+  {
+    "role": "user",
+    "content": "what is phishing email",
+    "time": "16:17"
+  },
+  {
+    "role": "assistant",
+    "content": "A phishing email is a type of fraudulent communication that appears to be from a legitimate source, often aiming to trick recipients into revealing sensitive information, such as passwords or credit card numbers. These emails typically contain links to fake websites that resemble real ones, encouraging users to enter their personal details. Always be cautious and verify the sender's identity before clicking on links or providing information.",
+    "time": "16:17"
+  }
+]

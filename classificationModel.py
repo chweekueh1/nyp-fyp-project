@@ -11,6 +11,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
+import time
 
 # Constants
 load_dotenv()
@@ -81,7 +82,10 @@ class State(TypedDict):
     answer: str
 
 def call_model(state: State):
+    start = time.time()
     response = rag_chain.invoke(state)
+    end = time.time()
+    print(f'Run time: {end-start} seconds')
     return {
         "context": response["context"],
         "answer": response["answer"],

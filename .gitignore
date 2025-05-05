@@ -11,3 +11,7 @@ dependencies/
 chroma_db/
 
 .env
+
+keywords_databank.bak
+keywords_databank.dat
+keywords_databank.dir

@@ -1080,3 +1080,464 @@
 2025-05-01 17:30:42,654 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
 2025-05-01 17:30:45,049 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 2025-05-01 17:30:45,061 - INFO - 127.0.0.1 - - [01/May/2025 17:30:45] "POST /classify HTTP/1.1" 200 -
+2025-05-02 16:07:51,987 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 16:07:51,988 - INFO - Created conversations directory at conversations
+2025-05-02 16:07:51,989 - INFO - Starting Flask application on port 5001.
+2025-05-02 16:07:52,006 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 16:07:52,006 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-02 16:17:52,272 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 16:17:52,273 - INFO - Starting Flask application on port 5001.
+2025-05-02 16:17:52,278 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 16:17:52,278 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-02 16:19:05,203 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 16:19:05,204 - INFO - Starting Flask application on port 5001.
+2025-05-02 16:19:05,209 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 16:19:05,209 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-02 16:45:50,249 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 16:45:50,250 - INFO - Starting Flask application on port 5001.
+2025-05-02 16:45:50,255 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 16:45:50,255 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-02 17:06:42,716 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 17:06:42,716 - INFO - Starting Flask application on port 5001.
+2025-05-02 17:06:42,722 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 17:06:42,722 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-02 17:25:42,134 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:25:43,200 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:25:45,488 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:25:46,312 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:25:51,731 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:25:52,670 - INFO - pikepdf C++ to Python logger bridge initialized
+2025-05-02 17:25:52,688 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:52,717 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:52,774 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:52,805 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:52,822 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:52,827 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:54,402 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:25:55,745 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:25:56,655 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:25:58,378 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:25:59,316 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:25:59,534 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:01,320 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:02,118 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:02,547 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:02,634 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:02,674 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:04,467 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:05,455 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:06,356 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:06,420 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:08,358 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:09,535 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:10,224 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:11,933 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:13,012 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:15,571 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:16,644 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:17,581 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:17,657 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:19,910 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:21,195 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:22,208 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:23,768 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:24,150 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:25,967 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:27,945 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:30,996 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:32,241 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:35,395 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:36,141 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:40,136 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:42,195 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:43,250 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:43,339 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:43,383 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-02 17:26:45,308 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:46,243 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:48,785 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:49,846 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:54,225 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-02 17:26:55,088 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-02 17:26:55,305 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-02 17:26:55,313 - INFO - Starting Flask application on port 5001.
+2025-05-02 17:26:55,319 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-02 17:26:55,320 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-04 18:10:20,893 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:23,510 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:10:27,790 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:29,857 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:10:33,090 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:38,270 - INFO - pikepdf C++ to Python logger bridge initialized
+2025-05-04 18:10:38,341 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:38,398 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:38,537 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:38,652 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:38,730 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:38,758 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:41,424 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:43,581 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:10:44,553 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:47,357 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:49,082 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:10:49,407 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:52,768 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:10:54,977 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:10:55,542 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:55,853 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:55,949 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:10:58,812 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:01,704 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:02,558 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:02,893 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:05,876 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:08,034 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:08,739 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:11,827 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:12,709 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:15,472 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:16,775 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:17,803 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:17,882 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:21,096 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:22,639 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:23,527 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:25,295 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:25,682 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:27,513 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:28,860 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:31,619 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:33,331 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:36,425 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:37,438 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:41,059 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:42,797 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:44,180 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:44,269 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:44,310 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-04 18:11:46,820 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:48,550 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:51,846 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:53,318 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:56,127 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-04 18:11:57,105 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-04 18:11:57,128 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-04 18:11:57,134 - INFO - Starting Flask application on port 5001.
+2025-05-04 18:11:57,153 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-04 18:11:57,153 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-05 15:17:12,426 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:12,431 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:13,376 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:13,964 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:16,225 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:17,271 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:18,854 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:19,701 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:20,810 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:21,487 - INFO - pikepdf C++ to Python logger bridge initialized
+2025-05-05 15:17:21,532 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:21,560 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:21,611 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:21,640 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:21,656 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:21,661 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:22,364 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:23,102 - INFO - pikepdf C++ to Python logger bridge initialized
+2025-05-05 15:17:23,118 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:23,146 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:23,198 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:23,226 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:23,242 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:23,248 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:25,579 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:27,607 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:28,471 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:30,405 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:31,462 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:31,707 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:35,211 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:38,871 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:39,393 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:39,469 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:39,507 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:41,937 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:42,858 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:43,636 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:43,696 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:45,921 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:46,922 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:47,663 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:49,649 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:50,768 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:54,126 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:17:55,069 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:17:56,075 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:17:56,150 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:00,038 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:01,277 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:01,935 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:04,454 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:04,844 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:06,637 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:07,507 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:10,591 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:11,802 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:15,443 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:16,396 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:20,951 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:23,205 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:24,379 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:24,462 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:24,501 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:18:27,836 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:28,749 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:32,511 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:33,621 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:37,104 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:18:37,901 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:18:38,133 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 15:29:11,644 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:13,019 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:14,567 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:16,863 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:17,921 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:18,990 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:20,989 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:21,669 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:22,239 - INFO - pikepdf C++ to Python logger bridge initialized
+2025-05-05 15:29:22,261 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:22,288 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:22,340 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:22,369 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:22,385 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:22,390 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:25,095 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:26,034 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:27,284 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:27,505 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:29,296 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:30,081 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:30,789 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:31,000 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:33,336 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:34,996 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:35,795 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:36,009 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:36,091 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:36,129 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:38,353 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:40,518 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:41,950 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:42,202 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:42,262 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:44,077 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:44,972 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:45,922 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:46,144 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:48,846 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:49,819 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:50,791 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:53,570 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:29:54,552 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:55,630 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:29:55,856 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:55,932 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:29:59,298 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:00,216 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:01,409 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:01,666 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:30:03,480 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:04,636 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:04,761 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:30:06,890 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:07,657 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:08,632 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:12,187 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:13,109 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:14,460 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:19,733 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:20,629 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:21,672 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:24,985 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:27,166 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:29,022 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:29,436 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:30:29,515 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:30:29,558 - WARNING - CropBox missing from /Page, defaulting to MediaBox
+2025-05-05 15:30:32,089 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:33,175 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:34,463 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:37,061 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:38,235 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:39,436 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:42,261 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:30:43,126 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:43,727 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:30:43,742 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 15:30:43,744 - INFO - Starting Flask application on port 5001.
+2025-05-05 15:30:43,748 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-05 15:30:43,748 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-05 15:31:23,312 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 15:37:11,060 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 15:37:11,063 - INFO - Starting Flask application on port 5001.
+2025-05-05 15:37:11,067 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-05 15:37:11,067 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-05 15:37:27,129 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 15:38:08,238 - INFO - Sanitized question: what is phishing email
+2025-05-05 15:38:09,790 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:38:11,641 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 15:38:11,646 - INFO - Generated queries: ['The question "what is phishing email" is a straightforward question and does not require splitting. Here’s the question and its rephrasings:', 'What is a phishing email?  ', '1. Can you explain what a phishing email is?  ', '2. What does it mean when someone refers to a phishing email?  ', '3. How would you define a phishing email?']
+2025-05-05 15:38:12,388 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 15:38:12,445 - ERROR - Error in /ask endpoint: Traceback (most recent call last):
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\CollectionCommon.py", line 90, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\CollectionCommon.py", line 294, in _validate_and_prepare_query_request
+    validate_filter_set(filter_set=filters)
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\types.py", line 345, in validate_filter_set
+    validate_where(filter_set["where"])
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\types.py", line 646, in validate_where
+    raise ValueError(
+ValueError: Expected operand value to be an list for operator $in, got Phishing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\app.py", line 313, in ask_question
+    response = get_convo_hist_answer(sanitized_question)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\chatModel.py", line 170, in get_convo_hist_answer
+    return app.invoke(state, config=config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\pregel\__init__.py", line 2718, in invoke
+    for chunk in self.stream(
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\pregel\__init__.py", line 2356, in stream
+    for _ in runner.tick(
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\pregel\runner.py", line 158, in tick
+    run_with_retry(
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\pregel\retry.py", line 39, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\utils\runnable.py", line 622, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langgraph\utils\runnable.py", line 376, in invoke
+    ret = self.func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\chatModel.py", line 149, in call_model
+    response = rag_chain.invoke(state)
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5440, in invoke
+    return self.bound.invoke(
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3045, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\passthrough.py", line 514, in invoke
+    return self._call_with_config(self._invoke, input, config, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 1933, in _call_with_config
+    context.run(
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\config.py", line 428, in call_func_with_variable_args
+    return func(input, **kwargs)  # type: ignore[call-arg]
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\passthrough.py", line 500, in _invoke
+    **self.mapper.invoke(
+      ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3776, in invoke
+    output = {key: future.result() for key, future in zip(steps, futures)}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3776, in <dictcomp>
+    output = {key: future.result() for key, future in zip(steps, futures)}
+                   ^^^^^^^^^^^^^^^
+  File "C:\Users\user\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\_base.py", line 401, in __get_result
+    raise self._exception
+  File "C:\Users\user\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3760, in _invoke_step
+    return context.run(
+           ^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5440, in invoke
+    return self.bound.invoke(
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\branch.py", line 234, in invoke
+    output = runnable.invoke(
+             ^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3047, in invoke
+    input = context.run(step.invoke, input, config)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\retrievers.py", line 259, in invoke
+    result = self._get_relevant_documents(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain\retrievers\multi_query.py", line 171, in _get_relevant_documents
+    documents = self.retrieve_documents(queries, run_manager)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain\retrievers\multi_query.py", line 209, in retrieve_documents
+    docs = self.retriever.invoke(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\retrievers.py", line 259, in invoke
+    result = self._get_relevant_documents(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\vectorstores\base.py", line 1077, in _get_relevant_documents
+    docs = self.vectorstore.similarity_search(query, **_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_chroma\vectorstores.py", line 608, in similarity_search
+    docs_and_scores = self.similarity_search_with_score(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_chroma\vectorstores.py", line 706, in similarity_search_with_score
+    results = self.__query_collection(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_core\utils\utils.py", line 53, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\langchain_chroma\vectorstores.py", line 398, in __query_collection
+    return self._collection.query(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\Collection.py", line 211, in query
+    query_request = self._validate_and_prepare_query_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\CollectionCommon.py", line 93, in wrapper
+    raise type(e)(msg).with_traceback(e.__traceback__)
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\CollectionCommon.py", line 90, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\models\CollectionCommon.py", line 294, in _validate_and_prepare_query_request
+    validate_filter_set(filter_set=filters)
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\types.py", line 345, in validate_filter_set
+    validate_where(filter_set["where"])
+  File "C:\Users\user\Documents\GitHub\nyp-fyp-project\.venv\Lib\site-packages\chromadb\api\types.py", line 646, in validate_where
+    raise ValueError(
+ValueError: Expected operand value to be an list for operator $in, got Phishing in query.
+During task with name 'model' and id '67219d70-46a5-b694-1663-b7f68a952e78'
+
+2025-05-05 15:38:12,446 - INFO - 127.0.0.1 - - [05/May/2025 15:38:12] "[35m[1mPOST /ask HTTP/1.1[0m" 500 -
+2025-05-05 16:16:21,340 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 16:16:21,341 - INFO - Starting Flask application on port 5001.
+2025-05-05 16:16:21,346 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5001
+2025-05-05 16:16:21,346 - INFO - [33mPress CTRL+C to quit[0m
+2025-05-05 16:16:41,784 - INFO - Flask application initialized. Upload folder set up at .\modelling\data\
+2025-05-05 16:17:32,186 - INFO - Sanitized question: what is phishing email
+2025-05-05 16:17:33,945 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 16:17:35,114 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 16:17:35,122 - INFO - Generated queries: ['The original question is straightforward and does not contain multiple related questions, so I will return it as is.', 'What is a phishing email?']
+2025-05-05 16:17:36,218 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 16:17:36,806 - INFO - HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+2025-05-05 16:17:39,582 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-05-05 16:17:39,584 - INFO - Question answered: what is phishing email
+2025-05-05 16:17:39,610 - INFO - 127.0.0.1 - - [05/May/2025 16:17:39] "POST /ask HTTP/1.1" 200 -
+2025-05-05 16:17:39,611 - INFO - Message saved to staff's history
+2025-05-05 16:17:39,620 - INFO - Message saved to staff's history

@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 import os
-import openai
 from dotenv import load_dotenv
 import logging
 import traceback
@@ -19,12 +18,14 @@ from openai import OpenAI
 import mimetypes
 import json
 from unstructured.partition.common import UnsupportedFileFormatError
+from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_chroma import Chroma
 from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
 from datetime import datetime
 import shutil
 from classificationModel import classify_text
 
-from modelWithConvoHist import get_convo_hist_answer
+from chatModel import get_convo_hist_answer
 
 # Logging configuration
 logging.basicConfig(
@@ -41,11 +42,18 @@ CHAT_DATA_PATH = os.getenv('CHAT_DATA_PATH')
 DATABASE_PATH = os.getenv("DATABASE_PATH", "./chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
+classification_db = Chroma(
+    collection_name = 'classification',
+    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
+    persist_directory=DATABASE_PATH
+)
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # Limit upload size to 25MB
 
 # Ensure 'uploads' folder exists
-os.makedirs(CHAT_DATA_PATH,exist_ok=True)
+if len(classification_db.get()['documents']) == 0:
+    initialiseDatabase()
 
 logging.info("Flask application initialized. Upload folder set up at %s", CHAT_DATA_PATH)
 
@@ -445,8 +453,7 @@ def process_text():
         return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == '__main__':
-    if not os.path.exists(DATABASE_PATH):
-        initialiseDatabase()
+
     logging.info("Starting Flask application on port 5001.")
     app.run(port=5001, debug=False)
     print(app.url_map)

@@ -1,0 +1,18 @@
+[
+  {
+    "sender": "user",
+    "message": {
+      "question": "what is phishing email",
+      "session": "1746433002"
+    },
+    "timestamp": "2025-05-05T08:17:39.584544"
+  },
+  {
+    "sender": "assistant",
+    "message": {
+      "answer": "A phishing email is a type of fraudulent communication that appears to be from a legitimate source, often aiming to trick recipients into revealing sensitive information, such as passwords or credit card numbers. These emails typically contain links to fake websites that resemble real ones, encouraging users to enter their personal details. Always be cautious and verify the sender's identity before clicking on links or providing information.",
+      "session": "1746433002"
+    },
+    "timestamp": "2025-05-05T08:17:39.585548"
+  }
+]

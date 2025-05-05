@@ -14,6 +14,7 @@ from keybert import KeyBERT
 from keybert.llm import OpenAI
 from keybert import KeyLLM
 import warnings
+import shelve
 
 warnings.filterwarnings("ignore")
 
@@ -25,6 +26,8 @@ CLASSIFICATION_DATA_PATH = os.getenv("CLASSIFICATION_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 DATABASE_PATH = os.getenv('DATABASE_PATH')
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
+
+keywords_bank = []
 
 classification_db = Chroma(
     collection_name = 'classification',
@@ -50,6 +53,7 @@ def dataProcessing(file, collection=chat_db):
     
     for doc in document:
         if "keywords" in doc.metadata:
+            keywords_bank.extend(doc.metadata['keywords'])
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
 
     #These are put in here for posterity but are weaker and less useful than OpenAIMetadataTagger and thus removed
@@ -185,11 +189,12 @@ def batching(chunks, batch_size):
 
 #Adding documents to the appropriate collection
 def databaseInsertion(batches, collection: Chroma):
-
+ 
     for chunk in batches:
         collection.add_documents(documents=chunk)
 
 def initialiseDatabase():
+
     chat_files = glob(CHAT_DATA_PATH + '/**/*.*', recursive=True)
     for file in chat_files:
         dataProcessing(file, collection=chat_db)
@@ -197,9 +202,10 @@ def initialiseDatabase():
     classification_files = glob(CLASSIFICATION_DATA_PATH + '/**/*.*', recursive=True)
     for file in classification_files:
         dataProcessing(file, collection=classification_db)
-        
-    chat_db.persist()
-    classification_db.persist()
+
+    db = shelve.open('keywords_databank')
+    db['keywords'] = keywords_bank
+    db.close()
 
 if __name__ == "__main__":
     pass
