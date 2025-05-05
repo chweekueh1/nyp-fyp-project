@@ -126,6 +126,42 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
         return response.json(), None
     except Exception as e:
         return None, f"An unexpected error occurred: {str(e)}"
+    
+# Sends question to backend and retrieve answer
+def ask_question(question):
+    with st.spinner("Getting answer..."):
+        if not st.session_state.current_chat_id:
+            st.session_state.current_chat_id = str(int(time.time()))
+            
+        payload = {
+            "question": question,
+            "username": st.session_state.username,
+            "chat_id": st.session_state.current_chat_id
+        }
+        
+        result, error = handle_api_request("ask", json=payload)
+        if error:
+            st.error(error)
+            return None
+        
+        current_time = time.strftime("%H:%M")
+
+        st.session_state.chat_history.append({
+            "role": "user", 
+            "content": question, 
+            "time": current_time,
+            "chat_id": st.session_state.current_chat_id
+        })
+        
+        answer = result.get("answer")
+        st.session_state.chat_history.append({
+            "role": "assistant", 
+            "content": answer, 
+            "time": current_time,
+            "chat_id": st.session_state.current_chat_id
+        })
+        
+        return answer
 
 def login():
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -143,38 +179,6 @@ def login():
                 st.success("Login successful!")
             else:
                 st.error("Invalid username or password")
-
-def ask_question(question):
-    """Send question to backend and get answer"""
-    with st.spinner("Getting answer..."):
-        # Include session ID in payload
-        payload = {
-            "question": question,
-            "session_id": st.session_state.session_id
-        }
-        result, error = handle_api_request("ask", json=payload)
-        
-        if error:
-            st.error(error)
-            return None
-        
-        # Current timestamp for message time
-        current_time = time.strftime("%H:%M")
-        
-        # Add to chat history
-        user_message = {"role": "user", "content": question, "time": current_time}
-        st.session_state.chat_history.append(user_message)
-        
-        answer = result.get("answer")
-        bot_message = {"role": "assistant", "content": answer, "time": current_time}
-        st.session_state.chat_history.append(bot_message)
-        
-        # Save to persistent storage
-        if st.session_state.username:
-            save_message(st.session_state.username, user_message)
-            save_message(st.session_state.username, bot_message)
-        
-        return answer
 
 def transcribe_and_process_audio(audio_data):
     """Send audio to backend for transcription only"""
