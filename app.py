@@ -1,30 +1,18 @@
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
-import os
-from dotenv import load_dotenv
-import logging
-import traceback
-import html
-import re
-import secrets
-import uuid
-import time
-import string
-import magic
-import zipfile
-import tempfile
-import io
 from openai import OpenAI
-import mimetypes
-import json
+from dotenv import load_dotenv
+from datetime import datetime
+import os, logging, traceback, html
+import re, secrets, uuid, time, string
+import magic, zipfile, tempfile
+import mimetypes, json, shutil
+
 from unstructured.partition.common import UnsupportedFileFormatError
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
-from datetime import datetime
-import shutil
 from classificationModel import classify_text
-
 from chatModel import get_convo_hist_answer
 
 # Logging configuration
@@ -79,11 +67,8 @@ def save_message(username, message):
                 history = json.load(f)
         else:
             history = []
-        
-        # Add new message
+    
         history.append(message)
-        
-        # Save updated history
         with open(history_file, "w") as f:
             json.dump(history, f, indent=2)
         
@@ -93,10 +78,9 @@ def save_message(username, message):
         logging.error(f"Error saving message for {username}: {str(e)}")
         return False
 
+# Helper function to load a user's conversation history
 def load_history(username):
-    """Load a user's conversation history"""
     history_file = get_user_history_file(username)
-    
     try:
         if os.path.exists(history_file):
             with open(history_file, "r") as f:
@@ -106,27 +90,6 @@ def load_history(username):
     except Exception as e:
         logging.error(f"Error loading history for {username}: {str(e)}")
         return []
-
-def clear_conversation(username):
-    history_file = get_user_history_file(username)
-
-    try:
-        if os.path.exists(history_file):
-            backup_file = f"{history_file}.{int(datetime.utcnow().timestamp())}.bak"
-            shutil.copyfile(history_file, backup_file)
-            logging.info(f"Backup created at {backup_file}")
-            
-            with open(history_file, "w") as f:
-                json.dump([], f)
-
-            logging.info(f"Conversation history cleared for {username}")
-        return True  # Either cleared or file doesn't exist
-    except Exception as e:
-        logging.error(f"Error clearing conversation for {username}: {str(e)}")
-        return False
-
-# Keep the original global history functions for backward compatibility
-HISTORY_FILE = "conversations.json"
 
 def save_message_global(sender, message):
     new_entry = {
@@ -240,7 +203,6 @@ def upload_file():
         except UnsupportedFileFormatError:
             return jsonify({'error': 'Invalid file type'}), 400
         
-        
         file_type = detectFileType(file_path)
         directory = os.path.join(CHAT_DATA_PATH, f'{file_type[1:]}_files')
         os.makedirs(directory, exist_ok=True)
@@ -248,9 +210,7 @@ def upload_file():
         new_file_name = generateUniqueFilename(filename=filename, username=username, filetype=file_type)
         full_directory = os.path.join(directory, new_file_name)
         shutil.copy(file_path, full_directory)
-
         shutil.rmtree(temp_directory)
-
         return jsonify({'status': 'File uploaded and text extracted'}), 200
     
     except Exception as e:
@@ -284,9 +244,7 @@ def data_classification():
         content = document[0].page_content
         response = classify_text(content)
         print(response)
-
         shutil.rmtree(temp_directory)
-
         return jsonify({'answer': response['answer']}), 200
 
     except Exception as e:
@@ -327,27 +285,6 @@ def ask_question():
         return jsonify({'answer': response['answer']}), 200
     except Exception as e:
         logging.error("Error in /ask endpoint: %s", traceback.format_exc())
-        return jsonify({'error': 'Internal server error'}), 500
-
-# Added new route for clearing history by session ID
-@app.route('/clear_history', methods=['POST'])
-def clear_history():
-    try:
-        data = request.json
-        username = data.get('username')
-        
-        if username:
-            result = clear_conversation(username)
-            if result:
-                return jsonify({'status': 'History cleared'}), 200
-            else:
-                return jsonify({'error': 'Failed to clear history'}), 500
-        else:
-            # Clear global history if no username provided
-            clear_conversation_global()
-            return jsonify({'status': 'Global history cleared'}), 200
-    except Exception as e:
-        logging.error(f"Error in /clear_history endpoint: {traceback.format_exc()}")
         return jsonify({'error': 'Internal server error'}), 500
 
 # Simplified route for audio transcription only

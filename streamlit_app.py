@@ -1,271 +1,83 @@
-import streamlit as st
-import requests
-from st_audiorec import st_audiorec
-import io
-import time
-import json
-import re
+from datetime import datetime
 from audio_recorder_streamlit import audio_recorder
-from app import load_history, save_message, clear_conversation
+import streamlit as st
+import requests, io, time
 
 # Set page configuration
-st.set_page_config(
-    page_title="NYP AI Chatbot Helper",
-    page_icon="🤖",
-    layout="wide"
-)
+st.set_page_config( page_title="NYP AI Chatbot Helper", page_icon="🤖", layout="wide")
 
 st.markdown('''
 <style>
     .css-1egvi7u {margin-top: -3rem;}
     .stAudio {height: 45px;}
-    .css-v37k9u a {color: #ff4c4b;} /* darkmode */
-    .css-nlntq9 a {color: #ff4c4b;} /* lightmode */
-    .main-header {
-        font-size: 2rem;
-        color: #0066cc;
-        text-align: center;
-        margin: 1rem 0 2rem 0;
-    }
-    .sub-header {
-        font-size: 1.5rem;
-        color: #0066cc;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-    }
-    .success-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #d4edda;
-        color: #155724;
-    }
-    .error-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #f8d7da;
-        color: #721c24;
-    }
+    .css-v37k9u a {color: #ff4c4b;}
+    .css-nlntq9 a {color: #ff4c4b;}
+    .main-header { font-size: 2rem; color: #0066cc; text-align: center; margin: 1rem 0 2rem 0; }
+    .sub-header { font-size: 1.5rem; color: #0066cc; margin-top: 2rem; margin-bottom: 1rem; }
+    .success-message { padding: 1rem; border-radius: 0.5rem; background-color: #d4edda; color: #155724; }
+    .error-message { padding: 1rem; border-radius: 0.5rem; background-color: #f8d7da; color: #721c24;}
+    
     /* Microphone button styling */
-    .microphone-button {
-        display: flex;
-        justify-content: center;
-        margin: 20px 0;
-    }
+    .microphone-button { display: flex; justify-content: center; margin: 20px 0; }
     
     /* Recording indicator */
-    .recording-indicator {
-        color: #ff4b4b;
-        font-weight: bold;
-        text-align: center;
-        margin-top: 10px;
-        animation: blink 1s infinite;
-    }
+    .recording-indicator { color: #ff4b4b; font-weight: bold; text-align: center; margin-top: 10px; animation: blink 1s infinite; }
     
-    @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }}
     
     /* Audio player container */
-    .audio-container {
-        display: flex;
-        align-items: center;
-        margin: 15px 0;
-        padding: 10px;
-        border-radius: 8px;
-        background-color: #f0f2f6;
-    }
+    .audio-container { display: flex; align-items: center; margin: 15px 0; padding: 10px; border-radius: 8px; background-color: #f0f2f6; }
     
     /* Delete button */
-    .delete-button {
-        color: #ff4b4b;
-        cursor: pointer;
-        margin-left: 10px;
-    }
+    .delete-button { color: #ff4b4b; cursor: pointer; margin-left: 10px; }
     
     /* Recording button styling */
-    .record-button {
-        background-color: #0066cc;
-        color: white;
-        border-radius: 50%;
-        width: 80px;
-        height: 80px;
-        font-size: 24px;
-        border: none;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
+    .record-button { background-color: #0066cc; color: white; border-radius: 50%; width: 80px; height: 80px; font-size: 24px; border: none;
+        cursor: pointer; transition: all 0.3s; }
+    .record-button.recording { background-color: #ff4b4b; animation: pulse 1.5s infinite; }
     
-    .record-button.recording {
-        background-color: #ff4b4b;
-        animation: pulse 1.5s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-    }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); }}
             
-     .submit-button {
-        background-color: #28a745;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 5px;
-        font-weight: bold;
-        margin-top: 10px;
-    }
+     .submit-button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
     
     /* Input method selector styling */
-    .input-selector {
-        display: flex;
-        margin-bottom: 20px;
-        background-color: #f0f2f6;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    
-    .input-option {
-        flex: 1;
-        text-align: center;
-        padding: 10px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: all 0.3s;
-    }
-    
-    .input-option.active {
-        background-color: #0066cc;
-        color: white;
-    }
-    
-    .input-option:hover:not(.active) {
-        background-color: #dbe4f0;
-    }
+    .input-selector { display: flex; margin-bottom: 20px; background-color: #f0f2f6; border-radius: 8px; overflow: hidden; }
+    .input-option { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: bold; transition: all 0.3s; }
+    .input-option.active { background-color: #0066cc; color: white; }
+    .input-option:hover:not(.active) { background-color: #dbe4f0; }
     
     /* Divider styling */
-    .divider {
-        margin: 20px 0;
-        border-top: 1px solid #e0e0e0;
-    }
+    .divider { margin: 20px 0; border-top: 1px solid #e0e0e0; }
     
     /* Response container styling */
-    .response-container {
-        margin-top: 20px;
-        padding: 15px;
-        border-radius: 8px;
-        background-color: #f8f9fa;
-        border-left: 4px solid #0066cc;
-    }
+    .response-container { margin-top: 20px; padding: 15px; border-radius: 8px; background-color: #f8f9fa; border-left: 4px solid #0066cc; }
     
     /* Chat message styling */
-    .chat-container {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-        margin-top: 20px;
-        padding: 10px;
-        max-height: 500px;
-        overflow-y: auto;
-        border-radius: 8px;
-        background-color: #f8f9fa;
-    }
-    
-    .message-container {
-        display: flex;
-        flex-direction: column;
-        max-width: 80%;
-        padding: 10px 15px;
-        border-radius: 15px;
-        font-size: 16px;
-    }
-    
-    .user-message {
-        align-self: flex-end;
-        background-color: #0066cc;
-        color: white;
-        border-bottom-right-radius: 5px;
-    }
-    
-    .bot-message {
-        align-self: flex-start;
-        background-color: #e6f7ff;
-        color: #333;
-        border-bottom-left-radius: 5px;
-    }
-    
-    .message-time {
-        font-size: 12px;
-        color: #888;
-        align-self: flex-end;
-        margin-top: 5px;
-    }
+    .chat-container { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; padding: 10px; max-height: 500px; overflow-y: auto;
+        border-radius: 8px; background-color: #f8f9fa; }
+    .message-container { display: flex; flex-direction: column; max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 16px; }
+    .user-message { align-self: flex-end; background-color: #0066cc; color: white; border-bottom-right-radius: 5px; }
+    .bot-message { align-self: flex-start; background-color: #e6f7ff; color: #333; border-bottom-left-radius: 5px; }
+    .message-time { font-size: 12px; color: #888; align-self: flex-end; margin-top: 5px; }
     
     /* Clear history button */
-    .clear-button {
-        color: #ff4b4b;
-        background-color: transparent;
-        border: 1px solid #ff4b4b;
-        border-radius: 5px;
-        padding: 5px 10px;
-        cursor: pointer;
-        transition: all 0.3s;
-        margin-top: 10px;
-    }
+    .clear-button { color: #ff4b4b; background-color: transparent; border: 1px solid #ff4b4b; border-radius: 5px; padding: 5px 10px; cursor: pointer;
+            transition: all 0.3s; margin-top: 10px; }
+    .clear-button:hover { background-color: #ff4b4b; color: white; }
     
-    .clear-button:hover {
-        background-color: #ff4b4b;
-        color: white;
-    }
+    /* New chat button styling */
+    .new-chat-button { background-color: #0066cc; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; 
+            margin-top: 10px; margin-bottom: 20px; width: 100%; transition: all 0.3s; }
+    .new-chat-button:hover { background-color: #004c99; }
     
-    .sidebar .message-container {
-        max-width: 100%;
-        padding: 8px 10px;
-        margin-bottom: 8px;
-        font-size: 14px;
-    }
-
-    .sidebar .message-time {
-        font-size: 10px;
-    }
-
-    /* Make sidebar scrollable if needed */
-    .sidebar .stSidebar {
-        max-height: 80vh;
-        overflow-y: auto;
-    }
-    
-    /* Clickable prompt in sidebar */
-    .sidebar-prompt {
-        cursor: pointer;
-        padding: 8px;
-        margin-bottom: 8px;
-        border-radius: 8px;
-        background-color: #f0f2f6;
-        border-left: 3px solid #0066cc;
-        transition: all 0.2s;
-    }
-    
-    .sidebar-prompt:hover {
-        background-color: #e2e8f0;
-    }
-    
-    .sidebar-prompt-text {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-size: 14px;
-    }
+    /* Active chat styling */
+    .active-chat { border-left: 3px solid #0066cc; background-color: #e6f7ff; }
 </style>
 ''', unsafe_allow_html=True)
 
 # Initialize session state
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = None
 if 'transcript' not in st.session_state:
     st.session_state.transcript = ""
 if 'is_recording' not in st.session_state:
@@ -279,24 +91,25 @@ if 'recording_mode' not in st.session_state:
 if 'temp_transcript' not in st.session_state:
     st.session_state.temp_transcript = ""
 if 'input_method' not in st.session_state:
-    st.session_state.input_method = "text"  # Default to text input
+    st.session_state.input_method = "text"
 if 'question_input' not in st.session_state:
     st.session_state.question_input = ""
-# Chat history storage
 if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-# Session ID for tracking conversation with backend
-if 'session_id' not in st.session_state:
-    st.session_state.session_id = str(int(time.time()))  # Simple timestamp-based session ID
-# Selected conversation for viewing
-if 'selected_message_index' not in st.session_state:
-    st.session_state.selected_message_index = -1
+     st.session_state.chat_history = []
+if 'username' not in st.session_state:
+    st.session_state.username = None
+if 'current_chat_id' not in st.session_state:
+    st.session_state.current_chat_id = None
+if 'chat_groups' not in st.session_state:
+    st.session_state.chat_groups = {}
+for msg in st.session_state.chat_history:
+    if 'chat_id' not in msg:
+        msg['chat_id'] = st.session_state.current_chat_id or str(int(time.time()))
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
 
 def login():
-    # st.markdown("<div class='main-header'>NYP CNC AI Chatbot</div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("### Login")
@@ -547,28 +360,6 @@ def display_chat_history():
                 <div class="message-time">{bot_message["time"]}</div>
             </div>
             """, unsafe_allow_html=True)
-        # if st.button("Back to All Messages"):
-        #     st.session_state.selected_message_index = -1
-        #     st.rerun()
-    # else:
-    #     chat_container = st.container()
-        
-    #     with chat_container:
-    #         for message in st.session_state.chat_history:
-    #             if message["role"] == "user":
-    #                 st.markdown(f"""
-    #                 <div class="message-container user-message">
-    #                     {message["content"]}
-    #                     <div class="message-time">{message["time"]}</div>
-    #                 </div>
-    #                 """, unsafe_allow_html=True)
-    #             else:
-    #                 st.markdown(f"""
-    #                 <div class="message-container bot-message">
-    #                     {message["content"]}
-    #                     <div class="message-time">{message["time"]}</div>
-    #                 </div>
-    #                 """, unsafe_allow_html=True)
 
 def combined_input_section():
     st.markdown("<div class='sub-header'>Ask a Question</div>", unsafe_allow_html=True)
@@ -659,7 +450,6 @@ def main():
 
     with tab3:
         file_classification_section()
-
 
 if __name__ == "__main__":
     main()
