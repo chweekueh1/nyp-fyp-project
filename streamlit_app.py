@@ -307,7 +307,6 @@ def upload_file(file):
         files = {"file": file}
         username = st.session_state.username
         response, error = handle_api_request("upload", data={"username": username}, files=files)
-
         if error:
             st.error(error)
             return False
@@ -316,7 +315,6 @@ def upload_file(file):
 # Helper function that handles file uploads
 def file_upload_section():
     failure = 0
-
     with st.form('Upload file(s)', clear_on_submit=True):
         uploaded_files = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
@@ -356,9 +354,8 @@ def file_classification_section():
             else:
                 st.error(f"Data classification failed: {response.json().get('error')}")
             
+# Helper function to record audio input and modify transcript 
 def audio_input_section():
-    """Audio recording section with automatic recording and transcript correction"""
-    # Only show the recorder if no audio is recorded yet or if we're in "re-record" mode
     if not st.session_state.audio_data or 'recording_mode' in st.session_state and st.session_state.recording_mode:
         audio_bytes = audio_recorder(
             pause_threshold=100000,
@@ -367,12 +364,9 @@ def audio_input_section():
             icon_size="2.5x"
         )
         
-        # Save recording once done
         if audio_bytes:
             st.session_state.audio_data = audio_bytes
             st.session_state.recording_mode = False
-            
-            # Immediately transcribe the audio
             with st.spinner("Transcribing your audio..."):
                 # Send only for transcription
                 transcript = transcribe_and_process_audio(audio_bytes)
@@ -380,7 +374,6 @@ def audio_input_section():
                     st.session_state.temp_transcript = transcript
                 else:
                     st.error("Failed to get transcription")
-            
             st.rerun()
     
     if st.session_state.audio_data:
@@ -388,7 +381,6 @@ def audio_input_section():
         
         if 'temp_transcript' not in st.session_state:
             st.session_state.temp_transcript = ""
-        
         st.markdown("### Your Transcription")
         corrected_transcript = st.text_area(
             "Review and correct the transcription if needed:",
@@ -397,20 +389,16 @@ def audio_input_section():
         )
         
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             if st.button("Submit", key="submit_transcript"):
                 if corrected_transcript:
-                    # Use the regular ask_question function which now handles chat history
                     answer = ask_question(corrected_transcript)
                     if answer:
-                        # Clear audio after successful submission
                         st.session_state.audio_data = None
                         st.session_state.temp_transcript = ""
                         st.rerun()
                     else:
                         st.error("Failed to get AI response")
-        
         with col2:
             if st.button("Re-record Audio", key="rerecord_btn"):
                 st.session_state.recording_mode = True
@@ -418,10 +406,9 @@ def audio_input_section():
                 st.session_state.temp_transcript = ""
                 st.rerun()
 
+# Helper function that handles text input
 def text_input_section():
-    """Handle question input and response"""
-    question = st.text_input("Enter your question", key="question_input", placeholder="Ask anything...")
-    
+    question = st.text_input("", key="question_input", placeholder="Ask anything...")
     if st.button("Submit", key="submit_text") and question:
         answer = ask_question(question)
         if answer:
@@ -431,23 +418,16 @@ def combined_input_section():
     st.markdown("<div class='sub-header'>Ask a Question</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Text Input", key="text_btn", 
-                     use_container_width=True,
-                     type="primary" if st.session_state.input_method == "text" else "secondary"):
+        if st.button("Text Input", key="text_btn", use_container_width=True, type="primary" if st.session_state.input_method == "text" else "secondary"):
             st.session_state.input_method = "text"
             st.session_state.audio_data = None
             st.session_state.temp_transcript = ""
             st.rerun()
-    
     with col2:
-        if st.button("Speech Input", key="speech_btn", 
-                     use_container_width=True,
-                     type="primary" if st.session_state.input_method == "speech" else "secondary"):
+        if st.button("Speech Input", key="speech_btn", use_container_width=True, type="primary" if st.session_state.input_method == "speech" else "secondary"):
             st.session_state.input_method = "speech"
             st.rerun()
-    
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
     if st.session_state.input_method == "text":
         text_input_section()
     else:
@@ -455,65 +435,32 @@ def combined_input_section():
     
     display_chat_history()
 
-def display_sidebar_prompts():
-    st.sidebar.markdown("### Your Questions")
-
-    user_messages = [msg for msg in st.session_state.chat_history if msg["role"] == "user"]
-    
-    if user_messages:
-        for i, msg in enumerate([m for m in st.session_state.chat_history if m["role"] == "user"]):
-            full_index = st.session_state.chat_history.index(msg)
-            
-            prompt_id = f"prompt_{i}"
-            shortened_text = msg["content"][:50] + "..." if len(msg["content"]) > 50 else msg["content"]
-            st.sidebar.markdown(f"""
-            <div class="sidebar-prompt" id="{prompt_id}" onclick="handlePromptClick('{prompt_id}')" data-index="{full_index}">
-                <div class="sidebar-prompt-text">{shortened_text}</div>
-                <div class="message-time">{msg["time"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.sidebar.button(f"View {i}", key=f"view_btn_{i}", help=f"View conversation for '{shortened_text}'"):
-                st.session_state.selected_message_index = full_index
-                st.rerun()
-        
-        st.sidebar.markdown("""
-        <script>
-        function handlePromptClick(id) {
-            const element = document.getElementById(id);
-            const index = element.getAttribute('data-index');
-            const buttonId = `view_btn_${id.split('_')[1]}`;
-            document.getElementById(buttonId).click();
-        }
-        </script>
-        """, unsafe_allow_html=True)
-    else:
-        st.sidebar.info("No questions asked yet.")
-
 def main():
     st.markdown("<div class='main-header'>NYP AI Chatbot Helper</div>", unsafe_allow_html=True)
     if not st.session_state.logged_in:
         login()
         return
     
-    display_sidebar_prompts()
-    
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
+    if st.session_state.logged_in:
+        st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
+        if st.sidebar.button("Logout", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.session_state.current_chat_id = None
+            st.session_state.chat_history = []
+            st.session_state.chat_groups = {}
         st.rerun()
-    
-    st.sidebar.markdown(f"**Session ID:** {st.session_state.session_id}")
-    st.sidebar.markdown(f"**User:** {st.session_state.username}")
+
+    if st.session_state.current_chat_id:
+        st.sidebar.markdown(f"**Chat ID:** {st.session_state.current_chat_id}")
+
+    display_sidebar_prompts()
 
     tab1, tab2, tab3 = st.tabs(["Ask Questions", "File Upload","Data Classification"])
-    
     with tab1:
         combined_input_section()
-    
     with tab2:
         file_upload_section()
-
     with tab3:
         file_classification_section()
 
