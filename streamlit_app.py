@@ -1,7 +1,7 @@
 from datetime import datetime
 from audio_recorder_streamlit import audio_recorder
 import streamlit as st
-import requests, io, time
+import requests, io, time, re, json
 
 # Set page configuration
 st.set_page_config( 
@@ -217,7 +217,6 @@ def display_sidebar_prompts():
             chat_groups[chat_id] = msg
             
     st.session_state.chat_groups = chat_groups
-    
     if chat_groups:
         for chat_id, first_msg in sorted(chat_groups.items(), key=lambda x: x[0], reverse=True):
             shortened_text = first_msg["content"][:50] + "..." if len(first_msg["content"]) > 50 else first_msg["content"]
@@ -292,21 +291,18 @@ def fetch_user_history(username):
         st.session_state.chat_history = []
         st.session_state.current_chat_id = None
 
+# Helper function that send audio to backend for transcription
 def transcribe_and_process_audio(audio_data):
-    """Send audio to backend for transcription only"""
-    with st.spinner("Processing your audio..."):
-        audio_bytes = io.BytesIO(audio_data)
-        files = {"audio": ("recording.wav", audio_bytes, "audio/wav")}
-        result, error = handle_api_request("transcribe", files=files)
-        
-        if error:
-            st.error(error)
-            return False
-        
-        return True
+    audio_bytes = io.BytesIO(audio_data)
+    files = {"audio": ("recording.wav", audio_bytes, "audio/wav")}
+    result, error = handle_api_request("transcribe", files=files)
+    if error:
+        st.error(error)
+        return None
+    return result.get("transcript")
 
+# Helper function that uploads file to backend
 def upload_file(file):
-    """Upload file to backend"""
     with st.spinner("Uploading and processing file(s)..."):
         files = {"file": file}
         username = st.session_state.username
@@ -315,24 +311,19 @@ def upload_file(file):
         if error:
             st.error(error)
             return False
-        
         return True
 
+# Helper function that handles file uploads
 def file_upload_section():
     failure = 0
-
-    """Handle file upload"""
 
     with st.form('Upload file(s)', clear_on_submit=True):
         uploaded_files = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
         'jpeg', 'jpg', 'png', 'md', 'msg', 'odt', 'org', 'p7s', 'pdf',
-        'ppt', 'pptx', 'rst', 'rtf', 'tiff', 'txt', 'tsv', 'xls', 'xlsx', 'xml'
-        ]
-        , accept_multiple_files=True)
-    
+        'ppt', 'pptx', 'rst', 'rtf', 'tiff', 'txt', 'tsv', 'xls', 'xlsx', 'xml'], accept_multiple_files=True)
+        
         submitted = st.form_submit_button('Upload')
-
         if submitted and uploaded_files != []:
             for uploaded_file in uploaded_files:
                 if not upload_file(uploaded_file):
@@ -340,10 +331,8 @@ def file_upload_section():
             success = len(uploaded_files) - failure
             st.success(f'Uploaded {success} file(s) successfully, {failure} file(s) failed')
 
+# Helper function that handles file classification
 def file_classification_section():
-        
-    """Handle file classification"""
-
     with st.form('Classify file', clear_on_submit=True):
         uploaded_file = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
@@ -351,9 +340,7 @@ def file_classification_section():
         'ppt', 'pptx', 'rst', 'rtf', 'tiff', 'txt', 'tsv', 'xls', 'xlsx', 'xml'])
     
         submitted = st.form_submit_button('Classify')
-
         if submitted and uploaded_file != None:
-            
             files = {"file": uploaded_file}
             response = requests.post("http://127.0.0.1:5001/classify", files=files)
 
@@ -369,7 +356,6 @@ def file_classification_section():
             else:
                 st.error(f"Data classification failed: {response.json().get('error')}")
             
-
 def audio_input_section():
     """Audio recording section with automatic recording and transcript correction"""
     # Only show the recorder if no audio is recorded yet or if we're in "re-record" mode
