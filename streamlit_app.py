@@ -256,6 +256,42 @@ def login():
             else:
                 st.error("Invalid username or password")
 
+def fetch_user_history(username):
+    try:
+        response, error = handle_api_request(
+            "get_history", 
+            method="get", 
+            data={"username": username}
+        )
+        if error:
+            st.warning(f"Could not load chat history: {error}")
+            return
+        if response and 'history' in response:
+            history = response['history']
+            for msg in history:
+                if 'chat_id' not in msg:
+                    msg_time = datetime.strptime(msg['time'], "%H:%M")
+                    msg['chat_id'] = str(int(msg_time.timestamp()))
+
+            st.session_state.chat_history = history
+            if history:
+                chat_ids = [msg.get('chat_id') for msg in history if msg.get('chat_id')]
+                if chat_ids:
+                    st.session_state.current_chat_id = max(set(chat_ids), key=chat_ids.count)
+                else:
+                    st.session_state.current_chat_id = str(int(time.time()))
+            else:
+                st.session_state.current_chat_id = None
+            
+        else:
+            st.session_state.chat_history = []
+            st.session_state.current_chat_id = None
+
+    except Exception as e:
+        st.warning(f"Error loading chat history: {str(e)}")
+        st.session_state.chat_history = []
+        st.session_state.current_chat_id = None
+
 def transcribe_and_process_audio(audio_data):
     """Send audio to backend for transcription only"""
     with st.spinner("Processing your audio..."):
