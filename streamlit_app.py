@@ -160,8 +160,82 @@ def ask_question(question):
             "time": current_time,
             "chat_id": st.session_state.current_chat_id
         })
-        
         return answer
+    
+# Helper function that displays conversation history
+def display_chat_history():
+    if not st.session_state.chat_history:
+        st.info("No conversation history yet. Ask a question to get started!")
+        return
+    
+    if st.session_state.current_chat_id:
+        current_chat_messages = [
+            msg for msg in st.session_state.chat_history 
+            if 'chat_id' not in msg or msg.get('chat_id') == st.session_state.current_chat_id
+        ]
+    else:
+        current_chat_messages = st.session_state.chat_history
+    
+    if not current_chat_messages:
+        st.info("No messages in this chat. Ask a question to get started!")
+        return
+
+    st.markdown("### Conversation History")
+
+    chat_container = st.container()
+    with chat_container:
+        for message in current_chat_messages:
+            if message["role"] == "user":
+                st.markdown(f"""
+                <div class="message-container user-message">
+                    {message["content"]}
+                    <div class="message-time">{message["time"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            else:
+                st.markdown(f"""
+                <div class="message-container bot-message">
+                    {message["content"]}
+                    <div class="message-time">{message["time"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+# Helper function to request new chats and view old chats
+def display_sidebar_prompts():
+    if st.sidebar.button("New Chat", key="new_chat_btn", help="Start a new conversation", use_container_width=True, type="primary"):
+        st.session_state.current_chat_id = str(int(time.time()))
+        st.rerun()
+    
+    st.sidebar.markdown("### Your Chats")
+    chat_groups = {}
+    for msg in st.session_state.chat_history:
+        chat_id = msg.get('chat_id')
+        if not chat_id:
+            continue
+        if chat_id not in chat_groups and msg['role'] == 'user':
+            chat_groups[chat_id] = msg
+            
+    st.session_state.chat_groups = chat_groups
+    
+    if chat_groups:
+        for chat_id, first_msg in sorted(chat_groups.items(), key=lambda x: x[0], reverse=True):
+            shortened_text = first_msg["content"][:50] + "..." if len(first_msg["content"]) > 50 else first_msg["content"]
+            is_selected = st.session_state.current_chat_id == chat_id
+            container_style = "active-chat" if is_selected else ""
+            with st.sidebar.container():
+                st.markdown(f"<div class='{container_style}'>", unsafe_allow_html=True)
+                col1, col2 = st.sidebar.columns([4, 1])
+                with col1:
+                    if st.button(shortened_text, key=f"chat_btn_{chat_id}",help=f"View this conversation", use_container_width=True):
+                        st.session_state.current_chat_id = chat_id
+                        st.rerun()
+                with col2:
+                    st.markdown(f"<p style='font-size: 0.7em; color: #888; text-align: right;'>{first_msg['time']}</p>", 
+                               unsafe_allow_html=True)
+                st.markdown("</div><hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
+    else:
+        st.sidebar.info("No previous chats found.")
 
 def login():
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -328,37 +402,6 @@ def text_input_section():
         answer = ask_question(question)
         if answer:
             st.rerun()
-
-def display_chat_history():
-    """Display the chat history in a conversational format"""
-    if not st.session_state.chat_history:
-        st.info("No conversation history yet. Ask a question to get started!")
-        return
-    
-    # st.markdown("### Conversation History")
-
-    if st.session_state.selected_message_index >= 0:
-        user_message = st.session_state.chat_history[st.session_state.selected_message_index]
-        bot_message = None
-        if st.session_state.selected_message_index + 1 < len(st.session_state.chat_history):
-            next_message = st.session_state.chat_history[st.session_state.selected_message_index + 1]
-            if next_message["role"] == "assistant":
-                bot_message = next_message
-        
-        st.markdown(f"""
-        <div class="message-container user-message">
-            {user_message["content"]}
-            <div class="message-time">{user_message["time"]}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if bot_message:
-            st.markdown(f"""
-            <div class="message-container bot-message">
-                {bot_message["content"]}
-                <div class="message-time">{bot_message["time"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
 
 def combined_input_section():
     st.markdown("<div class='sub-header'>Ask a Question</div>", unsafe_allow_html=True)
