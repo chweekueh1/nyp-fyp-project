@@ -243,13 +243,15 @@ def login():
         st.markdown("### Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password", key="password_input")
-
         if st.button("Login"):
             if username == "staff" and password == "123":
                 st.session_state.logged_in = True
                 st.session_state.username = username
-                # Load conversation history from persistent storage
-                st.session_state.chat_history = load_history(username)
+                st.session_state.chat_history = []
+                st.session_state.current_chat_id = None
+                st.session_state.chat_groups = {}
+
+                fetch_user_history(username)
                 st.success("Login successful!")
             else:
                 st.error("Invalid username or password")
