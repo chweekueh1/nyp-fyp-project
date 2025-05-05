@@ -4,8 +4,13 @@ import streamlit as st
 import requests, io, time
 
 # Set page configuration
-st.set_page_config( page_title="NYP AI Chatbot Helper", page_icon="🤖", layout="wide")
+st.set_page_config( 
+    page_title="NYP AI Chatbot Helper", 
+    page_icon="🤖", 
+    layout="wide"
+)
 
+# Apply custom styling
 st.markdown('''
 <style>
     .css-1egvi7u {margin-top: -3rem;}
@@ -102,12 +107,25 @@ if 'current_chat_id' not in st.session_state:
     st.session_state.current_chat_id = None
 if 'chat_groups' not in st.session_state:
     st.session_state.chat_groups = {}
+
 for msg in st.session_state.chat_history:
     if 'chat_id' not in msg:
         msg['chat_id'] = st.session_state.current_chat_id or str(int(time.time()))
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
+
+# Helper function to handle API requests with error handling
+def handle_api_request(endpoint, method="post", data=None, files=None, json=None):
+    try:
+        if method.lower() == "post":
+            response = requests.post(f"{API_URL}/{endpoint}", data=data, files=files, json=json, timeout=30)
+        else:
+            response = requests.get(f"{API_URL}/{endpoint}", params=data, timeout=30)
+        response.raise_for_status()
+        return response.json(), None
+    except Exception as e:
+        return None, f"An unexpected error occurred: {str(e)}"
 
 def login():
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -125,29 +143,6 @@ def login():
                 st.success("Login successful!")
             else:
                 st.error("Invalid username or password")
-
-def handle_api_request(endpoint, method="post", data=None, files=None, json=None):
-    """Generic function to handle API requests with error handling"""
-    try:
-        if method.lower() == "post":
-            response = requests.post(f"{API_URL}/{endpoint}", data=data, files=files, json=json, timeout=30)
-        else:
-            response = requests.get(f"{API_URL}/{endpoint}", params=data, timeout=30)
-        
-        response.raise_for_status()
-        return response.json(), None
-    except requests.exceptions.ConnectionError:
-        return None, "Cannot connect to server. Is the backend running?"
-    except requests.exceptions.Timeout:
-        return None, "Request timed out. The server might be busy."
-    except requests.exceptions.HTTPError as e:
-        try:
-            error_msg = response.json().get("error", str(e))
-        except:
-            error_msg = str(e)
-        return None, f"HTTP Error: {error_msg}"
-    except Exception as e:
-        return None, f"An unexpected error occurred: {str(e)}"
 
 def ask_question(question):
     """Send question to backend and get answer"""
