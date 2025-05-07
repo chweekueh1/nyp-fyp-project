@@ -107,7 +107,6 @@ if 'current_chat_id' not in st.session_state:
     st.session_state.current_chat_id = None
 if 'chat_groups' not in st.session_state:
     st.session_state.chat_groups = {}
-
 for msg in st.session_state.chat_history:
     if 'chat_id' not in msg:
         msg['chat_id'] = st.session_state.current_chat_id or str(int(time.time()))
