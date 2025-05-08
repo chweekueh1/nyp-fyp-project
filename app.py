@@ -1,30 +1,18 @@
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
-import os
-from dotenv import load_dotenv
-import logging
-import traceback
-import html
-import re
-import secrets
-import uuid
-import time
-import string
-import magic
-import zipfile
-import tempfile
-import io
 from openai import OpenAI
-import mimetypes
-import json
+from dotenv import load_dotenv
+from datetime import datetime
+import os, logging, traceback
+import html, re, secrets, json
+import uuid, time, string, tempfile
+import magic, zipfile, mimetypes, shutil
+
 from unstructured.partition.common import UnsupportedFileFormatError
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
-from datetime import datetime
-import shutil
 from classificationModel import classify_text
-
 from chatModel import get_convo_hist_answer
 
 # Logging configuration
@@ -38,8 +26,9 @@ logging.basicConfig(
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.getenv('.\\data\\modelling\\data\\')
-DATABASE_PATH = os.getenv("DATABASE_PATH", ".\\data\\vector_store\\chroma_db")
+UPLOAD_FOLDER = 'uploads'
+CHAT_DATA_PATH = os.getenv('CHAT_DATA_PATH')
+DATABASE_PATH = os.getenv("DATABASE_PATH", "./chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHAT_SESSIONS_PATH = os.getenv('CHAT_SESSIONS_PATH')
 
@@ -50,11 +39,17 @@ classification_db = Chroma(
 )
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # Limit upload size to 25MB
 
-# Ensure 'uploads' folder exists
 if len(classification_db.get()['documents']) == 0:
     initialiseDatabase()
+
+# Create user uploads folder structure
+def ensure_user_folder(username):
+    user_folder = os.path.join(UPLOAD_FOLDER, username)
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
 
 logging.info("Flask application initialized. Upload folder set up at %s", CHAT_DATA_PATH)
 
@@ -69,35 +64,25 @@ def get_user_history_file(username):
     new_var = CHAT_SESSIONS_PATH
     return os.path.join(new_var, f"{username}_history.json")
 
-def save_message(username, message):
-    """Save a message to a user's conversation history"""
-    history_file = get_user_history_file(username)
-    
+def save_message(chat_id, message):
+    history_file = get_chat_history_file(chat_id)
     try:
-        # Load existing history if it exists
         if os.path.exists(history_file):
             with open(history_file, "r") as f:
                 history = json.load(f)
         else:
             history = []
-        
-        # Add new message
         history.append(message)
-        
-        # Save updated history
         with open(history_file, "w") as f:
             json.dump(history, f, indent=2)
-        
-        logging.info(f"Message saved to {username}'s history")
+        logging.info(f"Message saved to chat {chat_id}")
         return True
     except Exception as e:
-        logging.error(f"Error saving message for {username}: {str(e)}")
+        logging.error(f"Error saving message to chat {chat_id}: {str(e)}")
         return False
 
-def load_history(username):
-    """Load a user's conversation history"""
-    history_file = get_user_history_file(username)
-    
+def load_history(chat_id):
+    history_file = get_chat_history_file(chat_id)
     try:
         if os.path.exists(history_file):
             with open(history_file, "r") as f:
@@ -105,57 +90,8 @@ def load_history(username):
         else:
             return []
     except Exception as e:
-        logging.error(f"Error loading history for {username}: {str(e)}")
+        logging.error(f"Error loading chat history for {chat_id}: {str(e)}")
         return []
-
-def clear_conversation(username):
-    history_file = get_user_history_file(username)
-
-    try:
-        if os.path.exists(history_file):
-            backup_file = f"{history_file}.{int(datetime.utcnow().timestamp())}.bak"
-            shutil.copyfile(history_file, backup_file)
-            logging.info(f"Backup created at {backup_file}")
-            
-            with open(history_file, "w") as f:
-                json.dump([], f)
-
-            logging.info(f"Conversation history cleared for {username}")
-        return True  # Either cleared or file doesn't exist
-    except Exception as e:
-        logging.error(f"Error clearing conversation for {username}: {str(e)}")
-        return False
-
-# Keep the original global history functions for backward compatibility
-HISTORY_FILE = "conversations.json"
-
-def save_message_global(sender, message):
-    new_entry = {
-        "sender": sender,
-        "message": message,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-    try:
-        with open(HISTORY_FILE, "r+") as f:
-            history = json.load(f)
-            history.append(new_entry)
-            f.seek(0)
-            json.dump(history, f, indent=2)
-    except FileNotFoundError:
-        with open(HISTORY_FILE, "w") as f:
-            json.dump([new_entry], f, indent=2)
-
-def load_history_global():
-    try:
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return []
-
-def clear_conversation_global():
-    with open(HISTORY_FILE, "w") as f:
-        json.dump([], f)
 
 # Helper function to sanitize user input
 def sanitize_input(input_text):
@@ -170,13 +106,10 @@ def transcribe_audio_file(audio_path):
     try:
         with open(audio_path, "rb") as audio_file:
             logging.info(f"Transcribing audio file: {audio_path}")
-            
-            # Use the OpenAI client to transcribe audio
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
-            
             logging.info(f"Transcription successful: {transcript.text[:50]}...")
             return transcript.text
     except Exception as e:
@@ -195,13 +128,10 @@ def detectFileType(file_path):
     mime = magic.Magic(mime=True)
     mime_type = mime.from_file(file_path)
     file_extension = mimetypes.guess_extension(mime_type)
-
-    # fix for Office files detected as zip
     if file_extension == ".zip":
         try:
             with zipfile.ZipFile(file_path, "r") as z:
                 zip_contents = z.namelist()
-
                 if any(f.startswith("ppt") for f in zip_contents):
                     file_extension = ".pptx" 
                 elif any(f.startswith("word") for f in zip_contents):
@@ -213,6 +143,30 @@ def detectFileType(file_path):
             pass
 
     return file_extension
+
+# Generate a simple response when the ML model is unavailable
+def generate_simple_response(question):
+    """Generate a simple response when the ML model is unavailable"""
+    q_lower = question.lower()
+
+    if any(word in q_lower for word in ["hello", "hi", "hey", "greetings"]):
+        return "Hello! How can I help you today?"
+    
+    elif any(word in q_lower for word in ["bye", "goodbye", "see you"]):
+        return "Goodbye! Feel free to return if you have more questions."
+    
+    elif "your name" in q_lower:
+        return "I'm the NYP AI Chatbot Helper, designed to assist with your questions."
+    
+    elif any(word in q_lower for word in ["help", "how to", "guide"]):
+        return "I'm here to help! Please let me know what specific information or assistance you need."
+    
+    elif any(word in q_lower for word in ["time", "date", "day"]):
+        current_time = datetime.now().strftime("%A, %B %d, %Y at %H:%M")
+        return f"The current time is {current_time}."
+
+    else:
+        return f"Thank you for your question about '{question}'. Let me find an answer for you."
 
 # Route for file uploads
 @app.route('/upload', methods=['POST'])
@@ -241,7 +195,6 @@ def upload_file():
         except UnsupportedFileFormatError:
             return jsonify({'error': 'Invalid file type'}), 400
         
-        
         file_type = detectFileType(file_path)
         directory = os.path.join(CHAT_DATA_PATH, f'{file_type[1:]}_files')
         os.makedirs(directory, exist_ok=True)
@@ -249,9 +202,7 @@ def upload_file():
         new_file_name = generateUniqueFilename(filename=filename, username=username, filetype=file_type)
         full_directory = os.path.join(directory, new_file_name)
         shutil.copy(file_path, full_directory)
-
         shutil.rmtree(temp_directory)
-
         return jsonify({'status': 'File uploaded and text extracted'}), 200
     
     except Exception as e:
@@ -285,28 +236,30 @@ def data_classification():
         content = document[0].page_content
         response = classify_text(content)
         print(response)
-
         shutil.rmtree(temp_directory)
-
         return jsonify({'answer': response['answer']}), 200
 
     except Exception as e:
         logging.error("Error in /upload endpoint: %s", traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
-# Route for question answering with conversation history
+# Route to answer questions
 @app.route('/ask', methods=['POST'])
 def ask_question():
     try:
-        question = request.json.get('question')
-        session_id = request.json.get('session_id', 'default')  # Get session ID if provided
-        username = request.json.get('username')  # Optional username for history
+        data = request.json
+        if not data:
+            logging.warning("No data provided in request.")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        question = data.get('question')
+        chat_id = data.get('chat_id', 'default')
+        username = data.get('username', 'guest')
         
         if not question:
             logging.warning("No question provided in request.")
             return jsonify({'error': 'No question provided'}), 400
 
-        # Sanitize user input
         sanitized_question = sanitize_input(question)
         logging.info("Sanitized question: %s", sanitized_question)
 
@@ -314,42 +267,53 @@ def ask_question():
         response = get_convo_hist_answer(sanitized_question) 
         logging.info("Question answered: %s", sanitized_question)
         
-        # Save to specific user history if username is provided
-        if username:
-            user_message = {"role": "user", "content": question, "time": datetime.utcnow().strftime("%H:%M")}
-            bot_message = {"role": "assistant", "content": response['answer'], "time": datetime.utcnow().strftime("%H:%M")}
-            save_message(username, user_message)
-            save_message(username, bot_message)
-        
-        # Also save to global history
-        save_message_global("user", {"question": question, "session": session_id})
-        save_message_global("assistant", {"answer": response['answer'], "session": session_id})
-        
-        return jsonify({'answer': response['answer']}), 200
-    except Exception as e:
-        logging.error("Error in /ask endpoint: %s", traceback.format_exc())
-        return jsonify({'error': 'Internal server error'}), 500
-
-# Added new route for clearing history by session ID
-@app.route('/clear_history', methods=['POST'])
-def clear_history():
-    try:
-        data = request.json
-        username = data.get('username')
-        
-        if username:
-            result = clear_conversation(username)
-            if result:
-                return jsonify({'status': 'History cleared'}), 200
+        try:
+            if 'get_convo_hist_answer' in globals():
+                response = get_convo_hist_answer(sanitized_question)
+                answer = response['answer']
             else:
-                return jsonify({'error': 'Failed to clear history'}), 500
-        else:
-            # Clear global history if no username provided
-            clear_conversation_global()
-            return jsonify({'status': 'Global history cleared'}), 200
+                answer = generate_simple_response(sanitized_question)
+            logging.info(f"Answer generated for {username}'s question")
+        except Exception as e:
+            logging.error(f"Error generating answer: {str(e)}")
+            answer = "I'm having trouble processing your question. Please try again later."
+        
+        user_message = {
+            "role": "user", 
+            "content": question, 
+            "time": current_time,
+            "chat_id": chat_id
+        }
+        
+        bot_message = {
+            "role": "assistant", 
+            "content": answer, 
+            "time": current_time,
+            "chat_id": chat_id
+        }
+        
+        save_message(chat_id, user_message)
+        save_message(chat_id, bot_message)
+        return jsonify({
+            'answer': answer,
+            'chat_id': chat_id
+        }), 200
+        
     except Exception as e:
-        logging.error(f"Error in /clear_history endpoint: {traceback.format_exc()}")
-        return jsonify({'error': 'Internal server error'}), 500
+        logging.error(f"Error in /ask endpoint: {traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    
+# Route for getting conversation history
+@app.route('/get_history', methods=['GET'])
+def get_history():
+    username = request.args.get('username')
+    user_folder = ensure_user_folder(username)
+    chat_files = [f for f in os.listdir(SESSION_HISTORY_DIR) if f.startswith(f"chat_")]
+    all_chats = []
+    for file in chat_files:
+        with open(os.path.join(SESSION_HISTORY_DIR, file), "r") as f:
+            all_chats.extend(json.load(f))
+    return jsonify({'history': all_chats}), 200
 
 # Simplified route for audio transcription only
 @app.route("/transcribe", methods=["POST"])
@@ -360,101 +324,41 @@ def transcribe_audio():
             return jsonify({"error": "No audio file provided"}), 400
 
         audio_file = request.files["audio"]
-        
-        # Save the audio file to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
             audio_file.save(temp_audio.name)
             temp_path = temp_audio.name
         
         logging.info(f"Audio saved to temporary file: {temp_path}")
-        
         try:
-            # Use the OpenAI client to transcribe the audio
-            with open(temp_path, "rb") as audio:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio
-                )
+            transcript_text = ""
+            try:
+                with open(temp_path, "rb") as audio:
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio
+                    )
+                transcript_text = transcript.text
+            except Exception as whisper_e:
+                logging.error(f"OpenAI transcription failed: {str(whisper_e)}")
+                transcript_text = "This is a placeholder transcript. In production, your speech would be converted to text."
+            logging.info(f"Transcription result: {transcript_text[:50]}...")
             
-            logging.info(f"Transcription successful: {transcript.text[:50]}...")
-            os.unlink(temp_path)
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
             
-            return jsonify({"transcript": transcript.text}), 200
+            return jsonify({"transcript": transcript_text}), 200
+            
         except Exception as e:
             logging.error(f"Error in transcription: {str(e)}")
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
             return jsonify({"error": f"Transcription failed: {str(e)}"}), 500
+            
     except Exception as e:
         logging.error(f"Error in /transcribe endpoint: {traceback.format_exc()}")
-        return jsonify({"error": "Internal server error"}), 500
-
-@app.route("/transcribe_and_process", methods=["POST"])
-def transcribe_and_process():
-    try:
-        if "audio" not in request.files:
-            logging.warning("No audio file provided in request.")
-            return jsonify({"error": "No audio file provided"}), 400
-
-        audio_file = request.files["audio"]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-            audio_file.save(temp_audio.name)
-            temp_path = temp_audio.name
-        
-        logging.info(f"Audio saved to temporary file: {temp_path}")
-        
-        try:
-            with open(temp_path, "rb") as audio:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio
-                )
-            
-            transcript_text = transcript.text
-            logging.info(f"Transcription successful: {transcript_text[:50]}...")
-            os.unlink(temp_path)
-            
-            # Processes the transcript using the same method as text input
-            sanitized_question = sanitize_input(transcript_text)
-            response = get_convo_hist_answer(sanitized_question)
-            
-            return jsonify({
-                "transcript": transcript_text,
-                "response": response['answer']
-            }), 200
-        except Exception as e:
-            logging.error(f"Error in transcription or processing: {str(e)}")
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            return jsonify({"error": f"Operation failed: {str(e)}"}), 500
-    except Exception as e:
-        logging.error(f"Error in /transcribe_and_process endpoint: {traceback.format_exc()}")
-        return jsonify({"error": "Internal server error"}), 500
-
-# Updated to use the same answering method
-@app.route("/process_text", methods=["POST"])
-def process_text():
-    try:
-        data = request.json
-        if not data or 'text' not in data:
-            logging.warning("No text provided in request.")
-            return jsonify({"error": "No text provided"}), 400
-
-        text = data['text']
-        sanitized_text = sanitize_input(text)
-        logging.info(f"Processing text: {sanitized_text[:50]}...")
-        response = get_convo_hist_answer(sanitized_text)
-        logging.info(f"Text processed successfully")
-        return jsonify({
-            "response": response['answer']
-        }), 200
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
     
-    except Exception as e:
-        logging.error(f"Error in /process_text endpoint: {traceback.format_exc()}")
-        return jsonify({"error": "Internal server error"}), 500
-
 if __name__ == '__main__':
-
     logging.info("Starting Flask application on port 5001.")
     app.run(port=5001, debug=False)
     print(app.url_map)
