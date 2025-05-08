@@ -38,9 +38,10 @@ logging.basicConfig(
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.getenv('CHAT_DATA_PATH')
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./chroma_db")
+CHAT_DATA_PATH = os.getenv('.\\data\\modelling\\data\\')
+DATABASE_PATH = os.getenv("DATABASE_PATH", ".\\data\\vector_store\\chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+CHAT_SESSIONS_PATH = os.getenv('CHAT_SESSIONS_PATH')
 
 classification_db = Chroma(
     collection_name = 'classification',
@@ -58,15 +59,15 @@ if len(classification_db.get()['documents']) == 0:
 logging.info("Flask application initialized. Upload folder set up at %s", CHAT_DATA_PATH)
 
 # Create conversations directory if it doesn't exist
-CONVERSATIONS_DIR = "conversations"
-if not os.path.exists(CONVERSATIONS_DIR):
-    os.makedirs(CONVERSATIONS_DIR)
-    logging.info(f"Created conversations directory at {CONVERSATIONS_DIR}")
+if not os.path.exists(CHAT_SESSIONS_PATH):
+    os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
+    logging.info(f"Created conversations directory at {CHAT_SESSIONS_PATH}")
 
 # Updated history management functions to handle user-specific histories
 def get_user_history_file(username):
     """Get the path to a user's conversation history file"""
-    return os.path.join(CONVERSATIONS_DIR, f"{username}_history.json")
+    new_var = CHAT_SESSIONS_PATH
+    return os.path.join(new_var, f"{username}_history.json")
 
 def save_message(username, message):
     """Save a message to a user's conversation history"""
@@ -310,7 +311,7 @@ def ask_question():
         logging.info("Sanitized question: %s", sanitized_question)
 
         # Get answer from model with conversation history
-        response = get_convo_hist_answer(sanitized_question)
+        response = get_convo_hist_answer(sanitized_question) 
         logging.info("Question answered: %s", sanitized_question)
         
         # Save to specific user history if username is provided

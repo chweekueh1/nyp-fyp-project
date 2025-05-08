@@ -6,13 +6,16 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 from typing_extensions import Annotated, TypedDict
 from typing import Sequence
 import openai, os, json, shelve
+import sqlite3
 from dotenv import load_dotenv
+from utils import rel2abspath, create_folders
 
 load_dotenv()
 
@@ -21,6 +24,10 @@ DATABASE_PATH = os.getenv("DATABASE_PATH")
 CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH"))
+
+create_folders(LANGCHAIN_CHECKPOINT_PATH)
+
 
 llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
 embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
@@ -67,7 +74,7 @@ system_prompt = (
     "Answer the following question and avoid giving any harmful, inappropriate, or biased content. "
     "Respond respectfully and ethically. Do not answer inappropriate or harmful questions. "
     "If the answer does not exist in the vector database, "
-    "Use your best judgment to answer the question if you feel the question is still related to NYP CNC. "
+    "Use your best judgment to answer the question if you feel the question is still related to NYP CNC and data security. "
     "Otherwise, reject the question nicely."
     "Keep the answer concise."
     "\n\n"
@@ -133,6 +140,7 @@ class State(TypedDict):
 
 # Model node that dynamically builds chain
 def call_model(state: State):
+    
     question = state["input"]
     retriever = route_retriever(question)
 
@@ -158,16 +166,18 @@ def call_model(state: State):
         "context": response["context"],
         "answer": response["answer"],
     }
-
+ 
 # LangGraph workflow
 workflow = StateGraph(state_schema=State)
 workflow.add_edge(START, "model")
 workflow.add_node("model", call_model)
-memory = MemorySaver()
-app = workflow.compile(checkpointer=memory)
+conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
+sqlite_saver =SqliteSaver(conn)  
+app = workflow.compile(checkpointer=sqlite_saver)
 
-config = {"configurable": {"thread_id": "abc123"}}
+config = {"configurable": {"thread_id": "abc234"}}
 
 def get_convo_hist_answer(question):
     state = {"input": question, "chat_history": [], "context": "", "answer": ""}
     return app.invoke(state, config=config)
+    

@@ -7,11 +7,7 @@ __pycache__/
 # Ignore local dependencies
 dependencies/
 
-# Ignore database
-chroma_db/
+# Ignore data
+data/
 
 .env
-
-keywords_databank.bak
-keywords_databank.dat
-keywords_databank.dir
