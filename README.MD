@@ -31,7 +31,15 @@
   python setup.py
 
 ```
-6. Install the library libmagic
+6. Activate the virtual enviroment
+
+``` bash
+
+  .venv\Scripts\activate
+
+```
+
+7. Install the library libmagic
 
 ``` bash
 
@@ -43,7 +51,7 @@
 
 ## Running the Model Interface (Frontend & Backend)
 
-Run app.py and streamlit_app.py 
+Run app.py and streamlit_app.py
 
 ```bash
 
