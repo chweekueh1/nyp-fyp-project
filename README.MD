@@ -1,25 +1,59 @@
 # NYP FYP CNC Chatbot
+
+## Installation and Set-up
+
 1. Git Clone the repository (Branch: **main**)
 
 2. Install [Python Version 3.11.9](https://www.python.org/downloads/release/python-3119/)
 
    1. Open the installer and ensure to check the box (add to PATH) on the bottom of the installer screen.
-   2. Once done, open the cloned GitHub repository.
-   3. Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
-   4. Find and select Python 3.12.9
 
-3. Unzip dependecies.zip into the same folder
 
-4. Create a virtual environment and activate it
+3. Once done, open the cloned GitHub repository (in VS Code)
+   
+   1. Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
+   2. Find and select Python 3.11.9
+
+4. Install the library dotenv
 
    Open a terminal ( Command Prompt )
 
 ``` bash
-  python -m venv .venv
-  .venv\Scripts\activate
+
+  pip install dotenv
+
 ```
-5. Install requirements
+
+5. Run the setup.py
+
+``` bash
+
+  python setup.py
+
+```
+6. Install the library libmagic
+
+``` bash
+
+  pip install python-magic
+  pip install python-magic-bin
+
+```
+
+
+## Running the Model Interface (Frontend & Backend)
+
+Run app.py and streamlit_app.py 
 
 ```bash
-  pip3 install -r requirements.txt
+
+python app.py
+streamlit run streamlit_app.py
+
 ```
+
+## Environment Variables
+
+To run this project, you will need to add the following environment variable to your .env file
+
+`OPENAI_API_KEY`

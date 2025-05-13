@@ -7,9 +7,9 @@ __pycache__/
 # Ignore local dependencies
 dependencies/
 
-# Ignore data
-data/
+# Ignore certain data
+data/keyword/
+data/memory_persistence/
+data/vector_store/
 
 app.log
-
-.env
