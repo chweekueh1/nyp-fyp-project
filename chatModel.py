@@ -24,6 +24,7 @@ DATABASE_PATH = os.getenv("DATABASE_PATH")
 CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+KEYWORDS_DATABANK_PATH = rel2abspath(os.getenv("KEYWORDS_DATABANK_PATH"))
 LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH"))
 
 create_folders(LANGCHAIN_CHECKPOINT_PATH)
@@ -91,7 +92,7 @@ qa_prompt = ChatPromptTemplate.from_messages(
 )
 
 def match_keywords(question):
-    with shelve.open('keywords_databank') as db:
+    with shelve.open(KEYWORDS_DATABANK_PATH) as db:
         keywords = db['keywords']
     keywords.append('None')
     content = f"###Keywords###\n{', '.join(keywords)}\n\n###Instructions###\nFrom the list of keywords, select all that apply to the question’s topic or subject matter. If none apply, return 'None'.\n{question}\n"
