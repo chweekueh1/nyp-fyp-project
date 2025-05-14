@@ -176,9 +176,7 @@ conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
 sqlite_saver =SqliteSaver(conn)  
 app = workflow.compile(checkpointer=sqlite_saver)
 
-config = {"configurable": {"thread_id": "abc234"}}
-
-def get_convo_hist_answer(question):
+def get_convo_hist_answer(question, thread_id):
     state = {"input": question, "chat_history": [], "context": "", "answer": ""}
-    return app.invoke(state, config=config)
+    return app.invoke(state, config={"configurable": {"thread_id": thread_id}})
     

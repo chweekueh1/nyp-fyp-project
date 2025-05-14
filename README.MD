@@ -38,6 +38,8 @@
   .venv\Scripts\activate
 
 ```
+   - Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
+   - Find and select Python 3.11.9 ('.venv')
 
 7. Install the library libmagic
 
@@ -47,7 +49,6 @@
   pip install python-magic-bin
 
 ```
-
 
 ## Running the Model Interface (Frontend & Backend)
 
