@@ -11,5 +11,6 @@ dependencies/
 data/keyword/
 data/memory_persistence/
 data/vector_store/
+data/chat_sessions/
 
 app.log
