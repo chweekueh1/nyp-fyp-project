@@ -13,4 +13,5 @@ data/memory_persistence/
 data/vector_store/
 data/chat_sessions/
 
+#Ignore the log files
 app.log

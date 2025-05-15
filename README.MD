@@ -33,13 +33,14 @@
 ```
 6. Activate the virtual enviroment
 
+   1. Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
+   2. Find and select Python 3.11.9 ('.venv')
+
 ``` bash
 
   .venv\Scripts\activate
 
 ```
-   - Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
-   - Find and select Python 3.11.9 ('.venv')
 
 7. Install the library libmagic
 
