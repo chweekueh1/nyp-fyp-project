@@ -188,8 +188,8 @@ def fetch_user_history(username):
         st.session_state.chat_history = []
         st.session_state.current_chat_id = None
 
+# Sends question to backend and gets answer
 def ask_question(question):
-    """Send question to backend and get answer"""
     with st.spinner("Getting answer..."):
         # Include session ID in payload
         payload = {
@@ -216,8 +216,8 @@ def ask_question(question):
         
         return answer
 
+# Sends audio to backend for transcription
 def transcribe_and_process_audio(audio_data):
-    """Send audio to backend for transcription only"""
     audio_bytes = io.BytesIO(audio_data)
     files = {"audio": ("recording.wav", audio_bytes, "audio/wav")}
     result, error = handle_api_request("transcribe", files=files)
@@ -239,18 +239,15 @@ def upload_file(file):
         
         return True
 
+# Handles file upload
 def file_upload_section():
-
-    """Handle file upload"""
-
     failure = 0
     with st.form('Upload file(s)', clear_on_submit=True):
         uploaded_files = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
         'jpeg', 'jpg', 'png', 'md', 'msg', 'odt', 'org', 'p7s', 'pdf',
         'ppt', 'pptx', 'rst', 'rtf', 'tiff', 'txt', 'tsv', 'xls', 'xlsx', 'xml'
-        ]
-        , accept_multiple_files=True)
+        ], accept_multiple_files=True)
     
         submitted = st.form_submit_button('Upload')
 
@@ -261,10 +258,8 @@ def file_upload_section():
             success = len(uploaded_files) - failure
             st.success(f'Uploaded {success} file(s) successfully, {failure} file(s) failed')
 
+# Handles file classification
 def file_classification_section():
-        
-    """Handle file classification"""
-
     with st.form('Classify file', clear_on_submit=True):
         uploaded_file = st.file_uploader("Choose a file", type=[
         'bmp', 'csv', 'doc', 'docx', 'eml', 'epub', 'heic', 'html',
@@ -274,7 +269,6 @@ def file_classification_section():
         submitted = st.form_submit_button('Classify')
 
         if submitted and uploaded_file != None:
-            
             files = {"file": uploaded_file}
             response = requests.post("http://127.0.0.1:5001/classify", files=files)
 
@@ -282,17 +276,16 @@ def file_classification_section():
                 json_str = response.json().get("answer")
                 cleaned = re.sub(r"^```json\s*|\s*```$", "",json_str)
                 data = json.loads(cleaned)
-                st.markdown("### 🧾 Result")
-                st.markdown(f"**🔐 Classification:** `{data.get('classification')}`")
-                st.markdown(f"**🔒 Sensitivity:** `{data.get('sensitivity')}`")
-                st.markdown("**🧠 Reasoning:**")
+                st.markdown("### Result")
+                st.markdown(f"** Classification:** `{data.get('classification')}`")
+                st.markdown(f"** Sensitivity:** `{data.get('sensitivity')}`")
+                st.markdown("** Reasoning:**")
                 st.markdown(f"> {data.get('reasoning')}")    
             else:
                 st.error(f"Data classification failed: {response.json().get('error')}")
             
-
+# Records audio and transcript correction
 def audio_input_section():
-    """Audio recording section with automatic recording and transcript correction"""
     if not st.session_state.audio_data or 'recording_mode' in st.session_state and st.session_state.recording_mode:
         audio_bytes = audio_recorder(
             pause_threshold=100000,
@@ -340,15 +333,16 @@ def audio_input_section():
                 st.session_state.temp_transcript = ""
                 st.rerun()
 
+# Handles question input and response
 def text_input_section():
-    """Handle question input and response"""
-    question = st.text_input("", key="question_input", placeholder="Ask anything...")
+    question = st.text_input("Type your question here", key="question_input", placeholder="Ask anything...")
     if st.button("Submit", key="submit_text") and question:
         answer = ask_question(question)
         if answer:
+            del st.session_state["question_input"]
             st.rerun()
 
-# Helper function that displays conversation history
+# Displays conversation history
 def display_chat_history():
     if not st.session_state.chat_history:
         st.info("No conversation history yet. Ask a question to get started!")
@@ -408,7 +402,7 @@ def combined_input_section():
 
     display_chat_history()
 
-# Helper function to request New Chats and View Old Chats
+# Request new chats and view old chats
 def display_sidebar_prompts():
     if st.sidebar.button("New Chat", key="new_chat_btn", help="Start a new conversation", use_container_width=True, type="primary"):
         st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
@@ -450,8 +444,11 @@ def main():
     if not st.session_state.logged_in:
         login()
         return
+    
     if st.session_state.logged_in:
-        st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
+        with st.container():
+            st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
+        # st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
         if st.sidebar.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = None
@@ -459,9 +456,12 @@ def main():
             st.session_state.chat_history = []
             st.session_state.chat_groups = {}
             st.rerun()
-    if st.session_state.current_chat_id:
-        st.sidebar.markdown(f"**Chat ID:** {st.session_state.current_chat_id}")
+
+    # if st.session_state.current_chat_id:
+    #     st.sidebar.markdown(f"**Chat ID:** {st.session_state.current_chat_id}")
+
     display_sidebar_prompts()
+
     tab1, tab2, tab3 = st.tabs(["Ask Questions", "File Upload", "Data Classification"])
     with tab1:
         combined_input_section()
@@ -469,7 +469,6 @@ def main():
         file_upload_section()
     with tab3:
         file_classification_section()
-
 
 if __name__ == "__main__":
     main()
