@@ -143,9 +143,10 @@ def login():
                 st.session_state.logged_in = True
                 st.session_state.username = username
                 st.session_state.chat_history = []
-                st.session_state.chat_groups = {}
 
                 fetch_user_history(username)
+                new_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+                st.session_state.current_chat_id = new_chat_id
                 st.success("Login successful!")
             else:
                 st.error("Invalid username or password")
@@ -160,25 +161,17 @@ def fetch_user_history(username):
         if error:
             st.warning(f"Could not load chat history: {error}")
             return
+
         if response and 'history' in response:
             history = response['history']
+            
             for msg in history:
                 if 'chat_id' not in msg:
                     msg['chat_id'] = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
 
             st.session_state.chat_history = history
-            if history:
-                chat_ids = [msg.get('chat_id') for msg in history if msg.get('chat_id')]
-                timestamps = [msg.get('timestamp') for msg in history if msg.get('timestamp')]
-                if chat_ids:
-                    latest_timestamp = max(set(timestamps), key=chat_ids.count)
-                    latest_chat = next(chat for chat in history if chat['timestamp'] == latest_timestamp)
-                    st.session_state.current_chat_id = latest_chat.get('chat_id')
-                else:
-                    st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
-            else:
-                st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
-            
+            st.session_state.current_chat_id = None
+
         else:
             st.session_state.chat_history = []
             st.session_state.current_chat_id = None
