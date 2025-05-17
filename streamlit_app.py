@@ -340,7 +340,7 @@ def display_chat_history():
     if not st.session_state.chat_history:
         st.info("No conversation history yet. Ask a question to get started!")
         return
-    
+
     if st.session_state.current_chat_id:
         current_chat_messages = [
             msg for msg in st.session_state.chat_history 
@@ -348,27 +348,48 @@ def display_chat_history():
         ]
     else:
         current_chat_messages = st.session_state.chat_history
-    
+
     if not current_chat_messages:
         st.info("No messages in this chat. Ask a question to get started!")
         return
-    
+
+    # Sort by timestamp
+    try:
+        sorted_messages = sorted(
+            current_chat_messages,
+            key=lambda x: datetime.strptime(x['timestamp'], r'%d%m%Y%H%M%S%f')
+        )
+    except KeyError:
+        sorted_messages = current_chat_messages  # Fallback if no timestamp
+
+    # Group messages by timestamp (assumes same timestamp = paired user/bot)
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for msg in sorted_messages:
+        ts = msg['timestamp']
+        grouped[ts].append(msg)
+
     st.markdown("### Conversation History")
     chat_container = st.container()
     with chat_container:
-        for message in current_chat_messages:
-            message_time = datetime.strptime(message['timestamp'],r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
-            if message["role"] == "user":
+        for ts, msgs in grouped.items():
+            user_msg = next((m for m in msgs if m["role"] == "user"), None)
+            bot_msg = next((m for m in msgs if m["role"] == "assistant"), None)
+
+            if user_msg:
+                message_time = datetime.strptime(user_msg['timestamp'], r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
                 st.markdown(f"""
                 <div class="message-container user-message">
-                    {message["content"]}
+                    {user_msg["content"]}
                     <div class="message-time">{message_time}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
+
+            if bot_msg:
+                message_time = datetime.strptime(bot_msg['timestamp'], r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
                 st.markdown(f"""
                 <div class="message-container bot-message">
-                    {message["content"]}
+                    {bot_msg["content"]}
                     <div class="message-time">{message_time}</div>
                 </div>
                 """, unsafe_allow_html=True)
