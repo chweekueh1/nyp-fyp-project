@@ -6,12 +6,12 @@ import json
 import re
 from audio_recorder_streamlit import audio_recorder
 from app import save_message
-from datetime import datetime, timezone
+from datetime import datetime
+import pytz
 from dateutil import tz
 from collections import defaultdict
 
-from_zone = tz.tzutc()
-to_zone = tz.tzlocal()
+sg_time = pytz.timezone("Asia/Singapore")
 
 # Set page configuration
 st.set_page_config(
@@ -146,7 +146,7 @@ def login():
                 st.session_state.chat_history = []
 
                 fetch_user_history(username)
-                new_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+                new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
                 st.session_state.current_chat_id = new_chat_id
                 st.success("Login successful!")
             else:
@@ -168,7 +168,7 @@ def fetch_user_history(username):
             
             for msg in history:
                 if 'chat_id' not in msg:
-                    msg['chat_id'] = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+                    msg['chat_id'] = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
 
             st.session_state.chat_history = history
             st.session_state.current_chat_id = None
@@ -198,7 +198,7 @@ def ask_question(question):
             return None
         
         # Current timestamp for message time
-        current_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
+        current_time = datetime.now(sg_time).strftime(r'%Y-%m-%d %H:%M:%S.%f')
         
         # Add to chat history
         user_message = {"role": "user", "content": question, "timestamp": current_time, "chat_id": st.session_state.current_chat_id}
@@ -415,7 +415,7 @@ def combined_input_section():
 # Request new chats and view old chats
 def display_sidebar_prompts():
     if st.sidebar.button("New Chat", key="new_chat_btn", help="Start a new conversation", use_container_width=True, type="primary"):
-        st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+        st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
         st.rerun()
     
     st.sidebar.markdown("### Your Chats")
@@ -432,8 +432,9 @@ def display_sidebar_prompts():
     if chat_groups:
         for chat_id, first_msg in sorted(chat_groups.items(), key=lambda x: x[0], reverse=True):
             shortened_text = first_msg["content"][:50] + "..." if len(first_msg["content"]) > 50 else first_msg["content"]
-            first_msg_ts = datetime.strptime(first_msg['timestamp'],r'%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
             is_selected = st.session_state.current_chat_id == chat_id
+            sgt_time = datetime.strptime(first_msg['timestamp'], r'%Y-%m-%d %H:%M:%S.%f')
+            first_msg_ts = sgt_time.strftime('%H:%M')
             container_style = "active-chat" if is_selected else ""
             with st.sidebar.container():
                 st.markdown(f"<div class='{container_style}'>", unsafe_allow_html=True)

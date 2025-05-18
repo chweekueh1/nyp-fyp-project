@@ -228,3 +228,4 @@ xxhash==3.5.0
 yarl==1.19.0
 zipp==3.21.0
 zstandard==0.23.0
+pytz>=2024.1
