@@ -67,7 +67,7 @@ if not os.path.exists(CHAT_SESSIONS_PATH):
 
 # Helper function that retrieves the path to a chat-specific history file
 def get_chat_history_file(username,chat_id):
-    return os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
+    return os.path.join(CHAT_SESSIONS_PATH, f"{chat_id}.json")
 
 def save_message(username, chat_id, message):
     history_file = get_chat_history_file(username, chat_id)

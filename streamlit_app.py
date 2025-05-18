@@ -144,11 +144,10 @@ def login():
                 st.session_state.logged_in = True
                 st.session_state.username = username
                 st.session_state.chat_history = []
-
                 fetch_user_history(username)
                 new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
                 st.session_state.current_chat_id = new_chat_id
-                st.success("Login successful!")
+                st.rerun()
             else:
                 st.error("Invalid username or password")
 
@@ -185,7 +184,6 @@ def fetch_user_history(username):
 # Sends question to backend and gets answer
 def ask_question(question):
     with st.spinner("Getting answer..."):
-        # Include session ID in payload
         payload = {
             "username": st.session_state.username,
             "question": question,
@@ -197,13 +195,9 @@ def ask_question(question):
             st.error(error)
             return None
         
-        # Current timestamp for message time
         current_time = datetime.now(sg_time).strftime(r'%Y-%m-%d %H:%M:%S.%f')
-        
-        # Add to chat history
         user_message = {"role": "user", "content": question, "timestamp": current_time, "chat_id": st.session_state.current_chat_id}
         st.session_state.chat_history.append(user_message)
-        
         answer = result.get("answer")
         bot_message = {"role": "assistant", "content": answer, 'timestamp': current_time, "chat_id": st.session_state.current_chat_id}
         st.session_state.chat_history.append(bot_message)
@@ -466,9 +460,6 @@ def main():
             st.session_state.chat_history = []
             st.session_state.chat_groups = {}
             st.rerun()
-
-    # if st.session_state.current_chat_id:
-    #     st.sidebar.markdown(f"**Chat ID:** {st.session_state.current_chat_id}")
 
     display_sidebar_prompts()
 
