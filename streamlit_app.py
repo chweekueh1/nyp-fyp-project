@@ -8,6 +8,7 @@ from audio_recorder_streamlit import audio_recorder
 from app import save_message
 from datetime import datetime, timezone
 from dateutil import tz
+from collections import defaultdict
 
 from_zone = tz.tzutc()
 to_zone = tz.tzlocal()
@@ -197,7 +198,7 @@ def ask_question(question):
             return None
         
         # Current timestamp for message time
-        current_time = datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')
+        current_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
         
         # Add to chat history
         user_message = {"role": "user", "content": question, "timestamp": current_time, "chat_id": st.session_state.current_chat_id}
@@ -357,13 +358,12 @@ def display_chat_history():
     try:
         sorted_messages = sorted(
             current_chat_messages,
-            key=lambda x: datetime.strptime(x['timestamp'], r'%d%m%Y%H%M%S%f')
+            key=lambda x: datetime.strptime(x['timestamp'], r'%Y-%m-%d %H:%M:%S.%f')
         )
     except KeyError:
         sorted_messages = current_chat_messages  # Fallback if no timestamp
 
     # Group messages by timestamp (assumes same timestamp = paired user/bot)
-    from collections import defaultdict
     grouped = defaultdict(list)
     for msg in sorted_messages:
         ts = msg['timestamp']
@@ -377,20 +377,16 @@ def display_chat_history():
             bot_msg = next((m for m in msgs if m["role"] == "assistant"), None)
 
             if user_msg:
-                message_time = datetime.strptime(user_msg['timestamp'], r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
                 st.markdown(f"""
                 <div class="message-container user-message">
                     {user_msg["content"]}
-                    <div class="message-time">{message_time}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
             if bot_msg:
-                message_time = datetime.strptime(bot_msg['timestamp'], r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
                 st.markdown(f"""
                 <div class="message-container bot-message">
                     {bot_msg["content"]}
-                    <div class="message-time">{message_time}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -436,7 +432,7 @@ def display_sidebar_prompts():
     if chat_groups:
         for chat_id, first_msg in sorted(chat_groups.items(), key=lambda x: x[0], reverse=True):
             shortened_text = first_msg["content"][:50] + "..." if len(first_msg["content"]) > 50 else first_msg["content"]
-            first_msg_ts = datetime.strptime(first_msg['timestamp'],r'%d%m%Y%H%M%S%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
+            first_msg_ts = datetime.strptime(first_msg['timestamp'],r'%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
             is_selected = st.session_state.current_chat_id == chat_id
             container_style = "active-chat" if is_selected else ""
             with st.sidebar.container():
@@ -462,7 +458,6 @@ def main():
     if st.session_state.logged_in:
         with st.container():
             st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
-        # st.sidebar.markdown(f"**Logged in as:** {st.session_state.username}")
         if st.sidebar.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.username = None

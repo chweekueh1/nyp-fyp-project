@@ -252,7 +252,7 @@ def ask_question():
         # Sanitize user input
         sanitized_question = sanitize_input(question)
         logging.info(f"Received question from {username}: {sanitized_question}")
-        question_time = datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')
+        question_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
 
         try:
             # Get answer from model with conversation history
@@ -262,7 +262,7 @@ def ask_question():
         except Exception as e:
             logging.error(f"Error generating answer: {str(e)}")
             answer = "I'm having trouble processing your question. Please try again later."
-        answer_time = datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')
+        answer_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
 
         user_message = {"role": "user", "content": question, "timestamp": question_time, "chat_id": chat_id}
         bot_message = {"role": "assistant", "content": answer, "timestamp": answer_time, "chat_id": chat_id}
