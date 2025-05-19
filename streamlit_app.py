@@ -116,11 +116,13 @@ if 'chat_groups' not in st.session_state:
 # List of allowed emails
 ALLOWED_EMAILS = [
     "staff123@mymail.nyp.edu.sg",
-    "staff345@mymail.nyp.edu.sg"
+    "staff345@mymail.nyp.edu.sg",
+    "staff678@mymail.nyp.edu.sg",
 ]
 
-# Path to store user data
 USER_DB_PATH = "data/user_info/users.json"
+CHAT_SESSIONS_PATH = os.path.join("data","chat_sessions")
+os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
@@ -136,6 +138,43 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
         return response.json(), None
     except Exception as e:
         return None, f"An unexpected error occurred: {str(e)}"
+    
+def ensure_user_folder_exists(username):
+    """Creates a folder for the user if it doesn't exist."""
+    user_folder = os.path.join(CHAT_SESSIONS_PATH)
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
+
+def ensure_user_db_exists():
+    """Ensure the user info directory and users.json exist."""
+    os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
+    
+    if not os.path.exists(USER_DB_PATH):
+        # Create default users.json with empty structure
+        with open(USER_DB_PATH, 'w') as f:
+            json.dump({"users": {}}, f, indent=2)
+
+def save_chat_history(username, chat_id, chat_history):
+    """Save chat history to a file in the user's folder."""
+    user_folder = ensure_user_folder_exists(username)
+    chat_file = os.path.join(user_folder, f"{chat_id}.json")
+    with open(chat_file, 'w') as f:
+        json.dump(chat_history, f, indent=2)
+
+def load_user_chats(username):
+    """Load all saved chats for the given user."""
+    user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+    if not os.path.exists(user_folder):
+        return []
+    
+    chat_files = [f for f in os.listdir(user_folder) if f.endswith(".json")]
+    chat_histories = []
+
+    for chat_file in chat_files:
+        with open(os.path.join(user_folder, chat_file), 'r') as f:
+            chat_histories.append(json.load(f))
+
+    return chat_histories
 
 def load_users():
     if not os.path.exists(USER_DB_PATH):
@@ -219,6 +258,30 @@ def fetch_user_history(username):
             method="get", 
             data={"username": username}
         )
+
+        local_history = load_user_chats(username)
+
+        combined_history = []
+        if local_history:
+            for chat in local_history:
+                combined_history.extend(chat)
+        elif response and 'history' in response:
+            combined_history = response['history']
+        else:
+            combined_history = []
+
+        for msg in combined_history:
+            if 'chat_id' not in msg:
+                msg['chat_id'] = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
+
+        st.session_state.chat_history = combined_history
+        st.session_state.current_chat_id = None
+
+    except Exception as e:
+        st.warning(f"Error loading chat history: {str(e)}")
+        st.session_state.chat_history = []
+        st.session_state.current_chat_id = None
+
         if error:
             st.warning(f"Could not load chat history: {error}")
             return
@@ -263,6 +326,8 @@ def ask_question(question):
         bot_message = {"role": "assistant", "content": answer, 'timestamp': current_time, "chat_id": st.session_state.current_chat_id}
         st.session_state.chat_history.append(bot_message)
         
+        save_chat_history(st.session_state.username, st.session_state.current_chat_id, st.session_state.chat_history)
+
         return answer
 
 # Sends audio to backend for transcription
@@ -506,6 +571,7 @@ def display_sidebar_prompts():
         st.sidebar.info("No previous chats found.")
 
 def main():
+    ensure_user_db_exists()
     st.markdown("<div class='main-header'>NYP AI Chatbot Helper</div>", unsafe_allow_html=True)
     if not st.session_state.logged_in:
         login()
