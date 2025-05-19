@@ -121,8 +121,7 @@ ALLOWED_EMAILS = [
 ]
 
 USER_DB_PATH = "data/user_info/users.json"
-CHAT_SESSIONS_PATH = os.path.join("data","chat_sessions")
-os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
+CHAT_SESSIONS_PATH = "chat_sessions"
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
@@ -141,7 +140,7 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
     
 def ensure_user_folder_exists(username):
     """Creates a folder for the user if it doesn't exist."""
-    user_folder = os.path.join(CHAT_SESSIONS_PATH)
+    user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
     os.makedirs(user_folder, exist_ok=True)
     return user_folder
 
