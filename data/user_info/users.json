@@ -1,8 +1,8 @@
 {
-  "ilysia": {
-    "password": "321"
-  },
-  "bryan": {
-    "password": "password123"
+  "users": {
+    "ilysia": {
+      "email": "staff123@mymail.nyp.edu.sg",
+      "password": "password123"
+    }
   }
 }

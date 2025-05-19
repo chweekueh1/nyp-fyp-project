@@ -113,6 +113,12 @@ if 'current_chat_id' not in st.session_state:
 if 'chat_groups' not in st.session_state:
     st.session_state.chat_groups = {}
 
+# List of allowed emails
+ALLOWED_EMAILS = [
+    "staff123@mymail.nyp.edu.sg",
+    "staff345@mymail.nyp.edu.sg"
+]
+
 # Path to store user data
 USER_DB_PATH = "data/user_info/users.json"
 
@@ -133,9 +139,15 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
 
 def load_users():
     if not os.path.exists(USER_DB_PATH):
-        return {}
+        return {"users": {}}
+
     with open(USER_DB_PATH, 'r') as f:
         return json.load(f)
+    
+    if "users" not in data:
+        return {"users": data}
+    
+    return data
 
 def save_users(users):
     with open(USER_DB_PATH, 'w') as f:
@@ -146,42 +158,58 @@ def login():
     with col2:
         st.markdown("### Login / Register")
         tab1, tab2 = st.tabs(["Login", "Register"])
-        
+
+        # --- LOGIN TAB ---
         with tab1:
             username_login = st.text_input("Username", key="login_username")
             password_login = st.text_input("Password", type="password", key="login_password")
+
             if st.button("Login", use_container_width=True):
-                users = load_users()
-                if username_login in users:
-                    if users[username_login]["password"] == password_login:
-                        st.session_state.logged_in = True
-                        st.session_state.username = username_login
-                        st.session_state.chat_history = []
-                        fetch_user_history(username_login)
-                        new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
-                        st.session_state.current_chat_id = new_chat_id
-                        st.rerun()
-                    else:
-                        st.error("Incorrect password")
+                users_data = load_users()
+                users = users_data.get("users", {})
+                
+                if username_login not in users:
+                    st.error("Username not found.")
+                elif users[username_login]["password"] == password_login:
+                    st.session_state.logged_in = True
+                    st.session_state.username = username_login
+                    st.session_state.chat_history = []
+                    fetch_user_history(username_login)
+                    new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
+                    st.session_state.current_chat_id = new_chat_id
+                    st.rerun()
                 else:
-                    st.error("User not found")
-        
+                    st.error("Incorrect password.")
+
+        # --- REGISTER TAB ---
         with tab2:
             username_register = st.text_input("New Username", key="register_username")
+            email_register = st.text_input("Email Address", key="register_email")
             password_register = st.text_input("New Password", type="password", key="register_password")
             confirm_register = st.text_input("Confirm Password", type="password", key="confirm_password")
+
             if st.button("Register", use_container_width=True):
-                if not username_register or not password_register or not confirm_register:
+                if not username_register or not email_register or not password_register or not confirm_register:
                     st.warning("Please fill all fields.")
                 elif password_register != confirm_register:
                     st.error("Passwords do not match.")
+                elif email_register not in ALLOWED_EMAILS:
+                    st.error("This email is not allowed to register.")
                 else:
-                    users = load_users()
+                    users_data = load_users()
+                    users = users_data.get("users", {})
+
                     if username_register in users:
                         st.warning("Username already exists.")
+                    elif any(user["email"] == email_register for user in users.values()):
+                        st.warning("This email is already registered.")
                     else:
-                        users[username_register] = {"password": password_register}
-                        save_users(users)
+                        users[username_register] = {
+                            "email": email_register,
+                            "password": password_register
+                        }
+                        users_data["users"] = users
+                        save_users(users_data)
                         st.success("Registration successful! You can now log in.")
 
 def fetch_user_history(username):
