@@ -4,8 +4,8 @@ import io
 import time
 import json
 import re
+import os
 from audio_recorder_streamlit import audio_recorder
-from app import save_message
 from datetime import datetime
 import pytz
 from dateutil import tz
@@ -75,11 +75,6 @@ st.markdown('''
     .bot-message { align-self: flex-start; background-color: #e6f7ff; color: #333; border-bottom-left-radius: 5px; }
     .message-time { font-size: 12px; color: #888; align-self: flex-end; margin-top: 5px; }
     
-    /* Clear history button */
-    .clear-button { color: #ff4b4b; background-color: transparent; border: 1px solid #ff4b4b; border-radius: 5px; padding: 5px 10px; cursor: pointer;
-            transition: all 0.3s; margin-top: 10px; }
-    .clear-button:hover { background-color: #ff4b4b; color: white; }
-    
     /* New chat button styling */
     .new-chat-button { background-color: #0066cc; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; 
             margin-top: 10px; margin-bottom: 20px; width: 100%; transition: all 0.3s; }
@@ -118,6 +113,9 @@ if 'current_chat_id' not in st.session_state:
 if 'chat_groups' not in st.session_state:
     st.session_state.chat_groups = {}
 
+# Path to store user data
+USER_DB_PATH = "data/user_info/users.json"
+
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
 
@@ -133,23 +131,58 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
     except Exception as e:
         return None, f"An unexpected error occurred: {str(e)}"
 
+def load_users():
+    if not os.path.exists(USER_DB_PATH):
+        return {}
+    with open(USER_DB_PATH, 'r') as f:
+        return json.load(f)
+
+def save_users(users):
+    with open(USER_DB_PATH, 'w') as f:
+        json.dump(users, f, indent=2)
+
 def login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("### Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password", key="password_input")
-        if st.button("Login"):
-            if username == "staff" and password == "123":
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.session_state.chat_history = []
-                fetch_user_history(username)
-                new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
-                st.session_state.current_chat_id = new_chat_id
-                st.rerun()
-            else:
-                st.error("Invalid username or password")
+        st.markdown("### Login / Register")
+        tab1, tab2 = st.tabs(["Login", "Register"])
+        
+        with tab1:
+            username_login = st.text_input("Username", key="login_username")
+            password_login = st.text_input("Password", type="password", key="login_password")
+            if st.button("Login", use_container_width=True):
+                users = load_users()
+                if username_login in users:
+                    if users[username_login]["password"] == password_login:
+                        st.session_state.logged_in = True
+                        st.session_state.username = username_login
+                        st.session_state.chat_history = []
+                        fetch_user_history(username_login)
+                        new_chat_id = f"{st.session_state.username}_{datetime.now(sg_time).strftime(r'%d%m%Y%H%M%S%f')}"
+                        st.session_state.current_chat_id = new_chat_id
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password")
+                else:
+                    st.error("User not found")
+        
+        with tab2:
+            username_register = st.text_input("New Username", key="register_username")
+            password_register = st.text_input("New Password", type="password", key="register_password")
+            confirm_register = st.text_input("Confirm Password", type="password", key="confirm_password")
+            if st.button("Register", use_container_width=True):
+                if not username_register or not password_register or not confirm_register:
+                    st.warning("Please fill all fields.")
+                elif password_register != confirm_register:
+                    st.error("Passwords do not match.")
+                else:
+                    users = load_users()
+                    if username_register in users:
+                        st.warning("Username already exists.")
+                    else:
+                        users[username_register] = {"password": password_register}
+                        save_users(users)
+                        st.success("Registration successful! You can now log in.")
 
 def fetch_user_history(username):
     try:
