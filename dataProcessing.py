@@ -57,6 +57,8 @@ def dataProcessing(file, collection=chat_db):
     for doc in document:
         if "keywords" in doc.metadata:
             keywords_bank.extend(doc.metadata['keywords'])
+            for i in range(len(doc.metadata['keywords'])):
+                doc.metadata[f'keyword{i}'] = doc.metadata['keywords'][i]
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
 
     #These are put in here for posterity but are weaker and less useful than OpenAIMetadataTagger and thus removed

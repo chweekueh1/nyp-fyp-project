@@ -27,8 +27,6 @@ from classificationModel import classify_text
 from utils import rel2abspath
 from chatModel import get_convo_hist_answer
 
-sg_time = pytz.timezone("Asia/Singapore")
-
 # Logging configuration
 logging.basicConfig(
     level=logging.INFO,
@@ -255,17 +253,18 @@ def ask_question():
         # Sanitize user input
         sanitized_question = sanitize_input(question)
         logging.info(f"Received question from {username}: {sanitized_question}")
-        question_time = datetime.now(sg_time).strftime(r'%Y-%m-%d %H:%M:%S.%f')
+        question_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
 
         try:
             # Get answer from model with conversation history
             response = get_convo_hist_answer(sanitized_question, chat_id) 
+            logging.info("Context: %s", response['context'])
             logging.info("Question answered: %s", sanitized_question)
             answer = response['answer']
         except Exception as e:
             logging.error(f"Error generating answer: {str(e)}")
             answer = "I'm having trouble processing your question. Please try again later."
-        answer_time = datetime.now(sg_time).strftime(r'%Y-%m-%d %H:%M:%S.%f')
+        answer_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
 
         user_message = {"role": "user", "content": question, "timestamp": question_time, "chat_id": chat_id}
         bot_message = {"role": "assistant", "content": answer, "timestamp": answer_time, "chat_id": chat_id}

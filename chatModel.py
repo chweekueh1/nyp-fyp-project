@@ -2,7 +2,6 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
@@ -28,7 +27,6 @@ KEYWORDS_DATABANK_PATH = rel2abspath(os.getenv("KEYWORDS_DATABANK_PATH"))
 LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH"))
 
 create_folders(LANGCHAIN_CHECKPOINT_PATH)
-
 
 llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
 embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
@@ -82,14 +80,11 @@ system_prompt = (
     "{context}"
 )
 
-# Creating the prompt template for question answering
-qa_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-    ]
-)
+qa_prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
 
 def match_keywords(question):
     with shelve.open(KEYWORDS_DATABANK_PATH) as db:
@@ -121,27 +116,32 @@ def match_keywords(question):
     args_str = r.choices[0].message.function_call.arguments
     args = json.loads(args_str)
     prediction = args['prediction']
-    list_prediction = prediction.split(', ')
+    return prediction.split(', ')
 
-    return list_prediction
+def build_keyword_filter(matched_keywords, max_keywords=10):
+    return {
+        "$or": [
+            {f"keyword{i}": {"$in": matched_keywords}}
+            for i in range(max_keywords)
+        ]
+    }
 
-# Retriever routing
+
 def route_retriever(question):
     matched_keywords = match_keywords(question)
     if 'None' in matched_keywords:
-        return db.as_retriever(search_kwargs={'k': 3})
-    return db.as_retriever(search_kwargs={'k': 3, 'filter': {"keywords": {"$in": matched_keywords}}})
+        return db.as_retriever(search_kwargs={'k': 5})
+    
+    keyword_filter = build_keyword_filter(matched_keywords)
+    return db.as_retriever(search_kwargs={'k': 5, 'filter': keyword_filter})
 
-# State schema
 class State(TypedDict):
     input: str
     chat_history: Annotated[Sequence[BaseMessage], add_messages]
     context: str
     answer: str
 
-# Model node that dynamically builds chain
 def call_model(state: State):
-    
     question = state["input"]
     retriever = route_retriever(question)
 
@@ -158,7 +158,7 @@ def call_model(state: State):
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
-    response = rag_chain.invoke(state)
+    response = rag_chain.invoke(state)      
     return {
         "chat_history": [
             HumanMessage(state["input"]),
@@ -167,16 +167,14 @@ def call_model(state: State):
         "context": response["context"],
         "answer": response["answer"],
     }
- 
-# LangGraph workflow
+
 workflow = StateGraph(state_schema=State)
 workflow.add_edge(START, "model")
 workflow.add_node("model", call_model)
 conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
-sqlite_saver =SqliteSaver(conn)  
+sqlite_saver = SqliteSaver(conn)  
 app = workflow.compile(checkpointer=sqlite_saver)
 
 def get_convo_hist_answer(question, thread_id):
     state = {"input": question, "chat_history": [], "context": "", "answer": ""}
     return app.invoke(state, config={"configurable": {"thread_id": thread_id}})
-    
