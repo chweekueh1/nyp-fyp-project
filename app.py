@@ -248,9 +248,11 @@ def ask_question():
         question_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
 
         try:
+            sources = []
             # Get answer from model with conversation history
-            response = get_convo_hist_answer(sanitized_question, chat_id) 
-            logging.info("Context: %s", response['context'])
+            response = get_convo_hist_answer(sanitized_question, chat_id)
+            context = response['context']
+            logging.info("Context: %s", context)
             logging.info("Question answered: %s", sanitized_question)
             answer = response['answer']
         except Exception as e:
