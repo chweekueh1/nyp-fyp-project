@@ -30,8 +30,6 @@ DATABASE_PATH = os.getenv('DATABASE_PATH')
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
 create_folders(KEYWORDS_DATABANK_PATH)
 
-keywords_bank = []
-
 classification_db = Chroma(
     collection_name = 'classification',
     embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
@@ -54,12 +52,20 @@ def dataProcessing(file, collection=chat_db):
     #print(document[0].metadata)
     #print('\n')
     
+    # Collect and transform keywords
+    new_keywords = []
     for doc in document:
         if "keywords" in doc.metadata:
-            keywords_bank.extend(doc.metadata['keywords'])
-            for i in range(len(doc.metadata['keywords'])):
-                doc.metadata[f'keyword{i}'] = doc.metadata['keywords'][i]
+            new_keywords.extend(doc.metadata["keywords"])
+            for i, kw in enumerate(doc.metadata["keywords"]):
+                doc.metadata[f"keyword{i}"] = kw
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
+
+    # Update the keyword shelve
+    with shelve.open(KEYWORDS_DATABANK_PATH) as db:
+        existing_keywords = db.get("keywords", [])
+        updated_keywords = list(set(existing_keywords + new_keywords))
+        db["keywords"] = updated_keywords
 
     #These are put in here for posterity but are weaker and less useful than OpenAIMetadataTagger and thus removed
     '''document[0].metadata['keywords'] = KeyBERTMetadataTagger(document[0].page_content)
@@ -208,11 +214,5 @@ def initialiseDatabase():
     for file in classification_files:
         dataProcessing(file, collection=classification_db)
 
-    db = shelve.open(KEYWORDS_DATABANK_PATH)
-    db['keywords'] = keywords_bank
-    db.close()
-
 if __name__ == "__main__":
     pass
-
-
