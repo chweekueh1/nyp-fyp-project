@@ -139,6 +139,8 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
             response = requests.get(f"{API_URL}/{endpoint}", params=data, timeout=30)
         response.raise_for_status()
         return response.json(), None
+    except requests.exceptions.Timeout:
+        return None, "Oops! The system took too long to respond. Please try again later."
     except Exception as e:
         return None, f"An unexpected error occurred: {str(e)}"
 
@@ -334,19 +336,25 @@ def file_classification_section():
     
         submitted = st.form_submit_button('Classify')
 
-        if submitted and uploaded_file != None:
-            files = {"file": uploaded_file}
-            response = requests.post("http://127.0.0.1:5001/classify", files=files)
+        if submitted:
+            if uploaded_file is None:
+                st.warning("Please upload a file before submitting")
+            else:
+                with st.spinner("Classifying file..."):
+                    files = {"file": uploaded_file}
+                    response = requests.post("http://127.0.0.1:5001/classify", files=files)
 
             if response.status_code == 200:
                 json_str = response.json().get("answer")
                 cleaned = re.sub(r"^```json\s*|\s*```$", "",json_str)
                 data = json.loads(cleaned)
-                st.markdown("### Result")
-                st.markdown(f"** Classification:** `{data.get('classification')}`")
-                st.markdown(f"** Sensitivity:** `{data.get('sensitivity')}`")
-                st.markdown("** Reasoning:**")
-                st.markdown(f"> {data.get('reasoning')}")    
+
+                st.success("File successfully classified!")
+                st.markdown(f"##### Classification:`{data.get('classification')}`")
+                st.markdown(f"##### Sensitivity:`{data.get('sensitivity')}`")
+                st.markdown("##### Reasoning:")
+                st.markdown(f"> {data.get('reasoning')}")   
+                
             else:
                 st.error(f"Data classification failed: {response.json().get('error')}")
             
