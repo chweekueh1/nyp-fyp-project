@@ -16,7 +16,6 @@ import tempfile
 from openai import OpenAI
 import mimetypes
 import json
-import pytz
 from unstructured.partition.common import UnsupportedFileFormatError
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_chroma import Chroma
@@ -63,27 +62,6 @@ logging.info("Flask application initialized. Upload folder set up at %s", CHAT_D
 if not os.path.exists(CHAT_SESSIONS_PATH):
     os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
     logging.info(f"Created conversations directory at {CHAT_SESSIONS_PATH}")
-
-# Helper function that retrieves the path to a chat-specific history file
-def get_chat_history_file(username,chat_id):
-    return os.path.join(CHAT_SESSIONS_PATH, f"{chat_id}.json")
-
-def save_message(username, chat_id, message):
-    history_file = get_chat_history_file(username, chat_id)
-    try:
-        if os.path.exists(history_file):
-            with open(history_file, "r") as f:
-                history = json.load(f)
-        else:
-            history = []
-        history.append(message)
-        with open(history_file, "w") as f: 
-            json.dump(history, f, indent=2)
-        logging.info(f"Message saved to chat {chat_id}")
-        return True
-    except Exception as e:
-        logging.error(f"Error saving message to chat {chat_id}: {str(e)}")
-        return False
 
 # Helper function to sanitize user input
 def sanitize_input(input_text):
@@ -142,16 +120,30 @@ def detectFileType(file_path):
 
     return file_extension
 
-# Route for getting conversation history
-@app.route('/get_history', methods=['GET'])
-def get_history():
-    username = request.args.get('username')
-    chat_files = [f for f in os.listdir(CHAT_SESSIONS_PATH) if f.startswith(f"{username}_")]
-    all_chats = []
-    for file in chat_files:
-        with open(os.path.join(CHAT_SESSIONS_PATH, file), "r") as f:
-            all_chats.extend(json.load(f))
-    return jsonify({'history': all_chats}), 200
+# Helper function that retrieves the path to a chat-specific history file
+def ensure_user_folder_file_exists(username, chat_id):
+    # Creates a folder for the user if it doesn't exist.
+    user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+    os.makedirs(user_folder, exist_ok=True)
+    chat_file = os.path.join(user_folder, f"{chat_id}.json")
+    return chat_file
+
+def save_message(username, chat_id, message):
+    history_file = ensure_user_folder_file_exists(username, chat_id)
+    try:
+        if os.path.exists(history_file):
+            with open(history_file, "r") as f:
+                history = json.load(f)
+        else:
+            history = []
+        history.append(message)
+        with open(history_file, "w") as f: 
+            json.dump(history, f, indent=2)
+        logging.info(f"Message saved to chat {chat_id}")
+        return True
+    except Exception as e:
+        logging.error(f"Error saving message to chat {chat_id}: {str(e)}")
+        return False
 
 # Route for file uploads
 @app.route('/upload', methods=['POST'])
@@ -271,7 +263,7 @@ def ask_question():
         save_message(username, chat_id, user_message)
         save_message(username, chat_id, bot_message)
         
-        return jsonify({'answer': answer}), 200
+        return jsonify({'answer': answer, 'user_message': user_message, 'bot_message': bot_message}), 200
     except Exception as e:
         logging.error("Error in /ask endpoint: %s", traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500

@@ -4,10 +4,12 @@ import io
 import json
 import re
 import os
+from dotenv import load_dotenv
 from audio_recorder_streamlit import audio_recorder
 from datetime import datetime, timezone
 from dateutil import tz
 from collections import defaultdict
+from utils import rel2abspath
 
 # Set page configuration
 st.set_page_config(
@@ -116,8 +118,10 @@ ALLOWED_EMAILS = [
     "staff678@mymail.nyp.edu.sg",
 ]
 
-USER_DB_PATH = "data/user_info/users.json"
-CHAT_SESSIONS_PATH = "chat_sessions"
+load_dotenv()
+
+USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH'))
+CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH'))
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
@@ -137,12 +141,6 @@ def handle_api_request(endpoint, method="post", data=None, files=None, json=None
         return response.json(), None
     except Exception as e:
         return None, f"An unexpected error occurred: {str(e)}"
-    
-def ensure_user_folder_exists(username):
-    """Creates a folder for the user if it doesn't exist."""
-    user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
-    os.makedirs(user_folder, exist_ok=True)
-    return user_folder
 
 def ensure_user_db_exists():
     """Ensure the user info directory and users.json exist."""
@@ -152,13 +150,6 @@ def ensure_user_db_exists():
         # Create default users.json with empty structure
         with open(USER_DB_PATH, 'w') as f:
             json.dump({"users": {}}, f, indent=2)
-
-def save_chat_history(username, chat_id, chat_history):
-    """Save chat history to a file in the user's folder."""
-    user_folder = ensure_user_folder_exists(username)
-    chat_file = os.path.join(user_folder, f"{chat_id}.json")
-    with open(chat_file, 'w') as f:
-        json.dump(chat_history, f, indent=2)
 
 def load_user_chats(username):
     """Load all saved chats for the given user."""
@@ -252,57 +243,22 @@ def login():
 
 def fetch_user_history(username):
     try:
-        response, error = handle_api_request(
-            "get_history", 
-            method="get", 
-            data={"username": username}
-        )
-
         local_history = load_user_chats(username)
 
         combined_history = []
         if local_history:
             for chat in local_history:
                 combined_history.extend(chat)
-        elif response and 'history' in response:
-            combined_history = response['history']
-        else:
-            combined_history = []
 
         for msg in combined_history:
             if 'chat_id' not in msg:
                 msg['chat_id'] = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
 
         st.session_state.chat_history = combined_history
-        st.session_state.current_chat_id = None
 
     except Exception as e:
         st.warning(f"Error loading chat history: {str(e)}")
         st.session_state.chat_history = []
-        st.session_state.current_chat_id = None
-
-        if error:
-            st.warning(f"Could not load chat history: {error}")
-            return
-
-        if response and 'history' in response:
-            history = response['history']
-            
-            for msg in history:
-                if 'chat_id' not in msg:
-                    msg['chat_id'] = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
-
-            st.session_state.chat_history = history
-            st.session_state.current_chat_id = None
-
-        else:
-            st.session_state.chat_history = []
-            st.session_state.current_chat_id = None
-
-    except Exception as e:
-        st.warning(f"Error loading chat history: {str(e)}")
-        st.session_state.chat_history = []
-        st.session_state.current_chat_id = None
 
 # Sends question to backend and gets answer
 def ask_question(question):
@@ -318,14 +274,11 @@ def ask_question(question):
             st.error(error)
             return None
         
-        current_time = datetime.now(timezone.utc).strftime(r'%Y-%m-%d %H:%M:%S.%f')
-        user_message = {"role": "user", "content": question, "timestamp": current_time, "chat_id": st.session_state.current_chat_id}
-        st.session_state.chat_history.append(user_message)
         answer = result.get("answer")
-        bot_message = {"role": "assistant", "content": answer, 'timestamp': current_time, "chat_id": st.session_state.current_chat_id}
+        user_message = result.get('user_message')
+        bot_message = result.get('bot_message')
+        st.session_state.chat_history.append(user_message)
         st.session_state.chat_history.append(bot_message)
-        
-        save_chat_history(st.session_state.username, st.session_state.current_chat_id, st.session_state.chat_history)
 
         return answer
 
