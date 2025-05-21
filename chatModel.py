@@ -130,10 +130,10 @@ def build_keyword_filter(matched_keywords, max_keywords=10):
 def route_retriever(question):
     matched_keywords = match_keywords(question)
     if 'None' in matched_keywords:
-        return db.as_retriever(search_kwargs={'k': 5})
+        return db.as_retriever(search_kwargs={'k': 3})
     
     keyword_filter = build_keyword_filter(matched_keywords)
-    return db.as_retriever(search_kwargs={'k': 5, 'filter': keyword_filter})
+    return db.as_retriever(search_kwargs={'k': 3, 'filter': keyword_filter})
 
 class State(TypedDict):
     input: str
