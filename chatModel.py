@@ -7,6 +7,7 @@ from langgraph.graph.message import add_messages
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.retrievers import EnsembleRetriever
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 from typing_extensions import Annotated, TypedDict
@@ -90,7 +91,8 @@ def match_keywords(question):
     with shelve.open(KEYWORDS_DATABANK_PATH) as db:
         keywords = db['keywords']
     keywords.append('None')
-    content = f"###Keywords###\n{', '.join(keywords)}\n\n###Instructions###\nFrom the list of keywords, select all that apply to the question’s topic or subject matter. If none apply, return 'None'.\n{question}\n"
+    content = f"""###Keywords###\n{', '.join(keywords)}\n\n###Instructions###\nFrom the list of keywords, 
+    select all that apply to the question’s topic or subject matter. If none apply, return 'None'.\n{question}\n"""
     function = {
         "name": "match_keywords",
         "description": "Match the question to keywords.",
@@ -145,14 +147,24 @@ def call_model(state: State):
     question = state["input"]
     retriever = route_retriever(question)
 
-    multiquery_retriever = MultiQueryRetriever.from_llm(
+    multiquery_retriever_with_keyword = MultiQueryRetriever.from_llm(
         retriever=retriever,
         llm=llm,
         prompt=multi_query_template
     )
 
+    multiquery_retriever = MultiQueryRetriever.from_llm(
+        retriever=db.as_retriever(search_kwargs={'k': 3}),
+        llm=llm,
+        prompt=multi_query_template
+    )
+
+    ensemble_retriever = EnsembleRetriever(
+    retrievers=[multiquery_retriever, multiquery_retriever_with_keyword], weights=[0.5, 0.5]
+    )
+
     history_aware_retriever = create_history_aware_retriever(
-        llm, multiquery_retriever, contextualize_q_prompt
+        llm, ensemble_retriever, contextualize_q_prompt
     )
 
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
