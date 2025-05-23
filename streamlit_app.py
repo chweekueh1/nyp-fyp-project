@@ -134,9 +134,9 @@ to_zone = tz.tzlocal()
 def handle_api_request(endpoint, method="post", data=None, files=None, json=None):
     try:
         if method.lower() == "post":
-            response = requests.post(f"{API_URL}/{endpoint}", data=data, files=files, json=json, timeout=30)
+            response = requests.post(f"{API_URL}/{endpoint}", data=data, files=files, json=json)
         else:
-            response = requests.get(f"{API_URL}/{endpoint}", params=data, timeout=30)
+            response = requests.get(f"{API_URL}/{endpoint}", params=data)
         response.raise_for_status()
         return response.json(), None
     except requests.exceptions.Timeout:

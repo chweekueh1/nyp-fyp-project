@@ -118,7 +118,10 @@ def match_keywords(question):
     args_str = r.choices[0].message.function_call.arguments
     args = json.loads(args_str)
     prediction = args['prediction']
-    return prediction.split(', ')
+    if isinstance(prediction, str):
+        prediction = prediction.split(', ')
+    return prediction
+
 
 def build_keyword_filter(matched_keywords, max_keywords=10):
     return {
