@@ -132,10 +132,10 @@ def build_keyword_filter(matched_keywords, max_keywords=10):
 def route_retriever(question):
     matched_keywords = match_keywords(question)
     if 'None' in matched_keywords:
-        return db.as_retriever(search_kwargs={'k': 3})
+        return db.as_retriever(search_kwargs={'k': 5})
     
     keyword_filter = build_keyword_filter(matched_keywords)
-    return db.as_retriever(search_kwargs={'k': 3, 'filter': keyword_filter})
+    return db.as_retriever(search_kwargs={'k': 5, 'filter': keyword_filter})
 
 class State(TypedDict):
     input: str
@@ -154,13 +154,13 @@ def call_model(state: State):
     )
 
     multiquery_retriever = MultiQueryRetriever.from_llm(
-        retriever=db.as_retriever(search_kwargs={'k': 3}),
+        retriever=db.as_retriever(search_kwargs={'k': 5}),
         llm=llm,
         prompt=multi_query_template
     )
 
     ensemble_retriever = EnsembleRetriever(
-    retrievers=[multiquery_retriever, multiquery_retriever_with_keyword], weights=[0.5, 0.5]
+    retrievers=[multiquery_retriever, multiquery_retriever_with_keyword], weights=[0.75, 0.25]
     )
 
     history_aware_retriever = create_history_aware_retriever(
