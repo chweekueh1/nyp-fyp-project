@@ -1,8 +1,7 @@
-import pathlib
 import os
 
 def rel2abspath(relative_path: str) -> str:
-    return str((pathlib.Path().resolve() / relative_path).resolve())
+    return os.path.abspath(relative_path)
 
 def create_folders(path: str):
     if not path.endswith('\\'):
