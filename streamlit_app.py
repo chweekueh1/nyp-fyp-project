@@ -121,7 +121,7 @@ ALLOWED_EMAILS = [
 load_dotenv()
 
 USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH'))
-CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH'))
+CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH'), '')
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"

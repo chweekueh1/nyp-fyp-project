@@ -163,6 +163,8 @@ python-dateutil==2.9.0.post0
 python-docx==1.1.2
 python-dotenv==1.1.0
 python-iso639==2025.2.18
+python-magic==0.4.27
+python-magic-bin==0.4.14
 python-multipart==0.0.20
 python-oxmsg==0.0.2
 python-pptx==1.0.2
@@ -181,6 +183,7 @@ safetensors==0.5.3
 scikit-learn==1.6.1
 scipy==1.15.2
 sentence-transformers==4.0.2
+setuptools==80.9.0
 shellingham==1.5.4
 six==1.17.0
 smmap==5.0.2
@@ -228,4 +231,3 @@ xxhash==3.5.0
 yarl==1.19.0
 zipp==3.21.0
 zstandard==0.23.0
-pytz>=2024.1
