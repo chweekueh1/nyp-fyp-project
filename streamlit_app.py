@@ -121,7 +121,7 @@ ALLOWED_EMAILS = [
 
 load_dotenv()
 
-USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', 'data/user_info/users.json'))
+USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', '$HOME\\.nypai-chatbot\\data\\user_info\\users.json'))
 CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', ''))
 
 # API Configuration

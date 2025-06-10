@@ -9,3 +9,8 @@ def create_folders(path: str):
     else:
         folder_path = path
     os.makedirs(folder_path, exist_ok=True)
+
+def ensure_chatbot_dir_exists():
+    # Creates a `.nypai-chatbot` folder for the user if it doesn't exist.
+    user_folder = "$HOME\\.nypai-chatbot\\"
+    os.makedirs(user_folder, exist_ok=True)

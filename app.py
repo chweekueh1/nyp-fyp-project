@@ -37,11 +37,11 @@ logging.basicConfig(
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", '')
-DATABASE_PATH = os.getenv("DATABASE_PATH", ".\\data\\vector_store\\chroma_db")
+CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", '$HOME\\.nypai-chatbot\\data')
+DATABASE_PATH = os.getenv("DATABASE_PATH", "$HOME\\.nypai-chatbot\\data\\vector_store\\chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH'))
-USER_DB_PATH = os.path.join(os.getenv("CHAT_DATA_PATH"),"users.json")
+USER_DB_PATH = os.path.join(os.getenv("CHAT_DATA_PATH"),"user_info\\users.json")
 
 classification_db = Chroma(
     collection_name = 'classification',
