@@ -24,8 +24,8 @@ DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", ''))
 CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", ''))
 openai.api_key = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", '')
-KEYWORDS_DATABANK_PATH = os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", ''))
-LANGCHAIN_CHECKPOINT_PATH = os.path.join(get_chatbot_dir(), os.getenv("LANGCHAIN_CHECKPOINT_PATH", ''))
+KEYWORDS_DATABANK_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", '')))
+LANGCHAIN_CHECKPOINT_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("LANGCHAIN_CHECKPOINT_PATH", '')))
 
 create_folders(LANGCHAIN_CHECKPOINT_PATH)
 

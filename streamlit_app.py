@@ -121,12 +121,8 @@ ALLOWED_EMAILS = [
 
 load_dotenv()
 
-USER_DB_PATH = os.path.join(
-    get_chatbot_dir(), os.getenv('USER_DB_PATH', 'data\\user_info\\users.json')
-)
-CHAT_SESSIONS_PATH = os.path.join(
-    get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', '')
-)
+USER_DB_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('USER_DB_PATH', 'data\\user_info\\users.json')))
+CHAT_SESSIONS_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', '')))
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
