@@ -9,7 +9,7 @@ from audio_recorder_streamlit import audio_recorder
 from datetime import datetime, timezone
 from dateutil import tz
 from collections import defaultdict
-from utils import rel2abspath
+from utils import rel2abspath, get_home_directory_path
 from hashing import hash_password, verify_password
 
 # Set page configuration
@@ -121,7 +121,7 @@ ALLOWED_EMAILS = [
 
 load_dotenv()
 
-USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', '$HOME\\.nypai-chatbot\\data\\user_info\\users.json'))
+USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', f'{get_home_directory_path()}\\.nypai-chatbot\\data\\user_info\\users.json'))
 CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', ''))
 
 # API Configuration

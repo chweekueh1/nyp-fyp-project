@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from utils import rel2abspath, ensure_chatbot_dir_exists
+from utils import rel2abspath, ensure_chatbot_dir_exists, get_home_directory_path
 import zipfile
 import subprocess
 import sys
@@ -10,7 +10,7 @@ PATH = os.getenv('DEPENDENCIES_PATH', '')
 
 def extractDependencies():
     with zipfile.ZipFile(rel2abspath('.\\dependencies.zip'), 'r') as zip_ref:
-        zip_ref.extractall(rel2abspath('$HOME\\.nypai-chatbot\\dependencies\\'))
+        zip_ref.extractall(rel2abspath(f'{get_home_directory_path()}\\.nypai-chatbot\\dependencies\\'))
 
 def applyPath():
     full_path = []
