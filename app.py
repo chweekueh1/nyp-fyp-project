@@ -23,7 +23,7 @@ from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
 from datetime import datetime, timezone
 import shutil
 from classificationModel import classify_text
-from utils import rel2abspath, get_home_directory_path
+from utils import get_chatbot_dir
 from chatModel import get_convo_hist_answer
 
 # Logging configuration
@@ -37,11 +37,19 @@ logging.basicConfig(
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", f'{get_home_directory_path()}\\.nypai-chatbot\\data')
-DATABASE_PATH = os.getenv("DATABASE_PATH", f"{get_home_directory_path()}\\.nypai-chatbot\\data\\vector_store\\chroma_db")
+CHAT_DATA_PATH = os.path.join(
+    get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", '\\data')
+)
+DATABASE_PATH = os.path.join(
+    get_chatbot_dir(), os.getenv("DATABASE_PATH", "\\data\\vector_store\\chroma_db")
+)
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', '~\\.nypai-chatbot\\chats'))
-USER_DB_PATH = os.path.join(os.getenv("CHAT_DATA_PATH"),"user_info\\users.json")
+CHAT_SESSIONS_PATH = os.path.join(
+    get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', '\\chats')
+)
+USER_DB_PATH = os.path.join(
+    get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", "\\user_info\\users.json")
+)
 
 classification_db = Chroma(
     collection_name = 'classification',

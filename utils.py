@@ -12,12 +12,13 @@ def create_folders(path: str):
 
 def ensure_chatbot_dir_exists():
     # Creates a `.nypai-chatbot` folder for the user if it doesn't exist.
-    user_folder = f"{get_home_directory_path()}\\.nypai-chatbot\\"
+    user_folder = get_chatbot_dir()
     os.makedirs(user_folder, exist_ok=True)
 
-def get_home_directory_path():
+def get_chatbot_dir():
     """
     Returns the absolute path to the current user's home directory.
     This method is robust and works across Windows, Linux, and macOS.
     """
-    return os.path.expanduser('~')
+    user_folder = f"{os.environ.get('USERPROFILE')}\\.nypai-chatbot\\"
+    return user_folder

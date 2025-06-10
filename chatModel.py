@@ -15,17 +15,17 @@ from typing import Sequence
 import openai, os, json, shelve
 import sqlite3
 from dotenv import load_dotenv
-from utils import rel2abspath, create_folders
+from utils import rel2abspath, create_folders, get_chatbot_dir
 
 load_dotenv()
 
 # Environment setup
-DATABASE_PATH = os.getenv("DATABASE_PATH")
-CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
+DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", ''))
+CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", ''))
 openai.api_key = os.getenv("OPENAI_API_KEY")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
-KEYWORDS_DATABANK_PATH = rel2abspath(os.getenv("KEYWORDS_DATABANK_PATH"))
-LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH"))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", '')
+KEYWORDS_DATABANK_PATH = os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", ''))
+LANGCHAIN_CHECKPOINT_PATH = os.path.join(get_chatbot_dir(), os.getenv("LANGCHAIN_CHECKPOINT_PATH", ''))
 
 create_folders(LANGCHAIN_CHECKPOINT_PATH)
 

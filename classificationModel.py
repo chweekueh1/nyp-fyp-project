@@ -12,12 +12,13 @@ from dotenv import load_dotenv
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 import time
+from utils import get_chatbot_dir
 
 # Constants
 load_dotenv()
-DATABASE_PATH = os.getenv('DATABASE_PATH')
+DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv('DATABASE_PATH', ''))
 openai.api_key = os.getenv("OPENAI_API_KEY")
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', '')
 
 # Initialize components
 llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
