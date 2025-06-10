@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from dateutil import tz
 from collections import defaultdict
 from utils import rel2abspath
+from hashing import hash_password, verify_password
 
 # Set page configuration
 st.set_page_config(
@@ -120,7 +121,7 @@ ALLOWED_EMAILS = [
 
 load_dotenv()
 
-USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', ''))
+USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', 'data/user_info/users.json'))
 CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', ''))
 
 # API Configuration
@@ -201,7 +202,7 @@ def login():
                 
                 if username_login not in users:
                     st.error("Username not found.")
-                elif users[username_login]["password"] == password_login:
+                elif verify_password(password_login, users[username_login]["hashedPassword"]):
                     st.session_state.logged_in = True
                     st.session_state.username = username_login
                     st.session_state.chat_history = []
@@ -235,9 +236,10 @@ def login():
                     elif any(user["email"] == email_register for user in users.values()):
                         st.warning("This email is already registered.")
                     else:
+                        hashed_password = hash_password(password_register)
                         users[username_register] = {
                             "email": email_register,
-                            "password": password_register
+                            "hashedPassword": hashed_password
                         }
                         users_data["users"] = users
                         save_users(users_data)
