@@ -10,7 +10,7 @@ import secrets
 import uuid
 import time
 import string
-import magic
+import filetype
 import zipfile
 import tempfile
 from openai import OpenAI
@@ -23,7 +23,7 @@ from dataProcessing import dataProcessing, initialiseDatabase, ExtractText
 from datetime import datetime, timezone
 import shutil
 from classificationModel import classify_text
-from utils import rel2abspath
+from utils import rel2abspath, get_home_directory_path
 from chatModel import get_convo_hist_answer
 
 # Logging configuration
@@ -37,10 +37,10 @@ logging.basicConfig(
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", '$HOME\\.nypai-chatbot\\data')
-DATABASE_PATH = os.getenv("DATABASE_PATH", "$HOME\\.nypai-chatbot\\data\\vector_store\\chroma_db")
+CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", f'{get_home_directory_path()}\\.nypai-chatbot\\data')
+DATABASE_PATH = os.getenv("DATABASE_PATH", f"{get_home_directory_path()}\\.nypai-chatbot\\data\\vector_store\\chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH'))
+CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', '~\\.nypai-chatbot\\chats'))
 USER_DB_PATH = os.path.join(os.getenv("CHAT_DATA_PATH"),"user_info\\users.json")
 
 classification_db = Chroma(
@@ -96,29 +96,75 @@ def generateUniqueFilename(filename, username, filetype):
     final_filename = f'{filename}_{username}_{time_id}_{random_id}{filetype}'
     return final_filename
 
-# function to detect file type using magic and mimetypes
-def detectFileType(file_path):
-    mime = magic.Magic(mime=True)
-    mime_type = mime.from_file(file_path)
-    file_extension = mimetypes.guess_extension(mime_type)
+# function to detect file type using filetype and mimetypes
 
-    # fix for Office files detected as zip
+def detectFileType(file_path):
+    """
+    Detects the file type and returns its common file extension.
+    It prioritizes content-based detection using the 'filetype' library.
+    Includes a specific fix for Office files (docx, xlsx, pptx) that might
+    be incorrectly identified as generic zip files.
+
+    Args:
+        file_path (str): The path to the file to detect.
+
+    Returns:
+        str or None: The file extension (e.g., ".pdf", ".jpg", ".docx"),
+                     or None if the file type cannot be determined.
+    """
+    # Initialize mime_type and file_extension.
+    # These will be populated based on the detection method.
+    mime_type = None
+    file_extension = None
+
+    # --- 1. Attempt content-based detection using 'filetype' library ---
+    # This is similar to what python-magic does, inspecting the file's magic bytes.
+    guessed_file_type = filetype.guess(file_path)
+
+    if guessed_file_type:
+        # If filetype successfully guessed, get its MIME type and extension.
+        mime_type = guessed_file_type.mime
+        # filetype.extension returns the extension without a leading dot (e.g., "txt", "pdf")
+        file_extension = "." + guessed_file_type.extension
+    else:
+        # --- 2. Fallback to mimetypes if 'filetype' couldn't determine the type ---
+        # mimetypes.guess_type primarily uses the file's name/extension as a heuristic.
+        # This is less reliable for content-based detection but can catch types
+        # that 'filetype' might not recognize by magic bytes, or if the file is empty/corrupt.
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type:
+            # mimetypes.guess_extension returns the extension with a leading dot (e.g., ".txt")
+            file_extension = mimetypes.guess_extension(mime_type)
+        # If both fail, file_extension will remain None, which is a valid return value.
+
+    # --- 3. Specific fix for Office files (docx, xlsx, pptx) detected as generic zip ---
+    # Microsoft Office Open XML files are essentially zip archives.
+    # We check for characteristic internal paths to differentiate them from generic zips.
     if file_extension == ".zip":
         try:
             with zipfile.ZipFile(file_path, "r") as z:
-                zip_contents = z.namelist()
+                zip_contents = z.namelist() # Get list of files inside the zip
 
-                if any(f.startswith("ppt") for f in zip_contents):
-                    file_extension = ".pptx" 
-                elif any(f.startswith("word") for f in zip_contents):
-                    file_extension = ".docx"  
-                elif any(f.startswith("xl") for f in zip_contents):
+                # Check for common prefixes found in Office XML structures
+                if any(f.startswith("ppt/") or f.startswith("ppt/_rels/") for f in zip_contents):
+                    file_extension = ".pptx"
+                elif any(f.startswith("word/") or f.startswith("word/_rels/") for f in zip_contents):
+                    file_extension = ".docx"
+                elif any(f.startswith("xl/") or f.startswith("xl/_rels/") for f in zip_contents):
                     file_extension = ".xlsx"
 
         except zipfile.BadZipFile:
+            # If the file was initially identified as .zip but isn't a valid zip archive,
+            # or it's a valid zip but not an Office format, we let the original
+            # .zip extension (or None) stand.
+            pass
+        except Exception:
+            # Catch any other potential errors during zip file processing (e.g., permissions)
+            # and ignore them, allowing the initial detection to remain.
             pass
 
     return file_extension
+
 
 # Helper function that retrieves the path to a chat-specific history file
 def ensure_user_folder_file_exists(username, chat_id):
