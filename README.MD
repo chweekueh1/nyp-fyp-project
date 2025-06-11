@@ -42,14 +42,6 @@
 
 ```
 
-7. Install the library libmagic
-
-``` bash
-
-  pip install python-magic
-  pip install python-magic-bin
-
-```
 
 ## Running the Model Interface (Frontend & Backend)
 
@@ -57,8 +49,7 @@ Run app.py and streamlit_app.py
 
 ```bash
 
-python app.py
-streamlit run streamlit_app.py
+python run.py
 
 ```
 

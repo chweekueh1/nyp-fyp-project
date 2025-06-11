@@ -14,18 +14,21 @@ from typing_extensions import Annotated, TypedDict
 from typing import Sequence
 import openai, os, json, shelve
 import sqlite3
+from typing import cast # Import 'cast' for type hinting
+from openai.types.chat import ChatCompletionToolParam 
+from openai.types import FunctionDefinition
 from dotenv import load_dotenv
-from utils import rel2abspath, create_folders, get_chatbot_dir
+from utils import rel2abspath, create_folders
 
 load_dotenv()
 
 # Environment setup
-DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", ''))
-CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", ''))
+DATABASE_PATH = os.getenv("DATABASE_PATH")
+CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH")
 openai.api_key = os.getenv("OPENAI_API_KEY")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", '')
-KEYWORDS_DATABANK_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", '')))
-LANGCHAIN_CHECKPOINT_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("LANGCHAIN_CHECKPOINT_PATH", '')))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+KEYWORDS_DATABANK_PATH = rel2abspath(os.getenv("KEYWORDS_DATABANK_PATH", ''))
+LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH", ''))
 
 create_folders(LANGCHAIN_CHECKPOINT_PATH)
 
@@ -91,9 +94,14 @@ def match_keywords(question):
     with shelve.open(KEYWORDS_DATABANK_PATH) as db:
         keywords = db['keywords']
     keywords.append('None')
-    content = f"""###Keywords###\n{', '.join(keywords)}\n\n###Instructions###\nFrom the list of keywords, 
-    select all that apply to the question’s topic or subject matter. If none apply, return 'None'.\n{question}\n"""
-    function = {
+    content = f"""###Keywords###
+    {', '.join(keywords)}
+
+    ###Instructions###
+    From the list of keywords, select all that apply to the question’s topic or subject matter. If no keywords apply, return an empty list for 'prediction'.
+    {question}
+    """
+    function_definition: ChatCompletionToolParam = cast(ChatCompletionToolParam, {
         "name": "match_keywords",
         "description": "Match the question to keywords.",
         "parameters": {
@@ -107,20 +115,39 @@ def match_keywords(question):
             },
             "required": ["prediction"]
         }
-    }
+    })
+
+    # Assuming 'openai' is an imported client instance (e.g., from openai import OpenAI; client = OpenAI(); client.chat.completions.create...)
+    # If 'openai' is the top-level library object, the call below is fine.
     r = openai.chat.completions.create(
         model="gpt-4",
         temperature=0.0,
         messages=[{"role": "user", "content": content}],
-        functions=[function],
-        function_call={"name": "match_keywords"},
+        tools=[function_definition],
+        tool_choice={"type": "function", "function": {"name": "match_keywords"}}
     )
-    args_str = r.choices[0].message.function_call.arguments
-    args = json.loads(args_str)
-    prediction = args['prediction']
-    if isinstance(prediction, str):
-        prediction = prediction.split(', ')
-    return prediction
+    predictions = [] # Initialize predictions to an empty list
+    if r.choices and r.choices[0].message.tool_calls:
+        # Access the list of tool calls. Since we forced a specific tool_choice,
+        # we expect exactly one tool call here.
+        first_tool_call = r.choices[0].message.tool_calls[0]
+
+        # Check if it's indeed a function tool call and the correct function
+        if first_tool_call.type == "function" and first_tool_call.function.name == "match_keywords":
+            args_str = first_tool_call.function.arguments
+
+            try:
+                # Parse the JSON string into a Python dictionary
+                parsed_args = json.loads(args_str)
+                predictions = parsed_args.get("prediction", []) # Safely get 'prediction', default to empty list
+                print(f"Extracted predictions: {predictions}") # For debugging
+            except json.JSONDecodeError as e:
+                print(f"Error parsing function arguments JSON: {e}")
+                print(f"Raw arguments string: {args_str}") # Print raw string to help debug malformed JSON
+        else:
+            print("Unexpected tool call type or function name in response.")
+    else:
+        print("No tool calls found in the OpenAI response message.")
 
 
 def build_keyword_filter(matched_keywords, max_keywords=10):
@@ -134,9 +161,10 @@ def build_keyword_filter(matched_keywords, max_keywords=10):
 
 def route_retriever(question):
     matched_keywords = match_keywords(question)
-    if 'None' in matched_keywords:
+        
+    if not matched_keywords: 
+        print("No keywords matched, returning default retriever.") # Added for debugging/clarity
         return db.as_retriever(search_kwargs={'k': 5})
-    
     keyword_filter = build_keyword_filter(matched_keywords)
     return db.as_retriever(search_kwargs={'k': 5, 'filter': keyword_filter})
 

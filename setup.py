@@ -26,6 +26,9 @@ def main():
     extractDependencies()
 
     applyPath()
+    if os.path.exists(rel2abspath('.venv')):
+        print("Removing existing virtual environment...")
+        os.rmdir(rel2abspath('.venv'))
 
     subprocess.run([sys.executable, "-m", "venv", '.venv'], check=True)
 
