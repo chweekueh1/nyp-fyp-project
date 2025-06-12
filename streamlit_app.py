@@ -11,6 +11,7 @@ from dateutil import tz
 from collections import defaultdict
 from utils import rel2abspath, get_home_directory_path
 from hashing import hash_password, verify_password
+from password import is_password_complex
 
 # Set page configuration
 st.set_page_config(
@@ -219,12 +220,15 @@ def login():
             email_register = st.text_input("Email Address", key="register_email")
             password_register = st.text_input("New Password", type="password", key="register_password")
             confirm_register = st.text_input("Confirm Password", type="password", key="confirm_password")
+            is_valid, message = is_password_complex.is_password_complex(password_register)
 
             if st.button("Register", use_container_width=True):
                 if not username_register or not email_register or not password_register or not confirm_register:
                     st.warning("Please fill all fields.")
                 elif password_register != confirm_register:
                     st.error("Passwords do not match.")
+                elif not is_valid:
+                    st.error(f"Password is invalid: {message}")
                 elif email_register not in ALLOWED_EMAILS:
                     st.error("This email is not allowed to register.")
                 else:
