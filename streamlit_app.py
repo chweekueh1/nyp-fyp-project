@@ -6,10 +6,11 @@ import re
 import os
 from dotenv import load_dotenv
 from audio_recorder_streamlit import audio_recorder
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta # Import timedelta for fixed offset
 from dateutil import tz
+from dateutil.parser import parse as dateutil_parse
 from collections import defaultdict
-from utils import get_chatbot_dir, get_chatbot_dir
+from utils import rel2abspath, get_chatbot_dir
 from hashing import hash_password, verify_password
 
 # Set page configuration
@@ -37,7 +38,7 @@ st.markdown('''
     /* Recording indicator */
     .recording-indicator { color: #ff4b4b; font-weight: bold; text-align: center; margin-top: 10px; animation: blink 1s infinite; }
     
-    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }}
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1); }}
     
     /* Audio player container */
     .audio-container { display: flex; align-items: center; margin: 15px 0; padding: 10px; border-radius: 8px; background-color: #f0f2f6; }
@@ -50,9 +51,9 @@ st.markdown('''
         cursor: pointer; transition: all 0.3s; }
     .record-button.recording { background-color: #ff4b4b; animation: pulse 1.5s infinite; }
     
-    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); }}
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: 1); }}
             
-     .submit-button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+    .submit-button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
     
     /* Input method selector styling */
     .input-selector { display: flex; margin-bottom: 20px; background-color: #f0f2f6; border-radius: 8px; overflow: hidden; }
@@ -76,7 +77,7 @@ st.markdown('''
     
     /* New chat button styling */
     .new-chat-button { background-color: #0066cc; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; 
-            margin-top: 10px; margin-bottom: 20px; width: 100%; transition: all 0.3s; }
+                margin-top: 10px; margin-bottom: 20px; width: 100%; transition: all 0.3s; }
     .new-chat-button:hover { background-color: #004c99; }
     
     /* Active chat styling */
@@ -104,7 +105,7 @@ if 'input_method' not in st.session_state:
 if 'question_input' not in st.session_state:
     st.session_state.question_input = ""
 if 'chat_history' not in st.session_state:
-     st.session_state.chat_history = []
+    st.session_state.chat_history = []
 if 'username' not in st.session_state:
     st.session_state.username = None
 if 'current_chat_id' not in st.session_state:
@@ -121,15 +122,51 @@ ALLOWED_EMAILS = [
 
 load_dotenv()
 
-USER_DB_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('USER_DB_PATH', 'data\\user_info\\users.json')))
-CHAT_SESSIONS_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', '')))
+USER_DB_PATH = rel2abspath(os.getenv('USER_DB_PATH', f'{get_chatbot_dir()}\\data\\user_info\\users.json'))
+CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', ''))
 
 # API Configuration
 API_URL = "http://127.0.0.1:5001"
 
-# Detect local timezone
-from_zone = tz.tzutc()
-to_zone = tz.tzlocal()
+# Define UTC+8 timezone explicitly
+UTC_PLUS_8 = tz.tzoffset("UTC+8", timedelta(hours=8))
+
+# Detect local timezone (used for displaying timestamps)
+from_zone = tz.tzutc() # Backend saves timestamps in UTC
+to_zone = tz.tzlocal() # Display in local timezone
+
+# --- New Helper Function for Robust Timestamp Parsing using dateutil ---
+def get_datetime_from_timestamp(ts_string):
+    """
+    Attempts to parse a timestamp string into a datetime object using dateutil.parser.parse.
+    Ensures the datetime object is timezone-aware and converted to UTC+8.
+    Returns datetime.min (timezone-aware UTC+8) if parsing fails completely to avoid crashing.
+    """
+    # Create a timezone-aware datetime.min for fallback
+    fallback_dt = datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8)
+
+    if not isinstance(ts_string, str) or not ts_string: # Handle empty or non-string timestamps
+        return fallback_dt
+
+    try:
+        # Use dateutil.parser.parse for flexible parsing.
+        # It attempts to create a timezone-aware object if offset information is present.
+        dt_obj = dateutil_parse(ts_string)
+        
+        # If the parsed object is naive (no timezone info), assume it's UTC and localize it.
+        # This is because your backend saves with %f and UTC+0 is implicitly assumed
+        # if no tzinfo is explicitly provided.
+        if dt_obj.tzinfo is None:
+            dt_obj = dt_obj.replace(tzinfo=timezone.utc) # Assume naive timestamps are UTC
+        
+        # Convert to the desired UTC+8 timezone for consistent comparison
+        return dt_obj.astimezone(UTC_PLUS_8)
+        
+    except ValueError as e:
+        # If dateutil.parser.parse fails, log the specific string that caused the issue.
+        print(f"Warning: Could not parse timestamp '{ts_string}' using dateutil.parser.parse. Error: {e}. Using timezone-aware datetime.min as fallback for sorting/display.")
+        return fallback_dt
+
 
 # Helper function to handle API requests with error handling
 def handle_api_request(endpoint, method="post", data=None, files=None, json=None):
@@ -164,8 +201,14 @@ def load_user_chats(username):
     chat_histories = []
 
     for chat_file in chat_files:
-        with open(os.path.join(user_folder, chat_file), 'r') as f:
-            chat_histories.append(json.load(f))
+        try:
+            with open(os.path.join(user_folder, chat_file), 'r') as f:
+                chat_histories.append(json.load(f))
+        except json.JSONDecodeError as e:
+            st.warning(f"Error reading chat file {chat_file}: {e}. Skipping this chat.")
+        except Exception as e:
+            st.warning(f"Unexpected error with chat file {chat_file}: {e}. Skipping this chat.")
+
 
     return chat_histories
 
@@ -174,11 +217,12 @@ def load_users():
         return {"users": {}}
 
     with open(USER_DB_PATH, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
     
+    # Ensure 'users' key exists, handle old formats if necessary
     if "users" not in data:
-        return {"users": data}
-    
+        return {"users": data} # If the whole file is just the users dict directly
+        
     return data
 
 def save_users(users):
@@ -207,8 +251,10 @@ def login():
                     st.session_state.username = username_login
                     st.session_state.chat_history = []
                     fetch_user_history(username_login)
-                    new_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
-                    st.session_state.current_chat_id = new_chat_id
+                    # Generate a new chat ID upon successful login if none is active
+                    if st.session_state.current_chat_id is None:
+                        new_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+                        st.session_state.current_chat_id = new_chat_id
                     st.rerun()
                 else:
                     st.error("Incorrect password.")
@@ -256,7 +302,8 @@ def fetch_user_history(username):
 
         for msg in combined_history:
             if 'chat_id' not in msg:
-                msg['chat_id'] = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+                # Assign a default chat_id for older messages if it's missing
+                msg['chat_id'] = f"{st.session_state.username}_legacy_chat_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
 
         st.session_state.chat_history = combined_history
 
@@ -355,7 +402,7 @@ def file_classification_section():
                 st.markdown(f"##### Classification:`{data.get('classification')}`")
                 st.markdown(f"##### Sensitivity:`{data.get('sensitivity')}`")
                 st.markdown("##### Reasoning:")
-                st.markdown(f"> {data.get('reasoning')}")   
+                st.markdown(f"> {data.get('reasoning')}")    
                 
             else:
                 st.error(f"Data classification failed: {response.json().get('error')}")
@@ -364,7 +411,7 @@ def file_classification_section():
 def audio_input_section():
     if not st.session_state.audio_data or 'recording_mode' in st.session_state and st.session_state.recording_mode:
         audio_bytes = audio_recorder(
-            pause_threshold=100000,
+            pause_threshold=100000, # Increased significantly to allow longer pauses during recording
             recording_color="#ff4b4b",
             neutral_color="#0066cc",
             icon_size="2.5x"
@@ -401,7 +448,7 @@ def audio_input_section():
                         st.session_state.temp_transcript = ""
                         st.rerun()
                     else:
-                        st.error("Failed to get AI response") 
+                        st.error("Failed to get AI response")    
         with col2:
             if st.button("Re-record Audio", key="rerecord_btn"):
                 st.session_state.recording_mode = True
@@ -424,37 +471,46 @@ def display_chat_history():
         st.info("No conversation history yet. Ask a question to get started!")
         return
 
+    # Filter messages for the current chat ID
     if st.session_state.current_chat_id:
         current_chat_messages = [
             msg for msg in st.session_state.chat_history 
-            if 'chat_id' not in msg or msg.get('chat_id') == st.session_state.current_chat_id
+            if msg.get('chat_id') == st.session_state.current_chat_id
+            # The line below handles old messages that might not have a chat_id
+            # If you want to strictly only show messages with a chat_id, remove 'or 'chat_id' not in msg'
+            or ('chat_id' not in msg and st.session_state.current_chat_id.startswith(f"{st.session_state.username}_legacy_chat_"))
         ]
     else:
+        # If no current_chat_id is set, show all history
         current_chat_messages = st.session_state.chat_history
+
 
     if not current_chat_messages:
         st.info("No messages in this chat. Ask a question to get started!")
         return
 
-    # Sort by timestamp
+    # Sort messages by timestamp using the robust parsing function
     try:
         sorted_messages = sorted(
             current_chat_messages,
-            key=lambda x: datetime.strptime(x['timestamp'], r'%Y-%m-%d %H:%M:%S.%f')
+            key=lambda x: get_datetime_from_timestamp(x.get('timestamp', '')) # Use .get with default for safety
         )
-    except KeyError:
-        sorted_messages = current_chat_messages  # Fallback if no timestamp
+    except Exception as e: # Catch any other potential errors during sorting
+        st.error(f"Error sorting chat history: {e}. Displaying unsorted.")
+        sorted_messages = current_chat_messages # Fallback to unsorted if error occurs
 
     # Group messages by timestamp (assumes same timestamp = paired user/bot)
     grouped = defaultdict(list)
     for msg in sorted_messages:
-        ts = msg['timestamp']
-        grouped[ts].append(msg)
+        # Using the actual timestamp string as key for grouping
+        ts = msg.get('timestamp')
+        if ts:
+            grouped[ts].append(msg)
 
     st.markdown("### Conversation History")
     chat_container = st.container()
     with chat_container:
-        for ts, msgs in grouped.items():
+        for ts_key, msgs in grouped.items():
             user_msg = next((m for m in msgs if m["role"] == "user"), None)
             bot_msg = next((m for m in msgs if m["role"] == "assistant"), None)
 
@@ -471,6 +527,16 @@ def display_chat_history():
                     {bot_msg["content"]}
                 </div>
                 """, unsafe_allow_html=True)
+            
+            # Display time after each pair, using the robust parsing
+            if user_msg and user_msg.get('timestamp'):
+                dt_object = get_datetime_from_timestamp(user_msg['timestamp'])
+                # Only format if parsing was successful (i.e., not datetime.min)
+                if dt_object != datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8): # Compare to timezone-aware min
+                    display_time = dt_object.astimezone(to_zone).strftime('%H:%M') # dt_object is already UTC+8, convert to local
+                    st.markdown(f"<p style='font-size: 0.7em; color: #888; align-self: flex-end; margin-top: 5px;'>{display_time}</p>",
+                                unsafe_allow_html=True)
+
 
 def combined_input_section():
     """Combined input section with toggle between text and speech"""
@@ -485,6 +551,8 @@ def combined_input_section():
     with col2:
         if st.button("Speech Input", key="speech_btn", use_container_width=True, type="primary" if st.session_state.input_method == "speech" else "secondary"):
             st.session_state.input_method = "speech"
+            st.session_state.audio_data = None # Clear audio data when switching to speech mode
+            st.session_state.temp_transcript = "" # Clear transcription
             st.rerun()
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     if st.session_state.input_method == "text":
@@ -499,24 +567,42 @@ def display_sidebar_prompts():
     if st.sidebar.button("New Chat", key="new_chat_btn", help="Start a new conversation", use_container_width=True, type="primary"):
         st.session_state.current_chat_id = f"{st.session_state.username}_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
         st.rerun()
-    
+        
     st.sidebar.markdown("### Your Chats")
     chat_groups = {}
+    # Iterate through chat history to identify unique chat_ids and their first message
     for msg in st.session_state.chat_history:
         chat_id = msg.get('chat_id')
         if not chat_id:
-            continue
+            # Assign a temporary chat_id for legacy messages if they are part of a 'chat_history'
+            # that's active (e.g., in current_chat_id that matched legacy_chat)
+            chat_id = f"{st.session_state.username}_legacy_chat_{datetime.now(timezone.utc).strftime(r'%d%m%Y%H%M%S%f')}"
+            msg['chat_id'] = chat_id # Temporarily update message with new ID if not present
+
+        # Only add the first user message for a given chat_id
         if chat_id not in chat_groups and msg['role'] == 'user':
             chat_groups[chat_id] = msg
             
-    st.session_state.chat_groups = chat_groups
+    st.session_state.chat_groups = chat_groups # Store grouped chats in session state
     
     if chat_groups:
-        for chat_id, first_msg in sorted(chat_groups.items(), key=lambda x: x[0], reverse=True):
+        # Sort chat IDs by the timestamp of their first message (most recent first)
+        sorted_chat_ids = sorted(
+            chat_groups.keys(), 
+            key=lambda chat_id: get_datetime_from_timestamp(chat_groups[chat_id].get('timestamp', '')), 
+            reverse=True
+        )
+
+        for chat_id in sorted_chat_ids:
+            first_msg = chat_groups[chat_id]
             shortened_text = first_msg["content"][:50] + "..." if len(first_msg["content"]) > 50 else first_msg["content"]
             is_selected = st.session_state.current_chat_id == chat_id
-            time = datetime.strptime(first_msg['timestamp'], r'%Y-%m-%d %H:%M:%S.%f')
-            first_msg_ts = time.replace(tzinfo=from_zone).astimezone(to_zone).strftime('%H:%M')
+            
+            # Robustly parse timestamp for display
+            dt_object = get_datetime_from_timestamp(first_msg.get('timestamp', ''))
+            # Format display time from the now timezone-aware UTC+8 object to local tz
+            first_msg_ts = dt_object.astimezone(to_zone).strftime('%H:%M') if dt_object != datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8) else "N/A"
+
             container_style = "active-chat" if is_selected else ""
             with st.sidebar.container():
                 st.markdown(f"<div class='{container_style}'>", unsafe_allow_html=True)
@@ -527,7 +613,7 @@ def display_sidebar_prompts():
                         st.rerun()
                 with col2:
                     st.markdown(f"<p style='font-size: 0.7em; color: #888; text-align: right;'>{first_msg_ts}</p>", 
-                               unsafe_allow_html=True)
+                                unsafe_allow_html=True)
                 st.markdown("</div><hr style='margin: 5px 0; opacity: 0.3;'>", unsafe_allow_html=True)
     else:
         st.sidebar.info("No previous chats found.")
@@ -562,3 +648,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

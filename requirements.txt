@@ -135,7 +135,6 @@ pdf2image==1.17.0
 pdfminer.six==20250327
 pi_heif==0.22.0
 pikepdf==9.5.2
-pillow==11.1.0
 posthog==3.24.1
 propcache==0.3.1
 proto-plus==1.26.1
@@ -229,5 +228,3 @@ xxhash==3.5.0
 yarl==1.19.0
 zipp==3.21.0
 zstandard==0.23.0
-auto-py-to-exe
-pyinstaller
