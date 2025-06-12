@@ -41,7 +41,7 @@ CHAT_DATA_PATH = os.getenv("CHAT_DATA_PATH", f'{get_chatbot_dir()}\\data')
 DATABASE_PATH = os.getenv("DATABASE_PATH", f"{get_chatbot_dir()}\\data\\vector_store\\chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHAT_SESSIONS_PATH = rel2abspath(os.getenv('CHAT_SESSIONS_PATH', f'{get_chatbot_dir()}\\chats'))
-USER_DB_PATH = os.path.join(os.getenv("CHAT_DATA_PATH"),"user_info\\users.json")
+USER_DB_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH","data\\user_info\\users.json"))
 
 classification_db = Chroma(
     collection_name = 'classification',

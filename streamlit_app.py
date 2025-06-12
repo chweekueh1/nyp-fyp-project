@@ -11,7 +11,7 @@ from dateutil import tz
 from dateutil.parser import parse as dateutil_parse
 from collections import defaultdict
 from utils import rel2abspath, get_chatbot_dir
-from hashing import hash_password, verify_password
+from hashing import hash_password, verify_password, is_password_complex
 
 # Set page configuration
 st.set_page_config(
@@ -245,7 +245,7 @@ def login():
                 users = users_data.get("users", {})
                 
                 if username_login not in users:
-                    st.error("Username not found.")
+                    st.error("Incorrect username or password.")
                 elif verify_password(password_login, users[username_login]["hashedPassword"]):
                     st.session_state.logged_in = True
                     st.session_state.username = username_login
@@ -257,7 +257,7 @@ def login():
                         st.session_state.current_chat_id = new_chat_id
                     st.rerun()
                 else:
-                    st.error("Incorrect password.")
+                    st.error("Incorrect username or password.")
 
         # --- REGISTER TAB ---
         with tab2:
@@ -276,11 +276,14 @@ def login():
                 else:
                     users_data = load_users()
                     users = users_data.get("users", {})
+                    is_complex, message = is_password_complex(password_register)
 
                     if username_register in users:
                         st.warning("Username already exists.")
                     elif any(user["email"] == email_register for user in users.values()):
                         st.warning("This email is already registered.")
+                    elif not is_complex:
+                        st.warning(message)
                     else:
                         hashed_password = hash_password(password_register)
                         users[username_register] = {

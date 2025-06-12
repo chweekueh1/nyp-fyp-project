@@ -1,4 +1,5 @@
 import bcrypt
+import re
 
 def hash_password(password):
     """
@@ -19,6 +20,27 @@ def verify_password(password, hashed_password):
     # bcrypt.checkpw automatically extracts the salt from the hashed password
     # and re-hashes the plaintext password with that salt for comparison.
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+# Function to validate password complexity
+def is_password_complex(password):
+    # Check length requirement
+    if len(password) < 10:
+        return False, "Password must be at least 10 characters long."
+    
+    # Check for at least one letter
+    if not re.search(r'[a-zA-Z]', password):
+        return False, "Password must contain at least one letter."
+    
+    # Check for at least one digit
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one digit."
+    
+    # Check for at least one symbol (non-alphanumeric character)
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one symbol (!@#$%^&*(),.?\":{}|<>)."
+    
+    # If all checks pass
+    return True, "Password is valid."
 
 # --- Example Usage ---
 if __name__ == "__main__":
