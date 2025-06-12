@@ -191,6 +191,10 @@ def save_message(username, chat_id, message):
         logging.error(f"Error saving message to chat {chat_id}: {str(e)}")
         return False
 
+@app.route('/health', methods=['GET'])
+def check_health():
+    return "OK", 200
+
 # Route for file uploads
 @app.route('/upload', methods=['POST'])
 def upload_file():

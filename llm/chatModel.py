@@ -36,9 +36,9 @@ load_dotenv()
 # Ensure get_chatbot_dir() returns a string for os.path.join compatibility
 BASE_CHATBOT_DIR = str(get_chatbot_dir())
 
-DATABASE_PATH = rel2abspath(os.getenv("DATABASE_PATH", os.path.join(BASE_CHATBOT_DIR, "data", "vector_store", "chroma_db")))
-KEYWORDS_DATABANK_PATH = rel2abspath(os.getenv("KEYWORDS_DATABANK_PATH", os.path.join(BASE_CHATBOT_DIR, "data", "keywords_db")))
-LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.getenv("LANGCHAIN_CHECKPOINT_PATH", os.path.join(BASE_CHATBOT_DIR, "langchain_checkpoints", "checkpoint.sqlite")))
+DATABASE_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("DATABASE_PATH", "data\\vector_store\\chroma_db")))
+KEYWORDS_DATABANK_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("KEYWORDS_DATABANK_PATH", "")))
+LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("LANGCHAIN_CHECKPOINT_PATH", "")))
 
 # Ensure necessary directories exist for persistent storage *before* use
 create_folders(os.path.dirname(DATABASE_PATH)) # For Chroma DB
