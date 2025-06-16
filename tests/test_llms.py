@@ -3,6 +3,10 @@ import os
 import json
 import io # Needed for BytesIO for audio data
 
+"""
+Audio and file upload tests will fail. This is intentional.
+"""
+
 # --- Configuration ---
 # Ensure this matches the FLASK_HOST and FLASK_PORT in your main_app.py
 BASE_URL = "http://127.0.0.1:5001"

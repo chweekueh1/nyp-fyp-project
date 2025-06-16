@@ -1,0 +1,3 @@
+                        audio_recorder_comp = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record your question", waveform_options=gr.WaveformOptions(
+                                waveform_progress_color="#ff4b4b",waveform_color="#0066cc", show_recording_waveform=True 
+                            ))

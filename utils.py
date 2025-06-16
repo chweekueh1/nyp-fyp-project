@@ -4,11 +4,23 @@ def rel2abspath(relative_path: str) -> str:
     return os.path.abspath(relative_path)
 
 def create_folders(path: str):
-    if not path.endswith('\\'):
-        folder_path = os.path.dirname(path)
-    else:
-        folder_path = path
-    os.makedirs(folder_path, exist_ok=True)
+    """
+    Checks if a directory (and all its parent directories) exist.
+    If not, it creates them. This function is idempotent, meaning it
+    won't raise an error if the directories already exist.
+
+    Args:
+        path (str): The full path of the directory to ensure exists.
+    """
+    try:
+        # os.makedirs creates all intermediate directories needed.
+        # exist_ok=True prevents an error if the directory already exists.
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        # Catching OSError for file system related errors (e.g., permissions)
+        # Re-raise the exception because if the directory can't be created,
+        # subsequent operations relying on it will fail.
+        raise
 
 def ensure_chatbot_dir_exists():
     # Creates a `.nypai-chatbot` folder for the user if it doesn't exist.

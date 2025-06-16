@@ -1,0 +1,3 @@
+- [ ] Fix the Gradio UI (split into modules, test and integrate them)
+    - [ ] Fix post login logic (loading chat history code)
+- [ ] Create a ./tests/test_backend.py to test backend functions

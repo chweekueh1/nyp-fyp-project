@@ -5,14 +5,5 @@
 # Ignore Python cache
 __pycache__/
 
-# Ignore local dependencies
-dependencies/
-
-# Ignore certain data
-data/keyword/
-data/memory_persistence/
-data/vector_store/
-data/chat_sessions/
-
 #Ignore the log files
 app.log

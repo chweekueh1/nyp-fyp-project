@@ -38,7 +38,8 @@ BASE_CHATBOT_DIR = str(get_chatbot_dir())
 
 DATABASE_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("DATABASE_PATH", "data\\vector_store\\chroma_db")))
 KEYWORDS_DATABANK_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("KEYWORDS_DATABANK_PATH", "data\\keywords\\keywords_databank"))) # Updated default path
-LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("LANGCHAIN_CHECKPOINT_PATH", "langchain_checkpoints\\checkpoint.sqlite"))) # Updated default path
+LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("LANGCHAIN_CHECKPOINT_PATH", "data\\langchain_checkpoints\\checkpoint.sqlite"))) # Updated default path
+print(LANGCHAIN_CHECKPOINT_PATH)
 
 # Ensure necessary directories exist for persistent storage *before* use
 create_folders(os.path.dirname(DATABASE_PATH)) # For Chroma DB
@@ -46,7 +47,7 @@ create_folders(os.path.dirname(KEYWORDS_DATABANK_PATH)) # For Shelve DB (it's a 
 create_folders(os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)) # For LangGraph Checkpoint DB
 
 # Use capital letters for the API key variable
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", '')
 
 if not OPENAI_API_KEY:
     logging.critical("OPENAI_API_KEY environment variable not set. Chat features will not work.")
@@ -54,6 +55,7 @@ if not OPENAI_API_KEY:
     embedding = None
     client = None # Initialize client as None if API key is missing
 else:
+    print("OpenAI key found")
     llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini") 
     embedding = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
     client = openai.OpenAI(api_key=OPENAI_API_KEY) # Initialize the OpenAI client here
@@ -373,6 +375,8 @@ if llm and db and client:
 
     # Connect to SQLite checkpoint for LangGraph (ensure directory exists)
     try:
+        print(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
+        print(f"Parent directory for SQLite: {os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)}")
         conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
         sqlite_saver = SqliteSaver(conn)  
         app = workflow.compile(checkpointer=sqlite_saver)
@@ -381,6 +385,7 @@ if llm and db and client:
         logging.critical(f"Failed to connect to SQLite checkpoint or compile LangGraph: {e}", exc_info=True)
         app = workflow.compile() # Compile without checkpointer if it fails
         logging.warning("LangGraph compiled without checkpointing due to error. State will not persist across runs.")
+        print(e)
 else:
     logging.critical("LLM, Chroma DB, or OpenAI client not initialized. LangGraph workflow will not be compiled. Chat functions will be limited.")
 
@@ -409,5 +414,4 @@ def get_convo_hist_answer(question: str, thread_id: str) -> dict:
     except Exception as e:
         logging.error(f"Error invoking LangGraph workflow for thread '{thread_id}': {e}", exc_info=True)
         return {"answer": "I'm sorry, I encountered an error while processing your request. Please try again.", "context": ""}
-
 

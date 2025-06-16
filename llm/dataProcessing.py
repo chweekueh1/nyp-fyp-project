@@ -15,7 +15,7 @@ from keybert.llm import OpenAI
 from keybert import KeyLLM
 import warnings
 import shelve
-from utils import create_folders, get_chatbot_dir
+from utils import create_folders, get_chatbot_dir, rel2abspath
 
 warnings.filterwarnings("ignore")
 
@@ -23,11 +23,11 @@ warnings.filterwarnings("ignore")
 load_dotenv()
 
 CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", ''))
-CLASSIFICATION_DATA_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("CLASSIFICATION_DATA_PATH", '')))
-KEYWORDS_DATABANK_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", '')))
+CLASSIFICATION_DATA_PATH = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv("CLASSIFICATION_DATA_PATH", '')))
+KEYWORDS_DATABANK_PATH = rel2abspath((os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", ''))))
 openai.api_key = os.getenv("OPENAI_API_KEY")
-DATABASE_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('DATABASE_PATH', '')))
-EMBEDDING_MODEL = os.path.join(get_chatbot_dir(), os.getenv('EMBEDDING_MODEL', ''))
+DATABASE_PATH = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv('DATABASE_PATH', '')))
+EMBEDDING_MODEL = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv('EMBEDDING_MODEL', '')))
 create_folders(KEYWORDS_DATABANK_PATH)
 
 classification_db = Chroma(
