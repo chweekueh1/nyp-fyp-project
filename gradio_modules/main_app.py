@@ -32,6 +32,12 @@ STYLES_DIR = parent_dir / "styles"
 CSS_PATH = STYLES_DIR / "styles.css"
 
 def ensure_styles_dir():
+    """
+    Ensure the styles directory exists and return the path to the CSS file.
+    
+    Returns:
+        str: Path to the CSS file if it exists, None otherwise.
+    """
     if STYLES_DIR.exists():
         return str(CSS_PATH) if CSS_PATH.exists() else None
         
@@ -40,7 +46,12 @@ def ensure_styles_dir():
     return None
 
 def initialize_app_data():
-    """Initialize the app data dictionary with required components."""
+    """
+    Initialize the app data dictionary with required components.
+    
+    Returns:
+        dict: Dictionary containing initialized Gradio components and states.
+    """
     login_col = gr.Column(visible=True)
     main_col = gr.Column(visible=False)
     return {
@@ -51,11 +62,16 @@ def initialize_app_data():
         'login_container_comp': login_col,
         'main_app_container_comp': main_col,
         'user_info': gr.Markdown(visible=False),
-        'logout_btn': gr.Button("Logout", visible=False)
+        'logout_button': gr.Button("Logout", visible=False)
     }
 
 def _add_components(app_data):
-    """Add all UI components to the app, ensuring both containers are always present."""
+    """
+    Add all UI components to the app, ensuring both containers are always present.
+    
+    Args:
+        app_data (dict): Dictionary containing Gradio components and states.
+    """
     # Add login interface inside login_container_comp
     with app_data['login_container_comp']:
         login_interface(app_data)
@@ -66,7 +82,12 @@ def _add_components(app_data):
         # Add any other main app UI here
 
 def _add_login_handling(app_data):
-    """Add login and register event handlers."""
+    """
+    Add login and register event handlers.
+    
+    Args:
+        app_data (dict): Dictionary containing Gradio components and states.
+    """
     # Add login button click event
     app_data['login_button'].click(
         fn=do_login,
@@ -77,7 +98,10 @@ def _add_login_handling(app_data):
         outputs=[
             app_data['logged_in_state'],
             app_data['username_state'],
-            app_data['login_container_comp']
+            app_data['login_container_comp'],
+            app_data['main_app_container_comp'],
+            app_data['logout_button'],
+            app_data['error_message']
         ]
     )
     
@@ -107,6 +131,8 @@ def _add_login_handling(app_data):
             app_data['logged_in_state'],
             app_data['username_state'],
             app_data['login_container_comp'],
+            app_data['main_app_container_comp'],
+            app_data['logout_button'],
             app_data['error_message']
         ]
     )
@@ -119,21 +145,40 @@ def _add_login_handling(app_data):
     )
 
 def _add_logout_logic(app_data):
-    """Add logout event handler."""
-    def do_logout():
-        return False, "", gr.update(visible=True)
+    """
+    Add logout event handler.
     
-    app_data['logout_btn'].click(
+    Args:
+        app_data (dict): Dictionary containing Gradio components and states.
+    """
+    def do_logout():
+        """
+        Handle the logout action, resetting the UI to the login state.
+        
+        Returns:
+            tuple: Updated states for UI components after logout.
+        """
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+    
+    app_data['logout_button'].click(
         fn=do_logout,
         outputs=[
             app_data['logged_in_state'],
             app_data['username_state'],
-            app_data['login_container_comp']
+            app_data['login_container_comp'],
+            app_data['main_app_container_comp'],
+            app_data['logout_button'],
+            app_data['error_message']
         ]
     )
 
 def _add_chat_handling(app_data):
-    """Add chat handling logic to the app."""
+    """
+    Add chat handling logic to the app.
+    
+    Args:
+        app_data (dict): Dictionary containing Gradio components and states.
+    """
     # Add chat handling
     app_data['send_button'].click(
         fn=_handle_chat_message,
@@ -150,6 +195,15 @@ def _add_chat_handling(app_data):
     
     # Add chat history update
     def update_chat_display(history):
+        """
+        Update the chat display with new history.
+        
+        Args:
+            history (list): List of chat messages.
+            
+        Returns:
+            list: Updated chat history.
+        """
         return history
         
     app_data['chat_history_state'].change(
@@ -187,8 +241,22 @@ def _handle_chat_message(message: str, history: list, username: str) -> tuple[st
         return "", history
 
 def _add_user_info_update(app_data):
-    """Add user info update logic."""
+    """
+    Add user info update logic.
+    
+    Args:
+        app_data (dict): Dictionary containing Gradio components and states.
+    """
     def update_user_info(username):
+        """
+        Update the user info display based on the current username.
+        
+        Args:
+            username (str): Current username.
+            
+        Returns:
+            gr.update: Updated user info component.
+        """
         if not username:
             return gr.update(visible=False)
         return gr.update(visible=True, value=f"Logged in as: {username}")
@@ -200,7 +268,12 @@ def _add_user_info_update(app_data):
     )
 
 def main_app():
-    """Create the main Gradio app."""
+    """
+    Create the main Gradio app.
+    
+    Returns:
+        gr.Blocks: The Gradio app interface.
+    """
     try:
         css_path = ensure_styles_dir()
         if not css_path:
@@ -224,7 +297,7 @@ def main_app():
             _add_user_info_update(app_data)
         return app
     except Exception as e:
-        logger.error(f"Error initializing app: {e}")
+        logger.error(f"Error creating main app: {e}")
         raise
 
 if __name__ == "__main__":

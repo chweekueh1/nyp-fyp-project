@@ -22,7 +22,18 @@ except ImportError as e:
     raise
 
 def search_interface(app_data: Dict[str, Any]) -> None:
-    """Create the search interface components and add them to app_data."""
+    """
+    Create the search interface components and add them to app_data.
+    
+    This function creates the search UI components including:
+    - Search input
+    - Search button
+    - Search results dropdown
+    - Search container
+    
+    Args:
+        app_data (Dict[str, Any]): Dictionary containing Gradio components and states.
+    """
     with gr.Column(visible=False) as search_container:
         with gr.Row():
             app_data['search_query'] = gr.Textbox(
@@ -58,44 +69,47 @@ def search_interface(app_data: Dict[str, Any]) -> None:
             outputs=[app_data['chat_history_state']]
         )
 
-def _handle_search(query: str, username: str) -> List[str]:
-    """Handle search query.
+def _handle_search(query: str, username: str) -> Dict[str, Any]:
+    """
+    Handle search query and return matching results.
     
     Args:
-        query: The search query
-        username: The username to search for
+        query (str): The search query.
+        username (str): Current username.
         
     Returns:
-        List of search results
+        Dict[str, Any]: Updated search results dropdown.
     """
-    if not query or not username:
-        return []
-    
+    if not query:
+        return {"choices": [], "value": None}
+        
     try:
         # Get search results from backend
         results = search_chat_history(query, username)
-        return [str(r) for r in results] if results else []
+        return {"choices": results, "value": None}
     except Exception as e:
-        logger.error(f"Error in search: {e}")
-        return []
+        logger.error(f"Error handling search: {e}")
+        return {"choices": [], "value": None}
 
-def _handle_search_result(chat_id: str, username: str) -> List[tuple[str, str]]:
-    """Handle search result selection.
+def _handle_search_result(selected: str, username: str) -> List[List[str]]:
+    """
+    Handle search result selection and return the corresponding chat history.
     
     Args:
-        chat_id: The selected chat ID
-        username: The username to get chat history for
+        selected (str): The selected search result.
+        username (str): Current username.
         
     Returns:
-        List of chat messages
+        List[List[str]]: Chat history for the selected result.
     """
-    if not chat_id or not username:
+    if not selected:
         return []
-    
+        
     try:
-        # Get chat history from backend
-        history = get_chat_history(chat_id, username)
-        return [(msg[0], msg[1]) for msg in history] if history else []
+        # Get chat history for selected result
+        history = get_chat_history(username, selected)
+        # Convert tuples to lists to match the expected return type
+        return [[str(msg[0]), str(msg[1])] for msg in history] if history else []
     except Exception as e:
-        logger.error(f"Error getting chat history: {e}")
+        logger.error(f"Error handling search result: {e}")
         return [] 

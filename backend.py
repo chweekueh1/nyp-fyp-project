@@ -29,6 +29,7 @@ from llm.chatModel import get_convo_hist_answer, is_llm_ready, initialize_llm_an
 from llm.dataProcessing import dataProcessing, ExtractText, initialiseDatabase
 from llm.classificationModel import classify_text
 from openai import OpenAI
+from hashing import hash_password, verify_password
 
 # Set up logging
 logger = setup_logging()
@@ -317,7 +318,7 @@ def get_chatbot_response(ui_state: dict) -> dict:
     Chatbot interface: generates a response using the LLM and updates history.
     """
     print(f"[DEBUG] backend.get_chatbot_response called with ui_state: {ui_state}")
-    user = ui_state.get('user')
+    username = ui_state.get('username')
     message = ui_state.get('message')
     history = ui_state.get('history', [])
     chat_id = ui_state.get('chat_id', 'default')
@@ -340,7 +341,7 @@ def audio_to_text(ui_state: dict) -> dict:
     Audio input interface: transcribes audio and gets a chatbot response.
     """
     print(f"[DEBUG] backend.audio_to_text called with ui_state: {ui_state}")
-    user = ui_state.get('user')
+    username = ui_state.get('username')
     audio_file = ui_state.get('audio_file')
     history = ui_state.get('history', [])
     chat_id = ui_state.get('chat_id', 'default')
@@ -374,7 +375,7 @@ def handle_uploaded_file(ui_state: dict) -> dict:
     File upload interface: processes the file and returns a message.
     """
     print(f"[DEBUG] backend.handle_uploaded_file called with ui_state: {ui_state}")
-    user = ui_state.get('user')
+    username = ui_state.get('username')
     file_obj = ui_state.get('file_obj')
     history = ui_state.get('history', [])
     chat_id = ui_state.get('chat_id', 'default')
@@ -492,7 +493,8 @@ async def do_login(username: str, password: str) -> Dict[str, str]:
         users = data.get("users", {})
         if username not in users:
             return {'code': '404', 'message': 'User not found'}
-        if users[username]['password'] != password:
+        stored_hash = users[username].get('hashedPassword')
+        if not stored_hash or not verify_password(password, stored_hash):
             return {'code': '401', 'message': 'Invalid password'}
         return {'code': '200', 'message': 'Login successful'}
     except Exception as e:
@@ -511,8 +513,9 @@ async def do_register(username: str, password: str) -> Dict[str, str]:
         users = data.get("users", {})
         if username in users:
             return {'code': '409', 'message': 'Username already exists'}
+        hashed_pw = hash_password(password)
         users[username] = {
-            'password': password,
+            'hashedPassword': hashed_pw,
             'created_at': str(datetime.now(timezone.utc))
         }
         with open(USER_DB_PATH, 'w') as f:

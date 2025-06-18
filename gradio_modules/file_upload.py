@@ -1,12 +1,41 @@
 import gradio as gr
 import backend
+from typing import Tuple, Any, List, Dict
 
-def file_upload_ui(username_state, chat_history_state, chat_id_state):
+def file_upload_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_state: gr.State) -> Tuple[gr.File, gr.Button, gr.Markdown]:
+    """
+    Create the file upload interface components.
+    
+    This function creates the file upload UI components including:
+    - File upload input
+    - Send button
+    - Debug markdown for status messages
+    
+    Args:
+        username_state (gr.State): State component for the current username.
+        chat_history_state (gr.State): State component for the chat history.
+        chat_id_state (gr.State): State component for the current chat ID.
+        
+    Returns:
+        Tuple[gr.File, gr.Button, gr.Markdown]: File upload, send button, and debug markdown.
+    """
     file_upload = gr.File(label="Upload a file for the chatbot")
     file_btn = gr.Button("Send File")
     file_debug_md = gr.Markdown(visible=True)
 
-    def send_file(user, file_obj, history, chat_id):
+    def send_file(user: str, file_obj: Any, history: List[List[str]], chat_id: str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """
+        Handle sending a file and updating the chat history.
+        
+        Args:
+            user (str): Current username.
+            file_obj (Any): The uploaded file object.
+            history (List[List[str]]): Current chat history.
+            chat_id (str): Current chat ID.
+            
+        Returns:
+            Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]: Updated chat history, debug message, and chat history state.
+        """
         if not user:
             return gr.update(value=history), gr.update(value="Not logged in!"), gr.update(value=history)
         if not file_obj:

@@ -1,13 +1,43 @@
+from typing import Tuple, Any, List, Dict
 import gradio as gr
 import backend
 
-def chatbot_ui(username_state, chat_history_state, chat_id_state):
+def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_state: gr.State) -> Tuple[gr.Chatbot, gr.Textbox, gr.Button, gr.Markdown]:
+    """
+    Create the chatbot interface components.
+    
+    This function creates the chatbot UI components including:
+    - Chat history display
+    - Message input
+    - Send button
+    - Debug markdown for status messages
+    
+    Args:
+        username_state (gr.State): State component for the current username.
+        chat_history_state (gr.State): State component for the chat history.
+        chat_id_state (gr.State): State component for the current chat ID.
+        
+    Returns:
+        Tuple[gr.Chatbot, gr.Textbox, gr.Button, gr.Markdown]: Chatbot, message input, send button, and debug markdown.
+    """
     chatbot = gr.Chatbot()
     chat_input = gr.Textbox(label="Type your message")
     send_btn = gr.Button("Send")
     debug_md = gr.Markdown(visible=True)
 
-    def send_message(user, msg, history, chat_id):
+    def send_message(user: str, msg: str, history: List[List[str]], chat_id: str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """
+        Handle sending a message and updating the chat history.
+        
+        Args:
+            user (str): Current username.
+            msg (str): The message to send.
+            history (List[List[str]]): Current chat history.
+            chat_id (str): Current chat ID.
+            
+        Returns:
+            Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]: Updated chat history, debug message, and chat history state.
+        """
         if not user:
             return gr.update(value=history), gr.update(value="Not logged in!"), gr.update(value=history)
         if not msg:
@@ -24,7 +54,11 @@ def chatbot_ui(username_state, chat_history_state, chat_id_state):
     return chatbot, chat_input, send_btn, debug_md
 
 def test_chatbot_ui():
-    """Test the chatbot UI components."""
+    """
+    Test the chatbot UI components.
+    
+    This function tests that all required components are created correctly.
+    """
     try:
         # Create test states
         username = gr.State("test_user")

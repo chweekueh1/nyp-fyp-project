@@ -138,7 +138,10 @@ def load_user_chats_sync(username: str) -> list:
 
 # --- Main login_interface function ---
 def login_interface(app_data: Dict[str, Any]) -> None:
-    """Create the login/register interface components with proper error handling and mode switching."""
+    """
+    Create the login/register interface components with proper error handling and mode switching.
+    This function initializes the UI components for login and registration, and sets up event handlers for button clicks.
+    """
     if not isinstance(app_data, dict):
         app_data = {}
 
@@ -148,6 +151,7 @@ def login_interface(app_data: Dict[str, Any]) -> None:
     if 'main_app_container_comp' not in app_data:
         app_data['main_app_container_comp'] = gr.Column(visible=False)
 
+    # Create login container and add it to app_data
     with gr.Column(visible=True) as login_container:
         app_data['logout_button'] = gr.Button("Logout", visible=False, elem_classes=["secondary"])
         app_data['username'] = gr.Textbox(
@@ -187,6 +191,7 @@ def login_interface(app_data: Dict[str, Any]) -> None:
         app_data['chat_history_state'] = gr.State([])
         app_data['password_visible'] = gr.State(False)
 
+    # Store login container in app_data
     app_data['login_container_comp'] = login_container
 
     # Password visibility toggle
@@ -202,6 +207,9 @@ def login_interface(app_data: Dict[str, Any]) -> None:
 
     # Switch to register mode
     def to_register_mode(is_registering):
+        """
+        Switch the UI to register mode, hiding login-related components and showing register-related components.
+        """
         return (
             gr.update(visible=False),  # login button
             gr.update(visible=False),  # to_register_button
@@ -225,6 +233,9 @@ def login_interface(app_data: Dict[str, Any]) -> None:
 
     # Switch to login mode
     def to_login_mode(is_registering):
+        """
+        Switch the UI to login mode, hiding register-related components and showing login-related components.
+        """
         return (
             gr.update(visible=True),   # login button
             gr.update(visible=True),   # to_register_button
@@ -248,15 +259,27 @@ def login_interface(app_data: Dict[str, Any]) -> None:
 
     # Actual login action
     def safe_login(username, password):
+        """
+        Handle the login action, validating inputs and calling the backend login function.
+        Returns the appropriate UI updates based on the login result.
+        """
         if not username or not password:
             logger.warning("Login attempt with empty fields")
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please enter both username and password")
+            # Only use gr.update for UI components, raw values for gr.State
+            result = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please enter both username and password"))
+            logger.info(f"safe_login returning: {result}")
+            return result
         result = do_login(username, password)
         # If login is successful, hide login_container and show main_app_container
         if result[0]:
-            return True, result[1], gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+            out = (True, result[1], gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False))
+            logger.info(f"safe_login returning: {out}")
+            return out
         else:
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), result[3] if len(result) > 3 else gr.update(visible=True, value="Login failed")
+            error_msg = result[3] if len(result) > 3 and isinstance(result[3], dict) else gr.update(visible=True, value="Login failed")
+            out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), error_msg)
+            logger.info(f"safe_login returning: {out}")
+            return out
     app_data['login_button'].click(
         fn=safe_login,
         inputs=[app_data['username'], app_data['password']],
@@ -272,16 +295,33 @@ def login_interface(app_data: Dict[str, Any]) -> None:
 
     # Actual register action
     def safe_register(*args):
+        """
+        Handle the registration action, calling the backend register function and returning appropriate UI updates.
+        """
         result = safe_register_impl(*args)
         # If registration is successful, switch to login mode and show success message
         if result[0] is False and isinstance(result[3], dict) and result[3].get("value", "").startswith("Registration successful"):
-            # Switch to login mode
-            return (
+            out = (
                 False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), result[3]
             )
-        return result
+            logger.info(f"safe_register returning (success): {out}")
+            return out
+        error_msg = result[3] if len(result) > 3 and isinstance(result[3], dict) else gr.update(visible=True, value="Registration failed")
+        out = (
+            result[0] if len(result) > 0 else False,
+            result[1] if len(result) > 1 else "",
+            result[2] if len(result) > 2 else gr.update(visible=True),
+            result[3] if len(result) > 3 and isinstance(result[3], dict) else gr.update(visible=False),
+            result[4] if len(result) > 4 else gr.update(visible=False),
+            error_msg
+        )
+        logger.info(f"safe_register returning (fail): {out}")
+        return out
 
     def safe_register_impl(username, password, confirm_password, is_registering, login_button, confirm_password_box, to_register_button, register_account_button, back_to_login_button, error_message_box):
+        """
+        Implementation of the registration logic, calling the backend register function and handling exceptions.
+        """
         try:
             return do_register(username, password, confirm_password, is_registering, login_button, confirm_password_box, to_register_button, register_account_button, back_to_login_button, error_message_box)
         except Exception as e:
@@ -296,7 +336,13 @@ def login_interface(app_data: Dict[str, Any]) -> None:
 
     # Logout button (shown only when logged in)
     def do_logout():
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        """
+        Handle the logout action, resetting the UI to the login state.
+        """
+        # Only use gr.update for UI components, raw values for gr.State
+        out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+        logger.info(f"do_logout returning: {out}")
+        return out
     app_data['logout_button'].click(
         fn=do_logout,
         outputs=[app_data['logged_in_state'], app_data['username_state'], app_data['login_container_comp'], app_data['main_app_container_comp'], app_data['logout_button'], app_data['error_message']]
@@ -329,58 +375,67 @@ def toggle_password_visibility(current_visible):
 def do_login(username: str, password: str):
     if not username or not password:
         logger.warning("Login attempt with empty fields")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please fill in all fields")
+        # Only use gr.update for UI components, raw values for gr.State
+        result = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please fill in all fields"))
+        logger.info(f"do_login returning: {result}")
+        return result
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(backend_login(username, password))
+        backend_result = loop.run_until_complete(backend_login(username, password))
         loop.close()
-        if result and result.get('code') == '200':
-            return True, username, gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+        if backend_result and backend_result.get('code') == '200':
+            out = (True, username, gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False))
+            logger.info(f"do_login returning: {out}")
+            return out
         else:
-            error_msg = result.get('message', 'Invalid username or password')
-            logger.warning(f"Login failed for user {username}: {error_msg}")
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg)
+            error_msg = backend_result.get('message', 'Invalid username or password')
+            out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg))
+            logger.info(f"do_login returning: {out}")
+            return out
     except Exception as e:
         logger.error(f"Unexpected error during login: {e}")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred")
+        out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred"))
+        logger.info(f"do_login returning: {out}")
+        return out
 
 def do_register(username: str, password: str, confirm_password: str, is_registering: bool, login_button, confirm_password_box, register_button, proceed_register_button, is_registering_state, error_message_box):
     # Validate inputs
     if not username or not password or not confirm_password:
         logger.warning("Registration attempt with empty fields")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="All fields are required")
+        result = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="All fields are required"))
+        logger.info(f"do_register returning: {result}")
+        return result
     if password != confirm_password:
         logger.warning(f"Password mismatch for user {username}")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Passwords do not match")
-    # Password complexity check
+        result = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Passwords do not match"))
+        logger.info(f"do_register returning: {result}")
+        return result
     is_valid, complexity_msg = is_password_complex(password)
     if not is_valid:
         logger.warning(f"Password complexity failed for user {username}: {complexity_msg}")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=complexity_msg)
+        result = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=complexity_msg))
+        logger.info(f"do_register returning: {result}")
+        return result
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(backend_register(username, password))
+        backend_result = loop.run_until_complete(backend_register(username, password))
         loop.close()
-        if result and result.get('code') == '200':
-            logger.info(f"Successfully registered user: {username}")
-            # Switch to login mode and show success message
-            return (
-                False,  # logged_in_state
-                "",    # username_state
-                gr.update(visible=True),  # show login container
-                gr.update(visible=True, value="Registration successful! Please log in."),
-                gr.update(visible=False),  # main_app_container_comp
-                gr.update(visible=False),  # logout_button
-            )
+        if backend_result and backend_result.get('code') == '200':
+            out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Registration successful! Please log in."))
+            logger.info(f"do_register returning: {out}")
+            return out
         else:
-            error_msg = result.get('message', 'Registration failed')
-            logger.warning(f"Registration failed for user {username}: {error_msg}")
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg)
+            error_msg = backend_result.get('message', 'Registration failed')
+            out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg))
+            logger.info(f"do_register returning: {out}")
+            return out
     except Exception as e:
         logger.error(f"Unexpected error during registration: {e}")
-        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred")
+        out = (False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred"))
+        logger.info(f"do_register returning: {out}")
+        return out
 
 # --- Test functions ---
 def test_login_interface() -> None:

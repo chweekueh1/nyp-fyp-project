@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple, Union
 import gradio as gr
 import logging
 import asyncio
@@ -23,7 +23,18 @@ except ImportError as e:
     raise
 
 def chat_interface(app_data: Dict[str, Any]) -> None:
-    """Create the chat interface components and add them to app_data."""
+    """
+    Create the chat interface components and add them to app_data.
+    
+    This function creates the chat UI components including:
+    - Chat history display
+    - Message input
+    - Send button
+    - Chat history state
+    
+    Args:
+        app_data (Dict[str, Any]): Dictionary containing Gradio components and states.
+    """
     with gr.Column(visible=False) as chat_container:
         app_data['chat_history'] = gr.Chatbot(
             label="Chat History",
@@ -54,39 +65,28 @@ def chat_interface(app_data: Dict[str, Any]) -> None:
             ]
         )
 
-def _handle_chat_message(message: str, history: list, username: str) -> tuple[str, list]:
-    """Handle chat message submission.
+def _handle_chat_message(msg: str, history: List[List[str]], username: str) -> Tuple[Dict[str, Any], List[List[str]]]:
+    """
+    Handle sending a chat message and updating the chat history.
     
     Args:
-        message: The message to send
-        history: The chat history
-        username: The username of the sender
+        msg (str): The message to send.
+        history (List[List[str]]): Current chat history.
+        username (str): Current username.
         
     Returns:
-        Tuple of (empty message, updated history)
+        Tuple[Dict[str, Any], List[List[str]]]: Updated message input and chat history.
     """
-    if not message.strip():
-        return message, history
-    
-    if not username:
-        history.append((message, "Error: You must be logged in to send messages."))
-        return "", history
-    
+    if not msg:
+        return {"value": ""}, history
+        
     try:
         # Get response from backend
-        response = get_chat_response(message, username)
-        if not response:
-            history.append((message, "Error: No response received from the server."))
-            return "", history
-            
-        history.append((message, response))
-        return "", history
+        response = get_chat_response(msg, username)
+        # Update history with new message and response
+        history.append([msg, response])
+        return {"value": ""}, history
     except Exception as e:
-        logger.error(f"Error in chat handling: {e}")
-        error_msg = "Sorry, I encountered an error. Please try again."
-        if isinstance(e, ConnectionError):
-            error_msg = "Error: Could not connect to the server. Please check your connection."
-        elif isinstance(e, TimeoutError):
-            error_msg = "Error: Request timed out. Please try again."
-        history.append((message, error_msg))
-        return "", history 
+        logger.error(f"Error handling chat message: {e}")
+        history.append([msg, f"Error: {str(e)}"])
+        return {"value": ""}, history 
