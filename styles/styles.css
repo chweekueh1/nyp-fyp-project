@@ -1,0 +1,664 @@
+/* styles/styles.css */
+
+/* Color Palette for Dark and Light Themes */
+body.theme-dark {
+  --flexcyon-base-01: #14161c;
+  --flexcyon-base-02: #191d28;
+  --flexcyon-base-03: #24262c;
+  --flexcyon-base-04: #4d566b;
+  --flexcyon-base-05: #6f7685;
+
+  --flexcyon-base-grey-dark: #898c93;
+  --flexcyon-base-grey-light: #d3d5d3;
+  --accent-color: #4CAF50; /* Green accent for dark mode */
+}
+
+body.theme-light {
+  --flexcyon-base-01: #faf7ef;
+  --flexcyon-base-02: #edebe5;
+  --flexcyon-base-03: #dddcd6;
+  --flexcyon-base-04: #d3d3ce;
+  --flexcyon-base-05: #b4b3af;
+  /* ------------------------------ */
+  --flexcyon-base-grey-dark: #797876;
+  --flexcyon-base-grey-light: #080808;
+  --accent-color: #9c27b0; /* Purple accent for light mode */
+}
+
+body:is(.theme-dark),
+body:is(.theme-light) {
+  --flexcyon-base-grey-tab: #71777f;
+  --flexyon-base-grey-token: #586582;
+  --flexcyon-base-grey-scroll: #3f495e;
+  --flexcyon-base-grey-scroll-hover: #5c6782;
+  /* ------------------------------ */
+  --flexcyon-base-01-02-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-01),
+    var(--flexcyon-base-02)
+  );
+  --flexcyon-base-02-03-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-02),
+    var(--flexcyon-base-03)
+  );
+  --flexcyon-base-03-04-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-03),
+    var(--flexcyon-base-04)
+  );
+  --flexcyon-base-04-05-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-04),
+    var(--flexcyon-base-05)
+  );
+
+  --flexcyon-base-grey-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-grey-light),
+    var(--flexcyon-base-grey-dark)
+  );
+
+  --color-base-00: var(--flexcyon-base-01);
+  --color-base-05: var(--flexcyon-base-01-02-mix);
+  --color-base-10: var(--flexcyon-base-02);
+  --color-base-20: var(--flexcyon-base-02-03-mix);
+  --color-base-25: var(--flexcyon-base-03);
+  --color-base-30: var(--flexcyon-base-03-04-mix);
+  --color-base-35: var(--flexcyon-base-04);
+  --color-base-40: var(--flexcyon-base-04-05-mix);
+  --color-base-50: var(--flexcyon-base-05);
+  --color-base-60: var(--flexcyon-base-grey-dark);
+  --color-base-70: var(--flexcyon-base-grey-mix);
+  --color-base-100: var(--flexcyon-base-grey-light);
+}
+
+body:is(.theme-light) {
+  --flexcyon-base-01-02-mix: color-mix(
+    in hsl,
+    var(--flexcyon-base-01) 70%,
+    var(--flexcyon-base-02) 30%
+  );
+}
+
+/* Global Reset and Body Styles */
+:root {
+    --primary-color: var(--accent-color);
+    --secondary-color: var(--flexcyon-base-04);
+    --background-color: var(--flexcyon-base-01);
+    --text-color: var(--flexcyon-base-grey-light);
+    --border-color: var(--flexcyon-base-03);
+    --shadow-light: rgba(0, 0, 0, 0.05);
+    --shadow-medium: rgba(0, 0, 0, 0.1);
+    --background-fill: var(--base-01) !important;
+    background-color: var(--base-01) !important;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+/* Main Application Container */
+.main-app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%;
+    max-width: 1200px; /* Max width for larger screens */
+    margin: 0 auto;
+    background-color: var(--flexcyon-base-01);
+    box-shadow: 0 4px 12px var(--shadow-medium);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* Header */
+.main-app-header {
+    background-color: var(--flexcyon-base-02);
+    color: var(--flexcyon-base-grey-light);
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--flexcyon-base-03);
+    box-shadow: 0 2px 4px var(--shadow-light);
+}
+
+.main-app-header h1 {
+    margin: 0;
+    font-size: 1.8em;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.main-app-header .gr-markdown {
+    color: var(--text-color-light) !important;
+}
+
+.main-app-header .gr-button {
+    background-color: var(--secondary-color);
+    color: var(--text-color-light);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+.main-app-header .gr-button:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
+}
+
+/* Main Content Area (Sidebar + Right Content) */
+.app-content-area {
+    display: flex;
+    flex-grow: 1;
+}
+
+/* Left Sidebar */
+.left-sidebar {
+    flex: 1;
+    min-width: 250px;
+    max-width: 300px;
+    background-color: var(--flexcyon-secondary);
+    padding: 20px;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Spacing between elements */
+    color: var(--flexcyon-text);
+}
+
+.sidebar-section-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color-dark);
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+
+.sidebar-separator {
+    border-bottom: 1px solid var(--border-color);
+    margin: 10px 0;
+}
+
+/* Navigation Buttons */
+.nav-button {
+    background-color: var(--flexcyon-base-02);
+    color: var(--flexcyon-base-grey-light);
+    border: 1px solid var(--flexcyon-base-03);
+    padding: 12px 15px;
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 1em;
+    transition: all 0.3s ease;
+}
+
+.nav-button:hover {
+    background-color: var(--flexcyon-base-03);
+    color: var(--accent-color);
+    transform: translateY(-1px);
+}
+
+/* Chat List Area */
+.chat-list-area {
+    margin-top: 15px;
+    flex-grow: 1; /* Allow chat list to take available space */
+    overflow-y: auto; /* Enable scrolling for many chats */
+    padding-right: 5px; /* For scrollbar spacing */
+}
+
+.chat-session-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Spacing between chat items */
+}
+
+.chat-session-item {
+    background-color: var(--flexcyon-base-02);
+    border: 1px solid var(--flexcyon-base-03);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.chat-session-item:hover {
+    background-color: var(--flexcyon-base-03);
+    border-color: var(--accent-color);
+}
+
+.chat-session-item.selected-chat-item {
+    background-color: var(--flexcyon-base-03);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.chat-session-name {
+    font-weight: bold;
+    color: var(--text-color-dark);
+    margin-bottom: 3px;
+}
+
+.chat-session-preview {
+    font-size: 0.85em;
+    color: #666;
+    white-space: nowrap; /* Prevent text wrapping */
+    overflow: hidden; /* Hide overflowing text */
+    text-overflow: ellipsis; /* Add ellipsis for hidden text */
+}
+
+.no-chats-message {
+    padding: 10px;
+    color: #888;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Right Content Area (Pages) */
+.right-content-area {
+    flex: 4;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--flexcyon-background);
+    color: var(--flexcyon-text);
+}
+
+.content-page-group {
+    flex-grow: 1;
+    display: flex; /* Use flex to control internal layout */
+    flex-direction: column;
+    /* Important: When a Gradio Group is visible=False, its display is set to none.
+       We set it to flex here so that when it IS visible, it behaves as a flex container. */
+}
+
+.page-title {
+    font-size: 2em;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+/* Chatbot Specific Styles */
+.main-chatbot-display,
+.search-results-chatbot {
+    flex-grow: 1; /* Allow chatbot to expand */
+    background-color: var(--flexcyon-base-01);
+    border: 1px solid var(--flexcyon-base-03);
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    overflow-y: auto; /* Enable scrolling for chat history */
+}
+
+/* Gradio Chatbot individual messages (adjust as needed, Gradio handles most here) */
+.main-chatbot-display .gr-message,
+.search-results-chatbot .gr-message {
+    background-color: var(--flexcyon-base-02);
+    border: 1px solid var(--flexcyon-base-03);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.main-chatbot-display .gr-message.user,
+.search-results-chatbot .gr-message.user {
+    background-color: var(--flexcyon-base-03);
+    border-color: var(--accent-color);
+    align-self: flex-end; /* Align to right */
+    border-bottom-right-radius: 2px; /* Small corner on sender side */
+}
+
+.main-chatbot-display .gr-message.bot,
+.search-results-chatbot .gr-message.bot {
+    background-color: var(--flexcyon-base-02);
+    border-color: var(--flexcyon-base-04);
+    align-self: flex-start; /* Align to left */
+    border-bottom-left-radius: 2px; /* Small corner on sender side */
+}
+
+/* Input / Send Button for Chatbot */
+.gr-textbox input[type="text"],
+.gr-textbox textarea {
+    background-color: var(--flexcyon-base-02);
+    color: var(--flexcyon-base-grey-light);
+    border: 1px solid var(--flexcyon-base-03);
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.gr-textbox input[type="text"]:focus,
+.gr-textbox textarea:focus {
+    border-color: var(--accent-color);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-color);
+}
+
+/* General Buttons */
+.gr-button {
+    background-color: var(--accent-color);
+    color: var(--flexcyon-base-grey-light);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: all 0.3s ease;
+}
+
+.gr-button:hover {
+    background-color: var(--flexcyon-base-03);
+    color: var(--accent-color);
+    transform: translateY(-1px);
+}
+
+.gr-button:active {
+    transform: translateY(0);
+}
+
+/* Back Button */
+.back-button {
+    background-color: var(--secondary-color);
+    margin-top: 20px;
+    align-self: flex-start; /* Align to left/start of the flex container */
+}
+
+.back-button:hover {
+    background-color: #5a6268;
+}
+
+/* Gradio Audio Component Styling */
+/* This targets the generated elements by Gradio for the audio player */
+#main_audio_output {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .main-app-container {
+        margin: 0;
+        border-radius: 0;
+        min-height: 100vh; /* Full height on mobile */
+    }
+
+    .app-content-area {
+        flex-direction: column; /* Stack sidebar and content */
+    }
+
+    .left-sidebar {
+        max-width: 100%; /* Full width sidebar */
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 15px;
+    }
+
+    .right-content-area {
+        padding: 15px;
+    }
+
+    .main-app-header h1 {
+        font-size: 1.5em;
+    }
+
+    .nav-button {
+        padding: 10px;
+        font-size: 0.95em;
+    }
+
+    .chat-session-item {
+        padding: 8px 10px;
+        font-size: 0.9em;
+    }
+
+    .chat-session-preview {
+        font-size: 0.8em;
+    }
+
+    .page-title {
+        font-size: 1.8em;
+    }
+
+    .gr-textbox input[type="text"],
+    .gr-textbox textarea {
+        padding: 8px 12px;
+    }
+
+    .gr-button {
+        padding: 8px 15px;
+        font-size: 0.9em;
+    }
+}
+
+.chat-session-item {
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    background-color: #f0f0f0; /* Default background */
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border: 1px solid #e0e0e0;
+}
+
+.chat-session-item:hover {
+    background-color: #e6e6e6; /* Hover effect */
+}
+
+.chat-session-item.selected-chat-item {
+    background-color: #d1e7dd; /* Highlight for selected chat (e.g., light green) */
+    border-color: #28a745; /* Darker border for emphasis */
+    font-weight: bold;
+}
+
+.chat-session-name {
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.chat-session-preview {
+    font-size: 0.85em;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.no-chats-message {
+    padding: 10px;
+    color: #888;
+    text-align: center;
+}
+
+/* Password visibility toggle */
+#password_visibility {
+    background-color: var(--flexcyon-base-02);
+    color: var(--flexcyon-base-grey-light);
+    border: 1px solid var(--flexcyon-base-03);
+    border-radius: 8px;
+    padding: 0;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#password_visibility:hover {
+    background-color: var(--flexcyon-base-03);
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+#password_input {
+    flex-grow: 1;
+}
+
+/* Password input row */
+#password_input + #password_visibility {
+    margin-top: 0;
+}
+
+/* Root variables for Flexcyon colors */
+:root {
+    /* Base colors */
+    --flexcyon-base-01: #ffffff;
+    --flexcyon-base-02: #f5f5f5;
+    --flexcyon-base-03: #e0e0e0;
+    --flexcyon-base-grey-light: #9e9e9e;
+    --flexcyon-base-grey-dark: #424242;
+    
+    /* Accent colors */
+    --accent-color: #4CAF50;  /* Green for dark mode */
+    --accent-color-light: #9c27b0;  /* Purple for light mode */
+}
+
+/* Dark mode variables */
+[data-theme="dark"] {
+    --flexcyon-base-01: #1a1a1a;
+    --flexcyon-base-02: #2d2d2d;
+    --flexcyon-base-03: #404040;
+    --flexcyon-base-grey-light: #9e9e9e;
+    --flexcyon-base-grey-dark: #e0e0e0;
+    --accent-color: #4CAF50;
+}
+
+/* Light mode variables */
+[data-theme="light"] {
+    --flexcyon-base-01: #ffffff;
+    --flexcyon-base-02: #f5f5f5;
+    --flexcyon-base-03: #e0e0e0;
+    --flexcyon-base-grey-light: #9e9e9e;
+    --flexcyon-base-grey-dark: #424242;
+    --accent-color: #9c27b0;
+}
+
+/* Main container styles */
+.gradio-container {
+    background-color: var(--flexcyon-base-01) !important;
+    color: var(--flexcyon-base-grey-dark) !important;
+}
+
+/* Button styles */
+button {
+    background-color: var(--flexcyon-base-02) !important;
+    color: var(--flexcyon-base-grey-dark) !important;
+    border: 1px solid var(--flexcyon-base-03) !important;
+    transition: all 0.3s ease !important;
+}
+
+button:hover {
+    background-color: var(--flexcyon-base-03) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--accent-color) !important;
+}
+
+/* Primary buttons (Login, Register) */
+button.primary {
+    background-color: var(--accent-color) !important;
+    color: white !important;
+    border: none !important;
+}
+
+button.primary:hover {
+    background-color: var(--accent-color) !important;
+    opacity: 0.9 !important;
+    color: white !important;
+}
+
+/* Input fields */
+input, textarea {
+    background-color: var(--flexcyon-base-02) !important;
+    color: var(--flexcyon-base-grey-dark) !important;
+    border: 1px solid var(--flexcyon-base-03) !important;
+}
+
+input:focus, textarea:focus {
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 2px var(--accent-color) !important;
+}
+
+/* Password visibility toggle */
+#password_visibility {
+    background-color: var(--flexcyon-base-02) !important;
+    color: var(--flexcyon-base-grey-light) !important;
+    border: 1px solid var(--flexcyon-base-03) !important;
+    border-radius: 8px !important;
+    padding: 0 !important;
+    margin-left: 8px !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#password_visibility:hover {
+    background-color: var(--flexcyon-base-03) !important;
+    color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+/* Error messages */
+.error-message {
+    color: #f44336 !important;
+    background-color: rgba(244, 67, 54, 0.1) !important;
+    border: 1px solid #f44336 !important;
+    padding: 8px !important;
+    border-radius: 4px !important;
+    margin: 8px 0 !important;
+}
+
+/* Chat messages */
+.user-message {
+    background-color: var(--flexcyon-base-02) !important;
+    border-left: 4px solid var(--accent-color) !important;
+}
+
+.bot-message {
+    background-color: var(--flexcyon-base-01) !important;
+    border-left: 4px solid var(--flexcyon-base-03) !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--flexcyon-base-02) !important;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--flexcyon-base-03) !important;
+    border-radius: 4px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color) !important;
+}

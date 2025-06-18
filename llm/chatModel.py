@@ -11,18 +11,20 @@ from langchain.retrievers import EnsembleRetriever
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 from typing_extensions import Annotated, TypedDict
-from typing import Sequence, List
+from typing import Sequence, List, Any, Optional, Dict, Union, cast
 import openai
 import os
 import json
 import shelve
 import sqlite3
-from typing import cast # For type hinting
 from openai.types.chat import ChatCompletionToolParam 
 from openai.types.shared_params import FunctionDefinition 
 from dotenv import load_dotenv
 from utils import rel2abspath, create_folders, get_chatbot_dir # Ensure get_chatbot_dir is imported
 import logging # Added for internal logging in this file
+import pickle
+import dill  # For better serialization support
+import threading
 
 # Set up logging for this specific module
 logging.basicConfig(
@@ -49,33 +51,58 @@ create_folders(os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)) # For LangGraph Check
 # Use capital letters for the API key variable
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", '')
 
-if not OPENAI_API_KEY:
-    logging.critical("OPENAI_API_KEY environment variable not set. Chat features will not work.")
-    llm = None
-    embedding = None
-    client = None # Initialize client as None if API key is missing
-else:
-    print("OpenAI key found")
-    llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini") 
-    embedding = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
-    client = openai.OpenAI(api_key=OPENAI_API_KEY) # Initialize the OpenAI client here
+llm: Optional[ChatOpenAI] = None
+embedding: Optional[OpenAIEmbeddings] = None
+client: Optional[openai.OpenAI] = None
+db: Optional[Chroma] = None
+llm_init_lock = threading.Lock()
 
+def initialize_llm_and_db():
+    global llm, embedding, client, db
+    with llm_init_lock:
+        if not OPENAI_API_KEY:
+            logging.critical("OPENAI_API_KEY environment variable not set. Chat features will not work.")
+            llm = None
+            embedding = None
+            client = None
+            db = None
+            return
+        try:
+            llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
+            embedding = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
+            client = openai.OpenAI(api_key=OPENAI_API_KEY)
+            logging.info("LLM, embedding, and OpenAI client initialized.")
+        except Exception as e:
+            logging.critical(f"Failed to initialize LLM or client: {e}")
+            llm = None
+            embedding = None
+            client = None
+            db = None
+            return
+        # Load Chroma DB
+        try:
+            if embedding is None:
+                logging.critical("Embedding model not initialized. Cannot initialize Chroma DB.")
+                db = None
+                return
+            db = Chroma(
+                collection_name="chat",
+                embedding_function=embedding,
+                persist_directory=DATABASE_PATH,
+            )
+            logging.info(f"Chroma DB 'chat' loaded from {DATABASE_PATH}")
+        except Exception as e:
+            logging.critical(f"Failed to load Chroma DB 'chat': {e}")
+            db = None
 
-# Load main vector DB
-db = None # Initialize to None in case of failure
-if embedding and DATABASE_PATH:
-    try:
-        db = Chroma(
-            collection_name="chat",
-            embedding_function=embedding,
-            persist_directory=DATABASE_PATH,
-        )
-        logging.info(f"Chroma DB 'chat' loaded from {DATABASE_PATH}")
-    except Exception as e:
-        logging.critical(f"Failed to load Chroma DB 'chat': {e}", exc_info=True)
-else:
-    logging.critical("Embedding function or DATABASE_PATH is not properly set up. Chroma DB cannot be initialized.")
+def is_llm_ready() -> bool:
+    return llm is not None and db is not None and client is not None
 
+# Call at module load
+def _init():
+    initialize_llm_and_db()
+
+_init()
 
 # --- Prompt Templates ---
 multi_query_template = PromptTemplate( 
@@ -128,87 +155,42 @@ qa_prompt = ChatPromptTemplate.from_messages([
 
 # --- Keyword Matching Function ---
 def match_keywords(question: str) -> List[str]:
-    """
-    Matches the question to predefined keywords using OpenAI's function calling.
-    """
-    if client is None: # Use the global OpenAI client instance
-        logging.error("OpenAI client not initialized. Cannot match keywords.")
+    if not question:
         return []
-
-    keywords = []
     try:
-        # Using shelve.open on the determined path
-        with shelve.open(str(KEYWORDS_DATABANK_PATH)) as db_shelf: # Ensure path is string
-            keywords = db_shelf.get('keywords', []) 
-            if not keywords:
-                logging.warning(f"No keywords found in shelve DB at {KEYWORDS_DATABANK_PATH}. Ensure initialiseDatabase() populates it.")
-                return []
-    except Exception as e:
-        logging.error(f"Error opening or reading from keyword shelve DB at {KEYWORDS_DATABANK_PATH}: {e}", exc_info=True)
-        return []
-
-    # Filter out empty strings and ensure unique keywords for the enum
-    unique_keywords = sorted(list(set(k for k in keywords if k and isinstance(k, str))))
-
-    # Provide a default enum value if no keywords are found, to avoid OpenAI API errors.
-    enum_values = unique_keywords if unique_keywords else ["no_keywords_matched"]
-    
-    # Define the function for the tool
-    function_definition: FunctionDefinition = { 
-        "name": "match_keywords",
-        "description": "Match the question to relevant keywords from a predefined list.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prediction": {
-                    "type": "array",
-                    "items": {"type": "string", "enum": enum_values},
-                    "description": "List of keywords predicted to be relevant to the question."
+        # Define the function parameter for keyword matching
+        tool_param = ChatCompletionToolParam(
+            type="function",
+            function=FunctionDefinition(
+                name="match_keywords",
+                description="Match the question to relevant keywords",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "prediction": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of matched keywords"
+                        }
+                    },
+                    "required": ["prediction"]
                 }
-            },
-            "required": ["prediction"]
-        }
-    }
-
-    # Cast the entire tool dictionary to ChatCompletionToolParam
-    tool_param: ChatCompletionToolParam = cast(ChatCompletionToolParam, {
-        "type": "function", 
-        "function": function_definition
-    })
-
-    try:
-        # Use the global `client` instance for API calls
-        r = client.chat.completions.create(
-            model="gpt-4o-mini", 
-            temperature=0.0,
-            messages=[{"role": "user", "content": f"Match the following question to relevant keywords: {question}"}],
-            tools=[tool_param], # Pass the casted tool_param here
-            tool_choice={"type": "function", "function": {"name": "match_keywords"}}
+            )
         )
         
-        predictions = []
-        if r.choices and r.choices[0].message.tool_calls:
-            first_tool_call = r.choices[0].message.tool_calls[0]
-
-            if first_tool_call.type == "function" and first_tool_call.function.name == "match_keywords":
-                args_str = first_tool_call.function.arguments
-                try:
-                    parsed_args = json.loads(args_str)
-                    predictions = parsed_args.get("prediction", [])
-                    # Filter out the "no_keywords_matched" if it was returned
-                    if "no_keywords_matched" in predictions:
-                        predictions.remove("no_keywords_matched")
-                    logging.info(f"Extracted keyword predictions for '{question}': {predictions}")
-                except json.JSONDecodeError as e:
-                    logging.error(f"Error parsing function arguments JSON for '{question}': {e}", exc_info=True)
-                    logging.error(f"Raw arguments string from LLM: {args_str}") 
-            else:
-                logging.warning(f"Unexpected tool call type or function name in OpenAI response for '{question}'.")
-        else:
-            logging.warning(f"No tool calls found in the OpenAI response message for keyword matching for '{question}'.")
-        
+        if client is None:
+            logging.error("OpenAI client not initialized")
+            return []
+            
+        r = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.0,
+            messages=[{"role": "user", "content": f"Match the following question to relevant keywords: {question}"}],
+            tools=[tool_param],
+            tool_choice={"type": "function", "function": {"name": "match_keywords"}}
+        )
+        predictions = _extract_predictions_from_response(r, question)
         return predictions
-
     except openai.APIError as e:
         logging.error(f"OpenAI API error during keyword matching for '{question}': {e}", exc_info=True)
         return []
@@ -216,8 +198,22 @@ def match_keywords(question: str) -> List[str]:
         logging.error(f"An unexpected error occurred during keyword matching for '{question}': {e}", exc_info=True)
         return []
 
+def _extract_predictions_from_response(r: Any, question: str) -> List[str]:
+    predictions = []
+    if r.choices and r.choices[0].message.tool_calls:
+        first_tool_call = r.choices[0].message.tool_calls[0]
+        if first_tool_call.type == "function" and first_tool_call.function.name == "match_keywords":
+            args_str = first_tool_call.function.arguments
+            try:
+                parsed_args = json.loads(args_str)
+                predictions = parsed_args.get("prediction", [])
+                if "no_keywords_matched" in predictions:
+                    predictions.remove("no_keywords_matched")
+            except json.JSONDecodeError as e:
+                logging.error(f"Error parsing tool call arguments: {e}")
+    return predictions
 
-def build_keyword_filter(matched_keywords: List[str], max_keywords: int = 10) -> dict:
+def build_keyword_filter(matched_keywords: List[str], max_keywords: int = 10) -> Dict[str, Any]:
     """
     Builds a ChromaDB filter dictionary for given keywords.
     Assumes keywords are stored in metadata fields like 'keyword0', 'keyword1', etc.
@@ -233,7 +229,7 @@ def build_keyword_filter(matched_keywords: List[str], max_keywords: int = 10) ->
 
 
 # --- Retriever Routing and RAG Chain Definition ---
-def route_retriever(question: str):
+def route_retriever(question: str) -> Optional[Any]:
     """
     Dynamically selects a retriever based on keyword matching.
     """
@@ -270,115 +266,142 @@ class State(TypedDict):
     answer: str # The AI's generated answer
 
 def call_model(state: State) -> State:
-    """
-    Retrieves relevant context and generates an answer using the RAG chain.
-    """
-    question = state["input"]
-    chat_history = state["chat_history"]
-
-    if llm is None or db is None:
-        logging.error("LLM or Chroma DB not initialized. Cannot answer question.")
-        # FIX: Convert chat_history to list before concatenation
-        return {
-            "input": question, 
-            "chat_history": list(chat_history) + [HumanMessage(question), AIMessage("Error: AI assistant not fully initialized.")],
-            "context": "No context due to initialization error.",
-            "answer": "I'm sorry, I cannot process your request right now due to an internal system error (AI not ready)."
-        }
-
-    # Route to the appropriate retriever (with or without keyword filter)
-    retriever_with_filter = route_retriever(question)
-
-    if retriever_with_filter is None:
-        logging.error("Retriever could not be initialized by route_retriever. Cannot answer question.")
-        # FIX: Convert chat_history to list before concatenation
-        return {
-            "input": question, 
-            "chat_history": list(chat_history) + [HumanMessage(question), AIMessage("Error: Retriever not available.")],
-            "context": "No context due to retriever error.",
-            "answer": "I'm sorry, I cannot process your request right now because the knowledge retrieval system is unavailable."
-        }
-
-    # Standard MultiQueryRetriever (without keyword filter)
-    # FIX: Ensure db is not None before calling as_retriever
-    if db is None:
-        logging.error("Chroma DB is unexpectedly None during MultiQueryRetriever setup.")
-        return {
-            "input": question,
-            "chat_history": list(chat_history) + [HumanMessage(question), AIMessage("Error: Knowledge database unavailable.")],
-            "context": "Database not initialized for multi-query.",
-            "answer": "I'm sorry, I cannot access the knowledge database right now."
-        }
-
-    multiquery_retriever = MultiQueryRetriever.from_llm(
-        retriever=db.as_retriever(search_kwargs={'k': 5}),
-        llm=llm,
-        prompt=multi_query_template
-    )
-
-    # Ensemble retriever to combine results from multiple strategies
-    ensemble_retriever = EnsembleRetriever(
-        retrievers=[multiquery_retriever, retriever_with_filter], 
-        weights=[0.75, 0.25] 
-    )
-
-    # History-aware retriever to reformulate queries based on chat history
-    history_aware_retriever = create_history_aware_retriever(
-        llm, 
-        ensemble_retriever, 
-        contextualize_q_prompt
-    )
-
-    # Chain to combine documents and generate answer
-    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    """Call the model with the given state.
     
-    # Full RAG chain
-    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
-
+    Args:
+        state: The current state containing input, chat history, context, and answer
+        
+    Returns:
+        Updated state with the model's response
+    """
+    if llm is None:
+        logging.error("LLM not initialized")
+        return _error_state(
+            state["input"],
+            state["chat_history"],
+            "AI not ready",
+            "No context due to initialization error."
+        )
+    
     try:
-        response = rag_chain.invoke({"input": question, "chat_history": chat_history})
+        # Get response from model
+        response = llm.invoke(state["input"])
+        if not response or not response.content:
+            return _error_state(
+                state["input"],
+                state["chat_history"],
+                "No response from model",
+                "No context available."
+            )
         
-        # 'context' from rag_chain is a list of Document objects, convert to string
-        retrieved_context = response.get("context", [])
-        generated_answer = response.get("answer", "I'm sorry, I couldn't find an answer based on the provided context.")
-        
-        # Convert context documents to string for storage in state
-        context_str = "\n".join([doc.page_content for doc in retrieved_context])
-        
-        # Return structure aligns with State TypedDict
-        # FIX: Convert chat_history to list before concatenation
         return {
-            "input": question, 
-            "chat_history": list(chat_history) + [HumanMessage(question), AIMessage(generated_answer)],
-            "context": context_str,
-            "answer": generated_answer,
+            "input": str(state["input"]),
+            "chat_history": state["chat_history"],
+            "context": str(state["context"]),
+            "answer": str(response.content)
         }
     except Exception as e:
-        logging.error(f"Error during RAG chain invocation for question '{question}': {e}", exc_info=True)
-        # Return structure aligns with State TypedDict
-        # FIX: Convert chat_history to list before concatenation
-        return {
-            "input": question, 
-            "chat_history": list(chat_history) + [HumanMessage(question), AIMessage("I apologize, but an error occurred while generating my response.")],
-            "context": "Error during RAG chain processing.",
-            "answer": "I apologize, but an error occurred while generating my response. Please try again."
-        }
+        logging.error(f"Error in model call: {e}")
+        return _error_state(
+            state["input"],
+            state["chat_history"],
+            "Sorry, I encountered an error. Please try again.",
+            "Error during model call."
+        )
 
+def _error_state(question: str, chat_history: Sequence[BaseMessage], answer: str, context: str) -> State:
+    """Create an error state.
+    
+    Args:
+        question: The user's question
+        chat_history: The chat history
+        answer: The error message
+        context: The context
+        
+    Returns:
+        Error state
+    """
+    return {
+        "input": str(question),
+        "chat_history": chat_history,
+        "context": str(context),
+        "answer": str(answer)
+    }
 
 # --- LangGraph Workflow Setup ---
-app = None # Initialize app to None
+CACHE_DIR = os.path.join(BASE_CHATBOT_DIR, 'data', 'cache')
+os.makedirs(CACHE_DIR, exist_ok=True)
+CHROMA_CACHE_PATH = os.path.join(CACHE_DIR, 'chroma_db.pkl')
+LANGCHAIN_CACHE_PATH = os.path.join(CACHE_DIR, 'langchain_workflow.pkl')
+CACHE_VERSION = "1.0"  # Add version for cache invalidation
+
+app: Optional[Any] = None # Initialize app to None
 # Ensure llm, db, and client are all initialized before compiling the workflow
-if llm and db and client: 
+if llm and db and client:
+    logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
+    # Try to load Chroma DB and LangGraph workflow from cache
+    chroma_loaded = False
+    workflow_loaded = False
+    
+    def load_from_cache(cache_path: str, cache_type: str) -> tuple[Optional[Any], bool]:
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, 'rb') as f:
+                    cached_data = pickle.load(f)
+                    if isinstance(cached_data, dict) and cached_data.get('version') == CACHE_VERSION:
+                        return cached_data.get('data'), True
+            return None, False
+        except Exception as e:
+            logging.warning(f"Failed to load {cache_type} from cache: {e}")
+            return None, False
+
+    def save_to_cache(cache_path: str, data: Any, cache_type: str) -> None:
+        try:
+            # For Chroma DB, we only cache the collection name and persist directory
+            if isinstance(data, Chroma):
+                cache_data = {
+                    'collection_name': data._collection.name,
+                    'persist_directory': data._persist_directory
+                }
+            else:
+                cache_data = data
+                
+            with open(cache_path, 'wb') as f:
+                pickle.dump({'version': CACHE_VERSION, 'data': cache_data}, f)
+            logging.info(f"Saved {cache_type} to cache")
+        except Exception as e:
+            logging.warning(f"Failed to save {cache_type} to cache: {e}")
+
+    # Load from cache
+    prev_db = db
+    _db, chroma_loaded = load_from_cache(CHROMA_CACHE_PATH, "Chroma DB")
+    if chroma_loaded and _db is not None:
+        logging.info("Chroma DB loaded from cache.")
+        # Recreate Chroma DB from cached data
+        try:
+            db = Chroma(
+                collection_name=_db['collection_name'],
+                embedding_function=embedding,
+                persist_directory=_db['persist_directory']
+            )
+            logging.info("Successfully recreated Chroma DB from cache")
+        except Exception as e:
+            logging.error(f"Failed to recreate Chroma DB from cache: {e}")
+            db = prev_db
+    else:
+        logging.info("Chroma DB not found in cache, using initialized instance.")
+        # db is already initialized above
+    
+    # Don't try to cache the LangGraph workflow as it contains non-picklable objects
     workflow = StateGraph(state_schema=State)
     workflow.add_node("model", call_model)
     workflow.add_edge(START, "model")
-
-    # Connect to SQLite checkpoint for LangGraph (ensure directory exists)
+    
     try:
         print(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
         print(f"Parent directory for SQLite: {os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)}")
         conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
-        sqlite_saver = SqliteSaver(conn)  
+        sqlite_saver = SqliteSaver(conn)
         app = workflow.compile(checkpointer=sqlite_saver)
         logging.info(f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}")
     except Exception as e:
@@ -386,23 +409,38 @@ if llm and db and client:
         app = workflow.compile() # Compile without checkpointer if it fails
         logging.warning("LangGraph compiled without checkpointing due to error. State will not persist across runs.")
         print(e)
+    
+    # Only save Chroma DB metadata to cache, not the full object
+    if db is not None:
+        save_to_cache(CHROMA_CACHE_PATH, db, "Chroma DB")
 else:
-    logging.critical("LLM, Chroma DB, or OpenAI client not initialized. LangGraph workflow will not be compiled. Chat functions will be limited.")
+    logging.critical("LLM, Chroma DB, or OpenAI client not initialized. Chat functions will be limited.")
 
 
 # --- Main Answer Retrieval Function ---
-def get_convo_hist_answer(question: str, thread_id: str) -> dict:
+def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
     """
     Retrieves a conversational answer using the LangGraph RAG workflow.
     """
+    print(f"[DEBUG] chatModel.get_convo_hist_answer called with question: {question}, thread_id: {thread_id}")
+    
     if app is None:
         logging.error("LangGraph app is not compiled. Cannot get conversational answer.")
         return {"answer": "I'm sorry, the AI assistant is not fully set up. Please try again later.", "context": ""}
+    
+    if llm is None or db is None:
+        logging.error("LLM or Chroma DB not initialized. Cannot answer question.")
+        return {"answer": "I'm sorry, I cannot process your request right now due to an internal system error (AI not ready).", "context": "No context due to initialization error."}
         
     # LangGraph's checkpointer automatically loads history based on thread_id
     # We pass the initial 'input' for the current turn.
     # The 'chat_history' will be loaded from the checkpointer by LangGraph based on the thread_id config.
-    initial_state = {"input": question, "chat_history": []} 
+    initial_state: State = {
+        "input": question,
+        "chat_history": [],
+        "context": "",
+        "answer": ""
+    }
 
     try:
         result = app.invoke(initial_state, config={"configurable": {"thread_id": thread_id}})
@@ -410,8 +448,10 @@ def get_convo_hist_answer(question: str, thread_id: str) -> dict:
         answer = result.get("answer", "No answer generated.")
         context = result.get("context", "No context retrieved.")
         
+        print(f"[DEBUG] chatModel.get_convo_hist_answer returning: {result}")
         return {"answer": answer, "context": context}
     except Exception as e:
+        print(f"[ERROR] chatModel.get_convo_hist_answer exception: {e}")
         logging.error(f"Error invoking LangGraph workflow for thread '{thread_id}': {e}", exc_info=True)
         return {"answer": "I'm sorry, I encountered an error while processing your request. Please try again.", "context": ""}
 

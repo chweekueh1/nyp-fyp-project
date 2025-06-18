@@ -9,12 +9,24 @@ import os
 import sys 
 from dotenv import load_dotenv
 import traceback 
+import logging
+from typing import Dict, Any, Tuple, Optional
+from backend import (
+    do_login as backend_login,
+    do_register as backend_register,
+    USER_DB_PATH,
+    CHAT_SESSIONS_PATH
+)
+from pathlib import Path
+from utils import setup_logging
 
-# --- ONLY FOR STANDALONE TESTING: Adjust sys.path to find parent modules ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.join(current_dir, '..')
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# Set up logging
+logger = setup_logging()
+
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
 # Import modules from the parent directory
 import backend 
@@ -23,9 +35,6 @@ import utils
 
 # --- Configuration (moved from app.py to login.py) ---
 load_dotenv() 
-
-USER_DB_PATH = os.path.join(utils.get_chatbot_dir(), os.getenv('USER_DB_PATH', r'data\user_info\users.json'))
-CHAT_SESSIONS_PATH = os.path.join(utils.get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', r'data\chat_sessions'))
 
 UTC_PLUS_8 = tz.tzoffset("UTC+8", timedelta(hours=8))
 from_zone = tz.tzutc() 
@@ -40,9 +49,9 @@ ALLOWED_EMAILS = [
 # --- Helper Functions (Synchronous, for user/chat data management - local to login.py) ---
 
 def get_datetime_from_timestamp(ts_string: str) -> datetime:
-    fallback_dt = datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8)
     if not isinstance(ts_string, str) or not ts_string:
-        return fallback_dt
+        return datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8)
+        
     try:
         dt_obj = dateutil_parse(ts_string)
         if dt_obj.tzinfo is None:
@@ -50,7 +59,7 @@ def get_datetime_from_timestamp(ts_string: str) -> datetime:
         return dt_obj.astimezone(UTC_PLUS_8)
     except ValueError as e:
         print(f"Warning: Could not parse timestamp '{ts_string}' using dateutil.parser.parse. Error: {e}. Using timezone-aware datetime.min as fallback for sorting/display.")
-        return fallback_dt
+        return datetime.min.replace(tzinfo=timezone.utc).astimezone(UTC_PLUS_8)
 
 def ensure_user_db_exists_sync():
     """Ensures the user database file and its directory exist."""
@@ -61,40 +70,55 @@ def ensure_user_db_exists_sync():
 
 def load_users_sync() -> dict:
     """
-    Loads user data from the JSON database.
-    Handles the {"users": {...}} format.
+    Loads user data from the JSON database with proper error handling.
+    Returns {"users": {...}} format.
     """
     if not os.path.exists(USER_DB_PATH):
-        ensure_user_db_exists_sync()
         return {"users": {}}
+        
     try:
         with open(USER_DB_PATH, 'r') as f:
             data = json.load(f)
-        if "users" not in data or not isinstance(data["users"], dict): 
-            print("Warning: users.json format unexpected. Reinitializing.")
-            ensure_user_db_exists_sync()
-            return {"users": {}} 
-        return data
+            if not isinstance(data, dict) or "users" not in data:
+                logging.warning("Invalid users data format, returning empty users dict")
+                return {"users": {}}
+            return data
     except json.JSONDecodeError as e:
-        print(f"Error decoding users.json: {e}. File might be corrupted. Reinitializing.")
-        ensure_user_db_exists_sync()
+        logging.error(f"Error decoding users data: {e}")
         return {"users": {}}
     except Exception as e:
-        print(f"Unexpected error loading users.json: {e}. Reinitializing.")
-        ensure_user_db_exists_sync()
+        logging.error(f"Error loading users data: {e}")
         return {"users": {}}
 
 def save_users_sync(users_data: dict) -> None:
     """
-    Saves user data to the JSON database.
+    Saves user data to the JSON database using atomic file operations.
     Expects and saves the {"users": {...}} format.
     """
+    if not users_data:
+        return
+        
     try:
-        os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True) 
-        with open(USER_DB_PATH, 'w') as f:
+        os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
+        temp_path = f"{USER_DB_PATH}.tmp"
+        
+        with open(temp_path, 'w') as f:
             json.dump(users_data, f, indent=2)
+        
+        if os.path.exists(USER_DB_PATH):
+            os.replace(temp_path, USER_DB_PATH)
+        else:
+            os.rename(temp_path, USER_DB_PATH)
+            
+        logging.info("Successfully saved users data")
     except Exception as e:
-        print(f"Error saving users.json: {e}")
+        logging.error(f"Error saving users data: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+        raise
 
 def load_user_chats_sync(username: str) -> list:
     """
@@ -116,358 +140,304 @@ def load_user_chats_sync(username: str) -> list:
             print(f"Unexpected error with chat file {chat_file}: {e}. Skipping this chat.")
     return chat_histories
 
-
 # --- Main login_interface function ---
-# Populates the passed-in login_container_comp and returns the app_data_dict.
-def login_interface(app_data_dict: dict) -> dict:
+def login_interface(app_data: Dict[str, Any]) -> None:
+    """Create the login/register interface components with proper error handling and mode switching."""
+    if not isinstance(app_data, dict):
+        app_data = {}
 
-    # Retrieve core components from the dictionary (direct access, no .get() with fallbacks here)
-    logged_in_state = app_data_dict['logged_in_state']
-    username_state = app_data_dict['username_state']
-    login_container_comp = app_data_dict['login_container_comp'] 
+    # State to track mode
+    if 'is_registering' not in app_data:
+        app_data['is_registering'] = gr.State(False)
 
-    # --- Password Visibility Toggle Helper ---
-    def toggle_password_visibility(is_visible: bool):
-        new_type = "password" if is_visible else "text"
-        new_icon = "👁️" if is_visible else "🙈" 
-        new_is_visible = not is_visible 
+    with gr.Column(visible=True) as login_container:
+        app_data['username'] = gr.Textbox(
+            label="Username",
+            placeholder="Enter your username",
+            show_label=True
+        )
+        with gr.Row():
+            app_data['password'] = gr.Textbox(
+                label="Password",
+                placeholder="Enter your password",
+                show_label=True,
+                type="password",
+                elem_id="password_input"
+            )
+            app_data['password_visibility'] = gr.Button(
+                "👁️",
+                elem_id="password_visibility",
+                size="sm"
+            )
+        app_data['confirm_password'] = gr.Textbox(
+            label="Confirm Password",
+            placeholder="Confirm your password",
+            show_label=True,
+            type="password",
+            visible=False
+        )
+        with gr.Row():
+            app_data['login_button'] = gr.Button("Login", elem_classes=["primary"])
+            app_data['register_button'] = gr.Button("Register", elem_classes=["primary"])
+        app_data['proceed_register_button'] = gr.Button("Register Account", visible=False, elem_classes=["primary"])
+        app_data['error_message'] = gr.Markdown(visible=False)
+        app_data['username_state'] = gr.State("")
+        app_data['logged_in_state'] = gr.State(False)
+        app_data['chat_id_state'] = gr.State("")
+        app_data['chat_history_state'] = gr.State([])
+        app_data['password_visible'] = gr.State(False)
 
-        return gr.update(type=new_type), gr.update(value=new_icon), new_is_visible
+    app_data['login_container_comp'] = login_container
 
-    # --- Login Logic (Refactored for minimal responsibility) ---
-    async def _process_login_logic(username_val, password_val):
-        try:
-            print(f"DEBUG: _process_login_logic - Attempting login for user: {username_val}")
-            users_data = await asyncio.to_thread(load_users_sync)
-            users = users_data.get("users", {}) 
+    # Password visibility toggle
+    app_data['password_visibility'].click(
+        fn=toggle_password_visibility,
+        inputs=[app_data['password_visible']],
+        outputs=[
+            app_data['password_visible'],
+            app_data['password'],
+            app_data['password_visibility']
+        ]
+    )
 
-            if username_val not in users:
-                print(f"DEBUG: _process_login_logic - User '{username_val}' not found. Returning error.")
-                gr.Error("Incorrect username or password.") 
-                return (gr.update(value=False),           
-                        gr.update(value=None),             
-                        gr.update(value="Incorrect username or password."), 
-                        gr.update(visible=True))          
+    # Switch to register mode
+    def to_register_mode(is_registering):
+        return (
+            gr.update(visible=not is_registering),  # login button
+            gr.update(visible=is_registering),      # confirm password
+            gr.update(visible=not is_registering),  # register button (switch)
+            gr.update(visible=is_registering),      # proceed register button
+            True
+        )
+    app_data['register_button'].click(
+        fn=to_register_mode,
+        inputs=[app_data['is_registering']],
+        outputs=[
+            app_data['login_button'],
+            app_data['confirm_password'],
+            app_data['register_button'],
+            app_data['proceed_register_button'],
+            app_data['is_registering']
+        ]
+    )
 
-            elif hashing.verify_password(password_val, users[username_val]["hashedPassword"]):
-                print(f"DEBUG: _process_login_logic - Password verified for user: {username_val}. Signaling success.")
-                gr.Info("Login successful! Main application loading...") 
-                
-                await asyncio.to_thread(load_user_chats_sync, username_val) 
-                print(f"DEBUG: _process_login_logic - Ensuring user chat session directory exists.")
+    # Switch to login mode
+    def to_login_mode(is_registering):
+        return (
+            gr.update(visible=True),   # login button
+            gr.update(visible=False),  # confirm password
+            gr.update(visible=True),   # register button (switch)
+            gr.update(visible=False),  # proceed register button
+            False
+        )
+    app_data['login_button'].click(
+        fn=to_login_mode,
+        inputs=[app_data['is_registering']],
+        outputs=[
+            app_data['login_button'],
+            app_data['confirm_password'],
+            app_data['register_button'],
+            app_data['proceed_register_button'],
+            app_data['is_registering']
+        ]
+    )
 
-                print("DEBUG: _process_login_logic - Returning minimal Gradio updates for success.")
-                return (gr.update(value=True),       
-                        gr.update(value=username_val), 
-                        gr.update(value=""),          
-                        gr.update(visible=False))      
-            else: 
-                print(f"DEBUG: _process_login_logic - User '{username_val}' found, but password incorrect. Returning error.")
-                gr.Error("Incorrect username or password.") 
-                return (gr.update(value=False), gr.update(value=None), gr.update(value="Incorrect username or password."), 
-                        gr.update(visible=True))
+    # Actual login action
+    def safe_login(username, password):
+        if not username or not password:
+            logger.warning("Login attempt with empty fields")
+            return False, "", gr.update(visible=True), gr.update(visible=True, value="Please enter both username and password")
+        return do_login(username, password)
+    app_data['login_button'].click(
+        fn=safe_login,
+        inputs=[app_data['username'], app_data['password']],
+        outputs=[
+            app_data['logged_in_state'],
+            app_data['username_state'],
+            app_data['login_container_comp'],
+            app_data['error_message']
+        ]
+    )
 
-        except Exception as e:
-            print(f"ERROR: _process_login_logic - An unexpected fatal error occurred: {e}. Printing traceback.")
-            traceback.print_exc() 
-            gr.Error(f"An unexpected error occurred during login: {e}")
-            return (gr.update(value=False), gr.update(value=None), gr.update(value=f"An unexpected error occurred: {e}"), 
-                    gr.update(visible=True))
+    # Actual register action
+    def safe_register(username, password, confirm_password):
+        if not username or not password or not confirm_password:
+            logger.warning("Registration attempt with empty fields")
+            return False, "All fields are required"
+        return do_register(username, password, confirm_password)
+    app_data['proceed_register_button'].click(
+        fn=safe_register,
+        inputs=[app_data['username'], app_data['password'], app_data['confirm_password']],
+        outputs=[app_data['logged_in_state'], app_data['error_message']]
+    )
 
-
-    # --- Register Logic ---
-    async def _process_register_logic(username_val, email_val, password_val, confirm_val):
-        try:
-            if not username_val or not email_val or not password_val or not confirm_val:
-                gr.Warning("Please fill all fields.")
-                return "Please fill all fields." 
-            if password_val != confirm_val:
-                gr.Error("Passwords do not match.")
-                return "Passwords do not match."
-            if email_val not in ALLOWED_EMAILS: 
-                gr.Error("This email is not allowed to register.")
-                return "This email is not allowed to register."
-
-            users_data = await asyncio.to_thread(load_users_sync)
-            users = users_data.get("users", {}) 
-            is_complex, message = hashing.is_password_complex(password_val)
-
-            if username_val in users:
-                gr.Warning("Username already exists.")
-                return "Username already exists."
-            if any(user["email"] == email_val for user in users.values()):
-                gr.Warning("This email is already registered.")
-                return "This email is already registered."
-            if not is_complex:
-                gr.Warning(message)
-                return message 
-
-            hashed_password = hashing.hash_password(password_val)
-            users[username_val] = {
-                "email": email_val,
-                "hashedPassword": hashed_password
-            }
-            users_data["users"] = users 
-            await asyncio.to_thread(save_users_sync, users_data)
-            print(f"DEBUG: _process_register_logic - Registration successful for user: {username_val}. Calling gr.Info.")
-            gr.Info("Registration successful! You can now log in.")
-            return "Registration successful! You can now log in." 
-        except Exception as e:
-            print(f"ERROR: _process_register_logic - An unexpected error occurred during registration: {e}. Printing traceback.")
-            traceback.print_exc()
-            gr.Error(f"An unexpected error occurred during registration: {e}")
-            return f"An unexpected error occurred: {e}"
-
-    # --- UI Layout for Login/Register (now populates the passed-in container) ---
-    with login_container_comp: 
-        gr.Markdown("<div class='main-header'>NYP AI Chatbot Helper</div>") 
-        gr.Markdown("## Login / Register")
-        with gr.Tabs():
-            with gr.Tab("Login"):
-                username_login_input = gr.Textbox(label="Username")
-                
-                with gr.Row():
-                    password_login_input = gr.Textbox(label="Password", type="password", scale=8)
-                    show_password_login_btn = gr.Button("👁️", scale=1, min_width=50, elem_classes="eye-button") 
-                    is_password_login_visible = gr.State(False) 
-
-                login_message = gr.Markdown() 
-
-                login_btn = gr.Button("Login", variant="primary")
-
-                login_btn.click(
-                    fn=_process_login_logic,
-                    inputs=[username_login_input, password_login_input],
-                    outputs=[logged_in_state, username_state, login_message, login_container_comp], 
-                    queue=False
-                )
-
-                show_password_login_btn.click(
-                    fn=toggle_password_visibility,
-                    inputs=[is_password_login_visible], 
-                    outputs=[password_login_input, show_password_login_btn, is_password_login_visible],
-                    queue=False
-                )
-
-            with gr.Tab("Register"):
-                username_register_input = gr.Textbox(label="New Username")
-                email_register_input = gr.Textbox(label="Email Address")
-                
-                with gr.Row():
-                    password_register_input = gr.Textbox(label="New Password", type="password", scale=8)
-                    show_password_register_btn = gr.Button("👁️", scale=1, min_width=50, elem_classes="eye-button")
-                    is_password_register_visible = gr.State(False) 
-
-                with gr.Row():
-                    confirm_password_input = gr.Textbox(label="Confirm Password", type="password", scale=8)
-                    show_confirm_password_btn = gr.Button("👁️", scale=1, min_width=50, elem_classes="eye-button")
-                    is_confirm_password_visible = gr.State(False) 
-
-                register_btn = gr.Button("Register", variant="primary")
-                register_message = gr.Markdown() 
-
-                register_btn.click(
-                    fn=_process_register_logic,
-                    inputs=[username_register_input, email_register_input, password_register_input, confirm_password_input],
-                    outputs=[register_message]
-                )
-
-                show_password_register_btn.click(
-                    fn=toggle_password_visibility,
-                    inputs=[is_password_register_visible], 
-                    outputs=[password_register_input, show_password_register_btn, is_password_register_visible],
-                    queue=False
-                )
-
-                show_confirm_password_btn.click(
-                    fn=toggle_password_visibility,
-                    inputs=[is_confirm_password_visible], 
-                    outputs=[confirm_password_input, show_confirm_password_btn, is_confirm_password_visible],
-                    queue=False
-                )
+def validate_password(password: str) -> Tuple[bool, str]:
+    """Validate password complexity.
     
-    return app_data_dict 
+    Args:
+        password: The password to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter"
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one number"
+    if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+        return False, "Password must contain at least one special character"
+    return True, ""
+
+def do_login(username: str, password: str) -> Tuple[bool, str, Dict[str, Any], Dict[str, Any]]:
+    """Handle login action.
+    
+    Args:
+        username: The username to login with
+        password: The password to login with
+        
+    Returns:
+        Tuple of (success, username, UI updates, error message)
+    """
+    # Validate inputs
+    if not username or not password:
+        logger.warning("Login attempt with empty fields")
+        return False, "", gr.update(visible=True), gr.update(visible=True, value="Please fill in all fields")
+    
+    try:
+        # Hash the password
+        hashed_password = hashing.hash_password(password)
+        
+        # Create event loop for async operation
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Call backend login with hashed password
+        result = loop.run_until_complete(backend_login(username, hashed_password))
+        loop.close()
+        
+        if result and isinstance(result, dict) and result.get('code') == '200':
+            return True, username, gr.update(visible=False), gr.update(visible=False)
+        else:
+            error_msg = result.get('message', 'Invalid username or password') if result else 'Invalid username or password'
+            logger.warning(f"Login failed for user {username}: {error_msg}")
+            return False, "", gr.update(visible=True), gr.update(visible=True, value=error_msg)
+            
+    except Exception as e:
+        logger.error(f"Unexpected error during login: {e}")
+        return False, "", gr.update(visible=True), gr.update(visible=True, value="An unexpected error occurred")
+
+def do_register(username: str, password: str, confirm_password: str) -> Tuple[bool, str]:
+    """Handle user registration.
+    
+    Args:
+        username: The username to register
+        password: The password to register
+        confirm_password: The password confirmation
+        
+    Returns:
+        Tuple of (success, message)
+    """
+    # Validate inputs
+    if not username or not password or not confirm_password:
+        logger.warning("Registration attempt with empty fields")
+        return False, "All fields are required"
+        
+    if password != confirm_password:
+        logger.warning(f"Password mismatch for user {username}")
+        return False, "Passwords do not match"
+        
+    if len(password) < 8:
+        logger.warning(f"Password too short for user {username}")
+        return False, "Password must be at least 8 characters long"
+        
+    # Validate password complexity
+    is_valid, error_msg = validate_password(password)
+    if not is_valid:
+        logger.warning(f"Invalid password complexity for user {username}: {error_msg}")
+        return False, error_msg
+        
+    try:
+        # Check if username exists
+        if backend.user_exists(username):
+            logger.warning(f"Username already exists: {username}")
+            return False, "Username already exists"
+            
+        # Hash the password
+        hashed_password = hashing.hash_password(password)
+        
+        # Register user
+        success = backend.register_user(username, hashed_password)
+        if not success:
+            logger.warning(f"Failed to register user: {username}")
+            return False, "Failed to register user"
+            
+        logger.info(f"Successfully registered user: {username}")
+        return True, "Registration successful! Please log in."
+        
+    except Exception as e:
+        logger.error(f"Unexpected error during registration: {e}")
+        return False, "An unexpected error occurred"
+
+# --- Test functions ---
+def test_login_interface() -> None:
+    """Test the login interface components."""
+    try:
+        # Create test app_data
+        app_data = {}
+        
+        # Test UI creation
+        login_interface(app_data)
+        assert app_data.get('username') is not None, "Username component should be created"
+        assert app_data.get('password') is not None, "Password component should be created"
+        assert app_data.get('login_button') is not None, "Login button should be created"
+        assert app_data.get('register_button') is not None, "Register button should be created"
+        assert app_data.get('error_message') is not None, "Error message component should be created"
+        assert app_data.get('username_state') is not None, "Username state should be created"
+        assert app_data.get('logged_in_state') is not None, "Logged in state should be created"
+        assert app_data.get('chat_id_state') is not None, "Chat ID state should be created"
+        assert app_data.get('chat_history_state') is not None, "Chat history state should be created"
+        
+        print("test_login_interface: PASSED")
+    except Exception as e:
+        print(f"test_login_interface: FAILED - {e}")
+        raise
 
 # --- Test Block for login.py (simulating app.py's main logic) ---
 if __name__ == "__main__":
-    load_dotenv() 
-
-    # --- Minimal Helper for get_chat_interface_history (mocked as it's an app.py function) ---
-    def mock_get_chat_interface_history(all_chat_messages, target_chat_id):
-        print(f"DEBUG (Test): mock_get_chat_interface_history called for chat_id: {target_chat_id}")
-        return [] 
-
-    # --- Create a dummy Gradio app context for testing the login interface ---
-    with gr.Blocks(title="Login Module Test App", css="""
-        .main-header {color: orange; font-size: 2em; text-align: center; margin-bottom: 20px;}
-        .eye-button {
-            min-width: 50px !important; 
-            padding: 5px; 
-            font-size: 1.2em; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .gradio-container {
-            max-width: 600px;
-            margin: auto;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-            border-radius: 8px; 
-        }
-        .gr-row {
-            align-items: center; 
-        }
-    """) as demo_app:
-        # --- Centralized dictionary for all Gradio states and components ---
-        app_data = {
-            'logged_in_state': gr.State(False),
-            'username_state': gr.State(None),
-            'current_chat_id_state': gr.State(None),
-            'chat_history_state': gr.State([]),
-            'login_container_comp': gr.Column(visible=True), 
-            'main_app_container_comp': gr.Column(visible=False), 
-            'user_info_md_comp': gr.Markdown("", visible=False),
-            'logout_button_comp': gr.Button("Logout", visible=False),
-            'chat_list_group_comp': gr.Column(visible=False),
-            'chatbot_gr_instance_comp': gr.Chatbot(visible=False),
-            # Add gr.Audio as per previous user request.
-            'audio_output_comp': gr.Audio(
-                label="Audio Output",
-                type="filepath", 
-                autoplay=False,
-                waveform_options={"waveform_progress_color": "green", "waveform_color": "blue"},
-                visible=False, 
-                elem_id="main_audio_output" 
-            )
-        }
-
-        # Call the login_interface function, passing app_data.
-        # login_interface will populate app_data['login_container_comp'] directly.
-        # The returned app_data is re-assigned for explicit flow.
-        app_data = login_interface(app_data_dict=app_data)
-
-        # --- Main Application Content (simulates app.py's main layout) ---
-        with app_data['main_app_container_comp']:
-            gr.Markdown("## Welcome to the Main Application!")
-            gr.Markdown("### If you see this, login was successful and `app.py` took over.")
-            
-            app_data['user_info_md_comp'] 
-            app_data['logout_button_comp']
-            
-            app_data['logout_button_comp'].click(
-                fn=lambda: (
-                    app_data['login_container_comp'].update(visible=True),
-                    app_data['main_app_container_comp'].update(visible=False),
-                    app_data['user_info_md_comp'].update(value="", visible=False), 
-                    app_data['logout_button_comp'].update(visible=False),
-                    app_data['chat_list_group_comp'].update(visible=False),
-                    app_data['username_state'].update(value=None), 
-                    app_data['logged_in_state'].update(value=False), 
-                    app_data['chatbot_gr_instance_comp'].update(value=[], visible=False),
-                    app_data['current_chat_id_state'].update(value=None), 
-                    app_data['chat_history_state'].update(value=[]), 
-                    app_data['audio_output_comp'].update(visible=False, value=None), # Update audio component
-                ),
-                inputs=[],
-                outputs=[
-                    app_data['login_container_comp'], app_data['main_app_container_comp'], app_data['user_info_md_comp'],
-                    app_data['logout_button_comp'], app_data['chat_list_group_comp'], app_data['username_state'],
-                    app_data['logged_in_state'], app_data['chatbot_gr_instance_comp'],
-                    app_data['current_chat_id_state'], app_data['chat_history_state'],
-                    app_data['audio_output_comp'], # Add audio component to outputs
-                ]
-            )
-            with app_data['chat_list_group_comp']:
-                gr.Markdown("### Your Chats (This is the mock sidebar from app.py logic)")
-                gr.HTML("Mock chat items will appear here once app.py loads them.")
-            
-            app_data['chatbot_gr_instance_comp'] 
-            app_data['audio_output_comp'] # Place the audio component
-
-        # --- Event Listener for logged_in_state (simulates app.py's main logic) ---
-        @demo_app.load 
-        @app_data['logged_in_state'].change 
-        def handle_login_state_change(): 
-            print(f"DEBUG (App Simulation): handle_login_state_change triggered.")
-            
-            is_logged_in = app_data['logged_in_state'].value
-            current_username = app_data['username_state'].value
-
-            print(f"DEBUG (App Simulation): Current states: logged_in={is_logged_in}, username={current_username}")
-            
-            # Direct access to component objects from the app_data dictionary.
-            login_container = app_data['login_container_comp']
-            main_app_container = app_data['main_app_container_comp']
-            user_info_md = app_data['user_info_md_comp']
-            logout_button = app_data['logout_button_comp']
-            chat_list_group = app_data['chat_list_group_comp']
-            chatbot_instance = app_data['chatbot_gr_instance_comp']
-            current_chat_id_state = app_data['current_chat_id_state']
-            chat_history_state = app_data['chat_history_state']
-            audio_output = app_data['audio_output_comp'] # Retrieve audio component
-
-            # Prepare tuple of gr.update objects in the exact order of handle_login_state_change_outputs
-            if is_logged_in:
-                print("DEBUG (App Simulation): User is logged in. Showing main app UI.")
-                
-                initial_chat_history = [] 
-                current_chat_id = f"{current_username}_{datetime.now(timezone.utc).strftime(r'%Y%m%d%H%M%S%f')}"
-                
-                return (
-                    gr.update(visible=False), # login_container
-                    gr.update(visible=True),  # main_app_container
-                    gr.update(value=f"**Logged in as:** {current_username}", visible=True), # user_info_md
-                    gr.update(visible=True),  # logout_button
-                    gr.update(visible=True),  # chat_list_group
-                    gr.update(value=[], visible=True), # chatbot_instance
-                    gr.update(value=current_chat_id), # current_chat_id_state
-                    gr.update(value=initial_chat_history), # chat_history_state
-                    gr.update(visible=True) # audio_output (show on login)
-                )
-            else:
-                print("DEBUG (App Simulation): User is logged out. Showing login UI.")
-                return (
-                    gr.update(visible=True),  # login_container
-                    gr.update(visible=False), # main_app_container
-                    gr.update(value="", visible=False), # user_info_md
-                    gr.update(visible=False), # logout_button
-                    gr.update(visible=False), # chat_list_group
-                    gr.update(value=[], visible=False), # chatbot_instance
-                    gr.update(value=None), # current_chat_id_state
-                    gr.update(value=[]), # chat_history_state
-                    gr.update(visible=False, value=None) # audio_output (hide and clear on logout)
-                )
-
-        handle_login_state_change_inputs = [] 
-
-        # Define outputs for handle_login_state_change as a LIST of component objects.
-        # This list's ORDER MUST MATCH the order of gr.update objects returned by the function.
-        handle_login_state_change_outputs = [
-            app_data['login_container_comp'], 
-            app_data['main_app_container_comp'], 
-            app_data['user_info_md_comp'],
-            app_data['logout_button_comp'], 
-            app_data['chat_list_group_comp'], 
-            app_data['chatbot_gr_instance_comp'],
-            app_data['current_chat_id_state'], 
-            app_data['chat_history_state'],
-            app_data['audio_output_comp'], # Add audio component to the outputs list
-        ]
-        
-        app_data['logged_in_state'].change(
-            fn=handle_login_state_change,
-            inputs=handle_login_state_change_inputs,
-            outputs=handle_login_state_change_outputs
-        )
-        
-        demo_app.load(
-            fn=handle_login_state_change,
-            inputs=handle_login_state_change_inputs,
-            outputs=handle_login_state_change_outputs,
-            queue=False
-        )
-
-    ensure_user_db_exists_sync() 
+    # Create test app_data
+    app_data = {}
     
-    demo_app.launch(debug=True, share=False)
+    # Create the interface
+    with gr.Blocks() as app:
+        login_interface(app_data)
+        
+        # Add login button click event
+        app_data['login_button'].click(
+            fn=do_login,
+            inputs=[app_data['username'], app_data['password']],
+            outputs=[
+                app_data['logged_in_state'],
+                app_data['username_state'],
+                app_data['login_container_comp']
+            ]
+        )
+        
+        # Add register button click event
+        app_data['register_button'].click(
+            fn=do_register,
+            inputs=[app_data['username'], app_data['password']],
+            outputs=[
+                app_data['logged_in_state'],
+                app_data['username_state'],
+                app_data['login_container_comp']
+            ]
+        )
+    
+    app.launch()
+
+if __name__ == "__main__":
+    test_login_interface()

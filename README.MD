@@ -53,8 +53,8 @@ Gradio, Pandoc, Tesseract OCR and OpenAI
 
 7. Activate the virtual enviroment
 
-    1. Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
-    2. Find and select Python 3.12.10 ('.venv')
+    I. Press Ctrl + Shift + P and search 'Python: Select Interpreter'.
+    II. Find and select Python 3.12.10 ('.venv')
 
     ```pwsh
     .venv\Scripts\activate
@@ -68,8 +68,8 @@ Run gradio_app.py
 python gradio_app.py
 ```
 
-This will take a while to start up (30 seconds to 1 minute), as it has to
-compile the `langchain` dependencies
+This will take a while to start up (10 to 30 seconds), as it has to
+compile the `langchain` dependencies unless there is already a cached instance.
 
 ## Environment Variables
 
@@ -79,3 +79,31 @@ In addition, you will need to add the following environment variable to
 your .env file.
 
 `OPENAI_API_KEY`: Your OpenAI API key.
+
+___
+
+## Testing
+
+The project includes two test files:
+
+1. `tests/run_tests.py` - Basic environment tests
+   - Tests environment variables
+   - Tests required directories and files
+   - Tests module imports
+   - Tests CSS file validity
+   - Run with: `python tests/run_tests.py`
+
+2. `tests/run_all_tests.py` - Comprehensive test suite
+   - Discovers and runs all test modules in the tests directory
+   - Creates detailed logs in the `logs` directory
+   - Provides more verbose output
+   - Run with: `python tests/run_all_tests.py`
+
+### When to Use Which Test File
+
+- Use `run_tests.py` when you want to quickly verify the basic environment setup
+- Use `run_all_tests.py` when you want to run the complete test suite with detailed logging
+
+### Test Logs
+
+Test logs are stored in the `logs` directory with timestamps in the format: `test_run_YYYYMMDD_HHMMSS.log`

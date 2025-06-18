@@ -16,34 +16,53 @@ from keybert import KeyLLM
 import warnings
 import shelve
 from utils import create_folders, get_chatbot_dir, rel2abspath
+import logging
 
 warnings.filterwarnings("ignore")
 
 # load environment variables for secure configuration
 load_dotenv()
 
+# Get paths and validate them
 CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", ''))
 CLASSIFICATION_DATA_PATH = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv("CLASSIFICATION_DATA_PATH", '')))
 KEYWORDS_DATABANK_PATH = rel2abspath((os.path.join(get_chatbot_dir(), os.getenv("KEYWORDS_DATABANK_PATH", ''))))
-openai.api_key = os.getenv("OPENAI_API_KEY")
 DATABASE_PATH = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv('DATABASE_PATH', '')))
-EMBEDDING_MODEL = rel2abspath(os.path.join(get_chatbot_dir(), os.getenv('EMBEDDING_MODEL', '')))
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default to a known model
+
+# Validate OpenAI API key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    logging.critical("OPENAI_API_KEY environment variable not set. LLM features will not work.")
+    raise ValueError("OPENAI_API_KEY environment variable not set")
+
+openai.api_key = OPENAI_API_KEY
+
+# Create necessary folders
 create_folders(KEYWORDS_DATABANK_PATH)
 
-classification_db = Chroma(
-    collection_name = 'classification',
-    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
-    persist_directory=DATABASE_PATH
-)
-
-chat_db = Chroma(
-    collection_name = 'chat',
-    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
-    persist_directory=DATABASE_PATH
-)
+# Initialize databases with proper error handling
+try:
+    embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+    
+    classification_db = Chroma(
+        collection_name='classification',
+        embedding_function=embedding,
+        persist_directory=DATABASE_PATH
+    )
+    
+    chat_db = Chroma(
+        collection_name='chat',
+        embedding_function=embedding,
+        persist_directory=DATABASE_PATH
+    )
+    
+    logging.info("Successfully initialized Chroma databases")
+except Exception as e:
+    logging.critical(f"Failed to initialize Chroma databases: {e}")
+    raise
 
 def dataProcessing(file, collection=chat_db):
-
     keywords_bank = []
 
     # extract text from file
@@ -51,8 +70,6 @@ def dataProcessing(file, collection=chat_db):
     
     # metadata keyword tagging for document
     document = OpenAIMetadataTagger(document)
-    #print(document[0].metadata)
-    #print('\n')
     
     for doc in document:
         if "keywords" in doc.metadata:
@@ -61,22 +78,8 @@ def dataProcessing(file, collection=chat_db):
                 doc.metadata[f'keyword{i}'] = doc.metadata['keywords'][i]
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
 
-    #These are put in here for posterity but are weaker and less useful than OpenAIMetadataTagger and thus removed
-    '''document[0].metadata['keywords'] = KeyBERTMetadataTagger(document[0].page_content)
-    print(document[0].metadata)
-    print('\n')
-
-    document[0].metadata['keywords'] = KeyBERTOpenAIMetadataTagger(document[0].page_content)
-    print(document[0].metadata)
-    print('\n')'''
-
     # chunking
-
-        # recursive
-    '''recursiveChunker(document)'''
-
-        # semantic
-    chunks = semanticChunker(document)
+    chunks = semanticChunker(list(document))
 
     # batching for efficient processing
     batches = batching(chunks,166)
@@ -84,22 +87,39 @@ def dataProcessing(file, collection=chat_db):
     # create and populate the vector database with document embeddings
     databaseInsertion(batches=batches, collection=collection)
 
-    db = shelve.open(KEYWORDS_DATABANK_PATH)
-    x = db.get('keywords')
-    if x == None:
-        x = keywords_bank
-    else:
-        x.extend(keywords_bank)
-        x = list(set(x))
-    db['keywords'] = x
-    db.close()
+    # Update keywords databank with atomic file operations
+    try:
+        # Create a temporary file for atomic write
+        temp_db_path = f"{KEYWORDS_DATABANK_PATH}.tmp"
+        with shelve.open(temp_db_path) as temp_db:
+            # Load existing keywords
+            existing_keywords = temp_db.get('keywords', [])
+            # Merge and deduplicate keywords
+            all_keywords = list(set(existing_keywords + keywords_bank))
+            # Save back to temporary file
+            temp_db['keywords'] = all_keywords
+        
+        # Atomic rename operation
+        if os.path.exists(KEYWORDS_DATABANK_PATH):
+            os.replace(temp_db_path, KEYWORDS_DATABANK_PATH)
+        else:
+            os.rename(temp_db_path, KEYWORDS_DATABANK_PATH)
+            
+        logging.info(f"Successfully updated keywords databank with {len(keywords_bank)} new keywords")
+    except Exception as e:
+        logging.error(f"Error updating keywords databank: {e}")
+        # Clean up temporary file if it exists
+        if os.path.exists(temp_db_path):
+            try:
+                os.remove(temp_db_path)
+            except:
+                pass
 
 # function to load files using an extension of unstructured partition with langchain's document loaders
 def ExtractText(path: str):
     loader = UnstructuredFileLoader(path, encoding='utf-8')
     documents = loader.load()
     return documents
-
 
 # function to create metadata keyword tags for document and chunk using OpenAI
 def OpenAIMetadataTagger(document: list[Document]):
@@ -119,12 +139,11 @@ def OpenAIMetadataTagger(document: list[Document]):
         "required": ["keywords"]
     }
 
-    llm = ChatOpenAI(temperature=0.8, model="gpt-4o")
+    llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")  # Changed to gpt-4o-mini for consistency
 
     document_transformer = create_metadata_tagger(metadata_schema=schema, llm=llm)
     enhanced_documents = document_transformer.transform_documents(document)
     return enhanced_documents
-
 
 # function to create metadata keyword tags for document and chunk using keyBERT library
 def KeyBERTMetadataTagger(document):

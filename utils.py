@@ -1,4 +1,7 @@
 import os
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 def rel2abspath(relative_path: str) -> str:
     return os.path.abspath(relative_path)
@@ -34,3 +37,55 @@ def get_chatbot_dir():
     """
     user_folder = f"{os.environ.get('USERPROFILE')}\\.nypai-chatbot\\"
     return user_folder
+
+def setup_logging():
+    """Set up centralized logging configuration.
+    
+    This function configures logging to:
+    1. Write to app.log in the project root
+    2. Rotate logs when they reach 5MB
+    3. Keep 3 backup files
+    4. Log all levels (DEBUG and above)
+    5. Format logs with timestamp, level, module, and message
+    """
+    # Get the project root directory
+    root_dir = Path(__file__).parent
+    
+    # Configure the root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    
+    # Clear any existing handlers
+    logger.handlers = []
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Create rotating file handler
+    log_file = root_dir / 'app.log'
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    
+    # Add handler to root logger
+    logger.addHandler(file_handler)
+    
+    # Also log to console with INFO level
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    # Clear the log file
+    with open(log_file, 'w') as f:
+        f.write('')
+    
+    return logger
