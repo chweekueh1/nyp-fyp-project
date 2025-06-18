@@ -454,4 +454,3 @@ def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
         print(f"[ERROR] chatModel.get_convo_hist_answer exception: {e}")
         logging.error(f"Error invoking LangGraph workflow for thread '{thread_id}': {e}", exc_info=True)
         return {"answer": "I'm sorry, I encountered an error while processing your request. Please try again.", "context": ""}
-

@@ -19,6 +19,7 @@ from backend import (
 )
 from pathlib import Path
 from utils import setup_logging
+from hashing import is_password_complex
 
 # Set up logging
 logger = setup_logging()
@@ -71,24 +72,24 @@ def ensure_user_db_exists_sync():
 def load_users_sync() -> dict:
     """
     Loads user data from the JSON database with proper error handling.
-    Returns {"users": {...}} format.
+    Returns the users dict (not the whole file).
     """
     if not os.path.exists(USER_DB_PATH):
-        return {"users": {}}
-        
+        return {}
     try:
         with open(USER_DB_PATH, 'r') as f:
             data = json.load(f)
-            if not isinstance(data, dict) or "users" not in data:
+            users = data.get("users", {})
+            if not isinstance(users, dict):
                 logging.warning("Invalid users data format, returning empty users dict")
-                return {"users": {}}
-            return data
+                return {}
+            return users
     except json.JSONDecodeError as e:
         logging.error(f"Error decoding users data: {e}")
-        return {"users": {}}
+        return {}
     except Exception as e:
         logging.error(f"Error loading users data: {e}")
-        return {"users": {}}
+        return {}
 
 def save_users_sync(users_data: dict) -> None:
     """
@@ -97,19 +98,15 @@ def save_users_sync(users_data: dict) -> None:
     """
     if not users_data:
         return
-        
     try:
         os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
         temp_path = f"{USER_DB_PATH}.tmp"
-        
         with open(temp_path, 'w') as f:
-            json.dump(users_data, f, indent=2)
-        
+            json.dump({"users": users_data}, f, indent=2)
         if os.path.exists(USER_DB_PATH):
             os.replace(temp_path, USER_DB_PATH)
         else:
             os.rename(temp_path, USER_DB_PATH)
-            
         logging.info("Successfully saved users data")
     except Exception as e:
         logging.error(f"Error saving users data: {e}")
@@ -118,7 +115,6 @@ def save_users_sync(users_data: dict) -> None:
                 os.remove(temp_path)
             except:
                 pass
-        raise
 
 def load_user_chats_sync(username: str) -> list:
     """
@@ -149,8 +145,11 @@ def login_interface(app_data: Dict[str, Any]) -> None:
     # State to track mode
     if 'is_registering' not in app_data:
         app_data['is_registering'] = gr.State(False)
+    if 'main_app_container_comp' not in app_data:
+        app_data['main_app_container_comp'] = gr.Column(visible=False)
 
     with gr.Column(visible=True) as login_container:
+        app_data['logout_button'] = gr.Button("Logout", visible=False, elem_classes=["secondary"])
         app_data['username'] = gr.Textbox(
             label="Username",
             placeholder="Enter your username",
@@ -178,8 +177,9 @@ def login_interface(app_data: Dict[str, Any]) -> None:
         )
         with gr.Row():
             app_data['login_button'] = gr.Button("Login", elem_classes=["primary"])
-            app_data['register_button'] = gr.Button("Register", elem_classes=["primary"])
-        app_data['proceed_register_button'] = gr.Button("Register Account", visible=False, elem_classes=["primary"])
+            app_data['to_register_button'] = gr.Button("Register", elem_classes=["secondary"])
+            app_data['register_account_button'] = gr.Button("Register Account", visible=False, elem_classes=["primary"])
+            app_data['back_to_login_button'] = gr.Button("Back to Login", visible=False, elem_classes=["secondary"])
         app_data['error_message'] = gr.Markdown(visible=False)
         app_data['username_state'] = gr.State("")
         app_data['logged_in_state'] = gr.State(False)
@@ -203,20 +203,22 @@ def login_interface(app_data: Dict[str, Any]) -> None:
     # Switch to register mode
     def to_register_mode(is_registering):
         return (
-            gr.update(visible=not is_registering),  # login button
-            gr.update(visible=is_registering),      # confirm password
-            gr.update(visible=not is_registering),  # register button (switch)
-            gr.update(visible=is_registering),      # proceed register button
+            gr.update(visible=False),  # login button
+            gr.update(visible=False),  # to_register_button
+            gr.update(visible=True),   # register_account_button
+            gr.update(visible=True),   # back_to_login_button
+            gr.update(visible=True),   # confirm_password
             True
         )
-    app_data['register_button'].click(
+    app_data['to_register_button'].click(
         fn=to_register_mode,
         inputs=[app_data['is_registering']],
         outputs=[
             app_data['login_button'],
+            app_data['to_register_button'],
+            app_data['register_account_button'],
+            app_data['back_to_login_button'],
             app_data['confirm_password'],
-            app_data['register_button'],
-            app_data['proceed_register_button'],
             app_data['is_registering']
         ]
     )
@@ -225,19 +227,21 @@ def login_interface(app_data: Dict[str, Any]) -> None:
     def to_login_mode(is_registering):
         return (
             gr.update(visible=True),   # login button
-            gr.update(visible=False),  # confirm password
-            gr.update(visible=True),   # register button (switch)
-            gr.update(visible=False),  # proceed register button
+            gr.update(visible=True),   # to_register_button
+            gr.update(visible=False),  # register_account_button
+            gr.update(visible=False),  # back_to_login_button
+            gr.update(visible=False),  # confirm_password
             False
         )
-    app_data['login_button'].click(
+    app_data['back_to_login_button'].click(
         fn=to_login_mode,
         inputs=[app_data['is_registering']],
         outputs=[
             app_data['login_button'],
+            app_data['to_register_button'],
+            app_data['register_account_button'],
+            app_data['back_to_login_button'],
             app_data['confirm_password'],
-            app_data['register_button'],
-            app_data['proceed_register_button'],
             app_data['is_registering']
         ]
     )
@@ -246,8 +250,13 @@ def login_interface(app_data: Dict[str, Any]) -> None:
     def safe_login(username, password):
         if not username or not password:
             logger.warning("Login attempt with empty fields")
-            return False, "", gr.update(visible=True), gr.update(visible=True, value="Please enter both username and password")
-        return do_login(username, password)
+            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please enter both username and password")
+        result = do_login(username, password)
+        # If login is successful, hide login_container and show main_app_container
+        if result[0]:
+            return True, result[1], gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+        else:
+            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), result[3] if len(result) > 3 else gr.update(visible=True, value="Login failed")
     app_data['login_button'].click(
         fn=safe_login,
         inputs=[app_data['username'], app_data['password']],
@@ -255,20 +264,42 @@ def login_interface(app_data: Dict[str, Any]) -> None:
             app_data['logged_in_state'],
             app_data['username_state'],
             app_data['login_container_comp'],
+            app_data['main_app_container_comp'],
+            app_data['logout_button'],
             app_data['error_message']
         ]
     )
 
     # Actual register action
-    def safe_register(username, password, confirm_password):
-        if not username or not password or not confirm_password:
-            logger.warning("Registration attempt with empty fields")
-            return False, "All fields are required"
-        return do_register(username, password, confirm_password)
-    app_data['proceed_register_button'].click(
+    def safe_register(*args):
+        result = safe_register_impl(*args)
+        # If registration is successful, switch to login mode and show success message
+        if result[0] is False and isinstance(result[3], dict) and result[3].get("value", "").startswith("Registration successful"):
+            # Switch to login mode
+            return (
+                False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), result[3]
+            )
+        return result
+
+    def safe_register_impl(username, password, confirm_password, is_registering, login_button, confirm_password_box, to_register_button, register_account_button, back_to_login_button, error_message_box):
+        try:
+            return do_register(username, password, confirm_password, is_registering, login_button, confirm_password_box, to_register_button, register_account_button, back_to_login_button, error_message_box)
+        except Exception as e:
+            logger.error(f"Exception in safe_register: {e}")
+            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred")
+
+    app_data['register_account_button'].click(
         fn=safe_register,
-        inputs=[app_data['username'], app_data['password'], app_data['confirm_password']],
-        outputs=[app_data['logged_in_state'], app_data['error_message']]
+        inputs=[app_data['username'], app_data['password'], app_data['confirm_password'], app_data['is_registering'], app_data['login_button'], app_data['confirm_password'], app_data['to_register_button'], app_data['register_account_button'], app_data['back_to_login_button'], app_data['error_message']],
+        outputs=[app_data['logged_in_state'], app_data['username_state'], app_data['login_container_comp'], app_data['main_app_container_comp'], app_data['logout_button'], app_data['error_message']]
+    )
+
+    # Logout button (shown only when logged in)
+    def do_logout():
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+    app_data['logout_button'].click(
+        fn=do_logout,
+        outputs=[app_data['logged_in_state'], app_data['username_state'], app_data['login_container_comp'], app_data['main_app_container_comp'], app_data['logout_button'], app_data['error_message']]
     )
 
 def validate_password(password: str) -> Tuple[bool, str]:
@@ -276,7 +307,6 @@ def validate_password(password: str) -> Tuple[bool, str]:
     
     Args:
         password: The password to validate
-        
     Returns:
         Tuple of (is_valid, error_message)
     """
@@ -292,95 +322,65 @@ def validate_password(password: str) -> Tuple[bool, str]:
         return False, "Password must contain at least one special character"
     return True, ""
 
-def do_login(username: str, password: str) -> Tuple[bool, str, Dict[str, Any], Dict[str, Any]]:
-    """Handle login action.
-    
-    Args:
-        username: The username to login with
-        password: The password to login with
-        
-    Returns:
-        Tuple of (success, username, UI updates, error message)
-    """
-    # Validate inputs
+def toggle_password_visibility(current_visible):
+    # Toggle between password and text
+    return not current_visible, gr.update(type="text" if not current_visible else "password"), gr.update(value="👁️" if not current_visible else "👁️‍🗨️")
+
+def do_login(username: str, password: str):
     if not username or not password:
         logger.warning("Login attempt with empty fields")
-        return False, "", gr.update(visible=True), gr.update(visible=True, value="Please fill in all fields")
-    
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Please fill in all fields")
     try:
-        # Hash the password
-        hashed_password = hashing.hash_password(password)
-        
-        # Create event loop for async operation
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
-        # Call backend login with hashed password
-        result = loop.run_until_complete(backend_login(username, hashed_password))
+        result = loop.run_until_complete(backend_login(username, password))
         loop.close()
-        
-        if result and isinstance(result, dict) and result.get('code') == '200':
-            return True, username, gr.update(visible=False), gr.update(visible=False)
+        if result and result.get('code') == '200':
+            return True, username, gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
         else:
-            error_msg = result.get('message', 'Invalid username or password') if result else 'Invalid username or password'
+            error_msg = result.get('message', 'Invalid username or password')
             logger.warning(f"Login failed for user {username}: {error_msg}")
-            return False, "", gr.update(visible=True), gr.update(visible=True, value=error_msg)
-            
+            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg)
     except Exception as e:
         logger.error(f"Unexpected error during login: {e}")
-        return False, "", gr.update(visible=True), gr.update(visible=True, value="An unexpected error occurred")
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred")
 
-def do_register(username: str, password: str, confirm_password: str) -> Tuple[bool, str]:
-    """Handle user registration.
-    
-    Args:
-        username: The username to register
-        password: The password to register
-        confirm_password: The password confirmation
-        
-    Returns:
-        Tuple of (success, message)
-    """
+def do_register(username: str, password: str, confirm_password: str, is_registering: bool, login_button, confirm_password_box, register_button, proceed_register_button, is_registering_state, error_message_box):
     # Validate inputs
     if not username or not password or not confirm_password:
         logger.warning("Registration attempt with empty fields")
-        return False, "All fields are required"
-        
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="All fields are required")
     if password != confirm_password:
         logger.warning(f"Password mismatch for user {username}")
-        return False, "Passwords do not match"
-        
-    if len(password) < 8:
-        logger.warning(f"Password too short for user {username}")
-        return False, "Password must be at least 8 characters long"
-        
-    # Validate password complexity
-    is_valid, error_msg = validate_password(password)
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="Passwords do not match")
+    # Password complexity check
+    is_valid, complexity_msg = is_password_complex(password)
     if not is_valid:
-        logger.warning(f"Invalid password complexity for user {username}: {error_msg}")
-        return False, error_msg
-        
+        logger.warning(f"Password complexity failed for user {username}: {complexity_msg}")
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=complexity_msg)
     try:
-        # Check if username exists
-        if backend.user_exists(username):
-            logger.warning(f"Username already exists: {username}")
-            return False, "Username already exists"
-            
-        # Hash the password
-        hashed_password = hashing.hash_password(password)
-        
-        # Register user
-        success = backend.register_user(username, hashed_password)
-        if not success:
-            logger.warning(f"Failed to register user: {username}")
-            return False, "Failed to register user"
-            
-        logger.info(f"Successfully registered user: {username}")
-        return True, "Registration successful! Please log in."
-        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(backend_register(username, password))
+        loop.close()
+        if result and result.get('code') == '200':
+            logger.info(f"Successfully registered user: {username}")
+            # Switch to login mode and show success message
+            return (
+                False,  # logged_in_state
+                "",    # username_state
+                gr.update(visible=True),  # show login container
+                gr.update(visible=True, value="Registration successful! Please log in."),
+                gr.update(visible=False),  # main_app_container_comp
+                gr.update(visible=False),  # logout_button
+            )
+        else:
+            error_msg = result.get('message', 'Registration failed')
+            logger.warning(f"Registration failed for user {username}: {error_msg}")
+            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=error_msg)
     except Exception as e:
         logger.error(f"Unexpected error during registration: {e}")
-        return False, "An unexpected error occurred"
+        return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="An unexpected error occurred")
 
 # --- Test functions ---
 def test_login_interface() -> None:
@@ -394,7 +394,7 @@ def test_login_interface() -> None:
         assert app_data.get('username') is not None, "Username component should be created"
         assert app_data.get('password') is not None, "Password component should be created"
         assert app_data.get('login_button') is not None, "Login button should be created"
-        assert app_data.get('register_button') is not None, "Register button should be created"
+        assert app_data.get('to_register_button') is not None, "Register button should be created"
         assert app_data.get('error_message') is not None, "Error message component should be created"
         assert app_data.get('username_state') is not None, "Username state should be created"
         assert app_data.get('logged_in_state') is not None, "Logged in state should be created"
@@ -422,18 +422,24 @@ if __name__ == "__main__":
             outputs=[
                 app_data['logged_in_state'],
                 app_data['username_state'],
-                app_data['login_container_comp']
+                app_data['login_container_comp'],
+                app_data['main_app_container_comp'],
+                app_data['logout_button'],
+                app_data['error_message']
             ]
         )
         
         # Add register button click event
-        app_data['register_button'].click(
+        app_data['to_register_button'].click(
             fn=do_register,
             inputs=[app_data['username'], app_data['password']],
             outputs=[
                 app_data['logged_in_state'],
                 app_data['username_state'],
-                app_data['login_container_comp']
+                app_data['login_container_comp'],
+                app_data['main_app_container_comp'],
+                app_data['logout_button'],
+                app_data['error_message']
             ]
         )
     

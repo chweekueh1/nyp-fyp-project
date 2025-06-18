@@ -22,13 +22,8 @@ except ImportError as e:
     raise
 
 def search_interface(app_data: Dict[str, Any]) -> None:
-    """Create the search interface components.
-    
-    Args:
-        app_data: Dictionary containing Gradio components and state
-    """
+    """Create the search interface components and add them to app_data."""
     with gr.Column(visible=False) as search_container:
-        # Search input
         with gr.Row():
             app_data['search_query'] = gr.Textbox(
                 label="Search",
@@ -37,15 +32,13 @@ def search_interface(app_data: Dict[str, Any]) -> None:
                 container=False
             )
             app_data['search_button'] = gr.Button("Search")
-        
-        # Search results
         app_data['search_results'] = gr.Dropdown(
             label="Search Results",
             choices=[],
             show_label=True,
             interactive=True
         )
-        
+        app_data['search_container'] = search_container
         # Add search button click event
         app_data['search_button'].click(
             fn=_handle_search,
@@ -55,7 +48,6 @@ def search_interface(app_data: Dict[str, Any]) -> None:
             ],
             outputs=[app_data['search_results']]
         )
-        
         # Add search result selection event
         app_data['search_results'].select(
             fn=_handle_search_result,
@@ -65,8 +57,6 @@ def search_interface(app_data: Dict[str, Any]) -> None:
             ],
             outputs=[app_data['chat_history_state']]
         )
-    
-    app_data['search_container'] = search_container
 
 def _handle_search(query: str, username: str) -> List[str]:
     """Handle search query.

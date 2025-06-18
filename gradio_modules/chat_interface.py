@@ -23,20 +23,13 @@ except ImportError as e:
     raise
 
 def chat_interface(app_data: Dict[str, Any]) -> None:
-    """Create the chat interface components.
-    
-    Args:
-        app_data: Dictionary containing Gradio components and state
-    """
+    """Create the chat interface components and add them to app_data."""
     with gr.Column(visible=False) as chat_container:
-        # Chat history display
         app_data['chat_history'] = gr.Chatbot(
             label="Chat History",
             height=400,
             show_label=True
         )
-        
-        # Message input
         with gr.Row():
             app_data['msg'] = gr.Textbox(
                 label="Message",
@@ -45,10 +38,8 @@ def chat_interface(app_data: Dict[str, Any]) -> None:
                 container=False
             )
             app_data['send_button'] = gr.Button("Send")
-        
-        # Store chat history state
         app_data['chat_history_state'] = gr.State([])
-        
+        app_data['chat_container'] = chat_container
         # Add send button click event
         app_data['send_button'].click(
             fn=_handle_chat_message,
@@ -62,8 +53,6 @@ def chat_interface(app_data: Dict[str, Any]) -> None:
                 app_data['chat_history_state']
             ]
         )
-    
-    app_data['chat_container'] = chat_container
 
 def _handle_chat_message(message: str, history: list, username: str) -> tuple[str, list]:
     """Handle chat message submission.

@@ -483,69 +483,40 @@ def get_completion(prompt: str, model: str = "gpt-3.5-turbo", max_tokens: int = 
         return {"error": str(e)}
 
 async def do_login(username: str, password: str) -> Dict[str, str]:
-    """Handle user login.
-    
-    Args:
-        username: The username to login with
-        password: The password to login with
-        
-    Returns:
-        Dict containing status code and message
-    """
+    """Handle user login."""
     try:
-        # Check if user exists
         if not os.path.exists(USER_DB_PATH):
             return {'code': '404', 'message': 'User database not found'}
-            
         with open(USER_DB_PATH, 'r') as f:
-            users = json.load(f)
-            
+            data = json.load(f)
+        users = data.get("users", {})
         if username not in users:
             return {'code': '404', 'message': 'User not found'}
-            
-        if users[username]['password'] != password:  # In production, use proper password hashing
+        if users[username]['password'] != password:
             return {'code': '401', 'message': 'Invalid password'}
-            
         return {'code': '200', 'message': 'Login successful'}
     except Exception as e:
         logging.error(f"Error in login: {e}")
         return {'code': '500', 'message': 'Internal server error'}
 
 async def do_register(username: str, password: str) -> Dict[str, str]:
-    """Handle user registration.
-    
-    Args:
-        username: The username to register
-        password: The password to register with
-        
-    Returns:
-        Dict containing status code and message
-    """
+    """Handle user registration."""
     try:
-        # Create user database if it doesn't exist
         if not os.path.exists(USER_DB_PATH):
             os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
             with open(USER_DB_PATH, 'w') as f:
-                json.dump({}, f)
-                
-        # Load existing users
+                json.dump({"users": {}}, f)
         with open(USER_DB_PATH, 'r') as f:
-            users = json.load(f)
-            
-        # Check if user already exists
+            data = json.load(f)
+        users = data.get("users", {})
         if username in users:
             return {'code': '409', 'message': 'Username already exists'}
-            
-        # Add new user
         users[username] = {
-            'password': password,  # In production, use proper password hashing
+            'password': password,
             'created_at': str(datetime.now(timezone.utc))
         }
-        
-        # Save updated users
         with open(USER_DB_PATH, 'w') as f:
-            json.dump(users, f, indent=2)
-            
+            json.dump({"users": users}, f, indent=2)
         return {'code': '200', 'message': 'Registration successful'}
     except Exception as e:
         logging.error(f"Error in registration: {e}")

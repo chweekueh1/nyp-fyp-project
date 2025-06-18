@@ -41,27 +41,29 @@ def ensure_styles_dir():
 
 def initialize_app_data():
     """Initialize the app data dictionary with required components."""
+    login_col = gr.Column(visible=True)
+    main_col = gr.Column(visible=False)
     return {
         'logged_in_state': gr.State(False),
         'username_state': gr.State(""),
         'current_chat_id_state': gr.State(""),
         'chat_history_state': gr.State([]),
-        'login_container_comp': gr.Column(visible=True),
-        'main_app_container_comp': gr.Column(visible=False),
+        'login_container_comp': login_col,
+        'main_app_container_comp': main_col,
         'user_info': gr.Markdown(visible=False),
         'logout_btn': gr.Button("Logout", visible=False)
     }
 
 def _add_components(app_data):
-    """Add all UI components to the app."""
-    # Add login interface
-    login_interface(app_data)
-    
-    # Add chat interface
-    chat_interface(app_data)
-    
-    # Add search interface
-    search_interface(app_data)
+    """Add all UI components to the app, ensuring both containers are always present."""
+    # Add login interface inside login_container_comp
+    with app_data['login_container_comp']:
+        login_interface(app_data)
+    # Add main app interface inside main_app_container_comp
+    with app_data['main_app_container_comp']:
+        chat_interface(app_data)
+        search_interface(app_data)
+        # Add any other main app UI here
 
 def _add_login_handling(app_data):
     """Add login and register event handlers."""
@@ -79,18 +81,41 @@ def _add_login_handling(app_data):
         ]
     )
     
-    # Add register button click event
-    app_data['register_button'].click(
+    # Add register navigation button click event (switch to register page)
+    app_data['to_register_button'].click(
+        fn=None,  # Navigation handled in login_and_register.py
+        inputs=[],
+        outputs=[]
+    )
+    
+    # Add register account button click event (actual registration)
+    app_data['register_account_button'].click(
         fn=do_register,
         inputs=[
             app_data['username'],
-            app_data['password']
+            app_data['password'],
+            app_data['confirm_password'],
+            app_data['is_registering'],
+            app_data['login_button'],
+            app_data['confirm_password'],
+            app_data['to_register_button'],
+            app_data['register_account_button'],
+            app_data['back_to_login_button'],
+            app_data['error_message']
         ],
         outputs=[
             app_data['logged_in_state'],
             app_data['username_state'],
-            app_data['login_container_comp']
+            app_data['login_container_comp'],
+            app_data['error_message']
         ]
+    )
+    
+    # Add back to login button click event (switch to login page)
+    app_data['back_to_login_button'].click(
+        fn=None,  # Navigation handled in login_and_register.py
+        inputs=[],
+        outputs=[]
     )
 
 def _add_logout_logic(app_data):
@@ -177,25 +202,26 @@ def _add_user_info_update(app_data):
 def main_app():
     """Create the main Gradio app."""
     try:
-        # Ensure styles directory exists
         css_path = ensure_styles_dir()
         if not css_path:
             logger.warning("Could not load CSS file")
-        
-        # Initialize app data
         app_data = initialize_app_data()
-        
-        # Create the app
         with gr.Blocks(theme=flexcyon_theme) as app:
-            # Add components
-            _add_components(app_data)
-            
+            # Show only login UI at startup
+            with gr.Column(visible=True) as login_col:
+                login_interface(app_data)
+            with gr.Column(visible=False) as main_col:
+                chat_interface(app_data)
+                search_interface(app_data)
+                # ... any other main app UI ...
+            # Store containers in app_data for toggling
+            app_data['login_container_comp'] = login_col
+            app_data['main_app_container_comp'] = main_col
             # Add event handlers
             _add_login_handling(app_data)
             _add_logout_logic(app_data)
             _add_chat_handling(app_data)
             _add_user_info_update(app_data)
-        
         return app
     except Exception as e:
         logger.error(f"Error initializing app: {e}")
