@@ -10,20 +10,21 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+# Now import from parent directory
+from backend import search_chat_history, get_chat_history
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import backend functions
-try:
-    from backend import search_chat_history, get_chat_history
-except ImportError as e:
-    logger.error(f"Failed to import backend functions: {e}")
-    raise
-
-def search_interface(app_data: Dict[str, Any]) -> None:
+def search_interface(
+    logged_in_state: gr.State,
+    username_state: gr.State,
+    current_chat_id_state: gr.State,
+    chat_history_state: gr.State
+) -> None:
     """
-    Create the search interface components and add them to app_data.
+    Create the search interface components.
     
     This function creates the search UI components including:
     - Search input
@@ -32,41 +33,45 @@ def search_interface(app_data: Dict[str, Any]) -> None:
     - Search container
     
     Args:
-        app_data (Dict[str, Any]): Dictionary containing Gradio components and states.
+        logged_in_state (gr.State): State for tracking login status
+        username_state (gr.State): State for storing current username
+        current_chat_id_state (gr.State): State for storing current chat ID
+        chat_history_state (gr.State): State for storing chat history
     """
     with gr.Column(visible=False) as search_container:
         with gr.Row():
-            app_data['search_query'] = gr.Textbox(
+            search_query = gr.Textbox(
                 label="Search",
                 placeholder="Search your chat history...",
                 show_label=False,
                 container=False
             )
-            app_data['search_button'] = gr.Button("Search")
-        app_data['search_results'] = gr.Dropdown(
+            search_button = gr.Button("Search")
+        search_results = gr.Dropdown(
             label="Search Results",
             choices=[],
             show_label=True,
             interactive=True
         )
-        app_data['search_container'] = search_container
+        
         # Add search button click event
-        app_data['search_button'].click(
+        search_button.click(
             fn=_handle_search,
             inputs=[
-                app_data['search_query'],
-                app_data['username_state']
+                search_query,
+                username_state
             ],
-            outputs=[app_data['search_results']]
+            outputs=[search_results]
         )
+        
         # Add search result selection event
-        app_data['search_results'].select(
+        search_results.select(
             fn=_handle_search_result,
             inputs=[
-                app_data['search_results'],
-                app_data['username_state']
+                search_results,
+                username_state
             ],
-            outputs=[app_data['chat_history_state']]
+            outputs=[chat_history_state]
         )
 
 def _handle_search(query: str, username: str) -> Dict[str, Any]:

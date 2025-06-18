@@ -5,26 +5,27 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from utils import setup_logging
-
-# Set up logging
-logger = setup_logging()
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-# Import backend functions
-try:
-    from backend import get_chat_response
-except ImportError as e:
-    logger.error(f"Failed to import backend functions: {e}")
-    raise
+# Now import from parent directory
+from utils import setup_logging
+from backend import get_chat_response
 
-def chat_interface(app_data: Dict[str, Any]) -> None:
+# Set up logging
+logger = setup_logging()
+
+def chat_interface(
+    logged_in_state: gr.State,
+    username_state: gr.State,
+    current_chat_id_state: gr.State,
+    chat_history_state: gr.State
+) -> None:
     """
-    Create the chat interface components and add them to app_data.
+    Create the chat interface components.
     
     This function creates the chat UI components including:
     - Chat history display
@@ -33,36 +34,48 @@ def chat_interface(app_data: Dict[str, Any]) -> None:
     - Chat history state
     
     Args:
-        app_data (Dict[str, Any]): Dictionary containing Gradio components and states.
+        logged_in_state (gr.State): State for tracking login status
+        username_state (gr.State): State for storing current username
+        current_chat_id_state (gr.State): State for storing current chat ID
+        chat_history_state (gr.State): State for storing chat history
     """
     with gr.Column(visible=False) as chat_container:
-        app_data['chat_history'] = gr.Chatbot(
+        chat_history = gr.Chatbot(
             label="Chat History",
             height=400,
             show_label=True
         )
         with gr.Row():
-            app_data['msg'] = gr.Textbox(
+            msg = gr.Textbox(
                 label="Message",
                 placeholder="Type your message here...",
                 show_label=False,
                 container=False
             )
-            app_data['send_button'] = gr.Button("Send")
-        app_data['chat_history_state'] = gr.State([])
-        app_data['chat_container'] = chat_container
+            send_button = gr.Button("Send")
+            
         # Add send button click event
-        app_data['send_button'].click(
+        send_button.click(
             fn=_handle_chat_message,
             inputs=[
-                app_data['msg'],
-                app_data['chat_history_state'],
-                app_data['username_state']
+                msg,
+                chat_history_state,
+                username_state
             ],
             outputs=[
-                app_data['msg'],
-                app_data['chat_history_state']
+                msg,
+                chat_history_state
             ]
+        )
+        
+        # Update chat display when history changes
+        def update_chat_display(history):
+            return history
+            
+        chat_history_state.change(
+            fn=update_chat_display,
+            inputs=[chat_history_state],
+            outputs=[chat_history]
         )
 
 def _handle_chat_message(msg: str, history: List[List[str]], username: str) -> Tuple[Dict[str, Any], List[List[str]]]:
