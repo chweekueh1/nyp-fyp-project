@@ -1,12 +1,26 @@
+#!/usr/bin/env python3
+"""
+Integration tests for backend API endpoints and LLM services.
+Tests the integration between frontend, backend, and LLM components.
+"""
+
 import requests
 import os
+import sys
 import json
 import io # Needed for BytesIO for audio data
 import tempfile
 import shutil
 import pytest
+from pathlib import Path
+
+# Add the parent directory to the path to import modules
+parent_dir = Path(__file__).parent.parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
 from gradio_modules.main_app import main_app
-from backend import ask_question, transcribe_audio, upload_file, data_classification
+from backend import ask_question, transcribe_audio, upload_file, data_classification, fuzzy_search_chats, render_all_chats
 import asyncio
 import wave
 import numpy as np
@@ -154,52 +168,97 @@ def setup_user_chats(tmp_path, user, chats):
     return user_dir
 
 def test_fuzzy_search_chats(tmp_path, monkeypatch):
-    # Prepare mock data
-    user = "testuser"
-    chats = {
-        "chat1": [
-            {"role": "user", "content": "Hello, how are you?"},
-            {"role": "assistant", "content": "I'm fine, thank you!"}
-        ],
-        "chat2": [
-            {"role": "user", "content": "What is the weather today?"},
-            {"role": "assistant", "content": "It's sunny."}
-        ]
-    }
-    setup_user_chats(tmp_path, user, chats)
-    # Patch the data path
-    monkeypatch.setattr("os.path.dirname", lambda _: str(tmp_path))
-    from gradio_modules.main_app import fuzzy_search_chats
-    # Fuzzy search for 'weather'
-    result = fuzzy_search_chats(user, "weather")
-    assert "chat2" in result
-    assert "weather" in result.lower()
-    # Fuzzy search for 'hello'
-    result = fuzzy_search_chats(user, "hello")
-    assert "chat1" in result
-    assert "hello" in result.lower()
-    # Fuzzy search for non-existent
-    result = fuzzy_search_chats(user, "nonexistent")
-    assert "No matching chats found" in result
+    """Test fuzzy search functionality."""
+    print("🔍 Testing fuzzy_search_chats function...")
+    try:
+        # Prepare mock data
+        user = "testuser"
+        chats = {
+            "chat1": [
+                {"role": "user", "content": "Hello, how are you?", "timestamp": "2024-01-01T10:00:00Z"},
+                {"role": "assistant", "content": "I'm fine, thank you!", "timestamp": "2024-01-01T10:00:01Z"}
+            ],
+            "chat2": [
+                {"role": "user", "content": "What is the weather today?", "timestamp": "2024-01-01T11:00:00Z"},
+                {"role": "assistant", "content": "It's sunny.", "timestamp": "2024-01-01T11:00:01Z"}
+            ]
+        }
+        setup_user_chats(tmp_path, user, chats)
+        
+        # Patch the data path
+        monkeypatch.setattr("backend.CHAT_SESSIONS_PATH", str(tmp_path / "data" / "chat_sessions"))
+        
+        # Test fuzzy search for 'weather'
+        result = fuzzy_search_chats(user, "weather")
+        assert "chat2" in result
+        assert "weather" in result.lower()
+        print("  ✅ Weather search passed")
+        
+        # Test fuzzy search for 'hello'
+        result = fuzzy_search_chats(user, "hello")
+        assert "chat1" in result
+        assert "hello" in result.lower()
+        print("  ✅ Hello search passed")
+        
+        # Test fuzzy search for non-existent
+        result = fuzzy_search_chats(user, "nonexistent")
+        assert "No matching chats found" in result
+        print("  ✅ Non-existent search passed")
+        
+        print("✅ test_fuzzy_search_chats: PASSED")
+    except Exception as e:
+        print(f"❌ test_fuzzy_search_chats: FAILED - {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def test_render_all_chats(tmp_path, monkeypatch):
-    user = "testuser"
-    chats = {
-        "chat1": [
-            {"role": "user", "content": "Hello, how are you?"},
-            {"role": "assistant", "content": "I'm fine, thank you!"}
-        ],
-        "chat2": [
-            {"role": "user", "content": "What is the weather today?"},
-            {"role": "assistant", "content": "It's sunny."}
-        ]
-    }
-    setup_user_chats(tmp_path, user, chats)
-    monkeypatch.setattr("os.path.dirname", lambda _: str(tmp_path))
-    from gradio_modules.main_app import render_all_chats
-    chatbots = render_all_chats(user)
-    assert any("chat1" in str(bot.label) for bot in chatbots)
-    assert any("chat2" in str(bot.label) for bot in chatbots)
+    """Test render all chats functionality."""
+    print("🔍 Testing render_all_chats function...")
+    try:
+        user = "testuser"
+        chats = {
+            "chat1": [
+                {"role": "user", "content": "Hello, how are you?", "timestamp": "2024-01-01T10:00:00Z"},
+                {"role": "assistant", "content": "I'm fine, thank you!", "timestamp": "2024-01-01T10:00:01Z"}
+            ],
+            "chat2": [
+                {"role": "user", "content": "What is the weather today?", "timestamp": "2024-01-01T11:00:00Z"},
+                {"role": "assistant", "content": "It's sunny.", "timestamp": "2024-01-01T11:00:01Z"}
+            ]
+        }
+        setup_user_chats(tmp_path, user, chats)
+        
+        # Patch the data path
+        monkeypatch.setattr("backend.CHAT_SESSIONS_PATH", str(tmp_path / "data" / "chat_sessions"))
+        
+        # Test rendering all chats
+        result = render_all_chats(user)
+        assert isinstance(result, list), f"Expected list, got {type(result)}"
+        assert len(result) == 2, f"Expected 2 chats, got {len(result)}"
+        
+        # Check chat structure
+        for chat in result:
+            assert 'chat_id' in chat, "Chat should have chat_id"
+            assert 'chat_name' in chat, "Chat should have chat_name"
+            assert 'message_count' in chat, "Chat should have message_count"
+            assert 'last_message' in chat, "Chat should have last_message"
+            assert 'timestamp' in chat, "Chat should have timestamp"
+        
+        print("  ✅ Chat structure validation passed")
+        
+        # Check that chat IDs are present
+        chat_ids = [chat['chat_id'] for chat in result]
+        assert "chat1" in chat_ids, "chat1 should be in results"
+        assert "chat2" in chat_ids, "chat2 should be in results"
+        print("  ✅ Chat IDs validation passed")
+        
+        print("✅ test_render_all_chats: PASSED")
+    except Exception as e:
+        print(f"❌ test_render_all_chats: FAILED - {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 async def test_ask_question():
     """Test the ask_question function directly."""
@@ -250,5 +309,84 @@ def run_all_unit_tests():
     finally:
         cleanup_dummy_files()
 
+def run_integration_tests():
+    """Run all integration tests."""
+    print("🚀 Running integration tests...")
+    print("=" * 60)
+    
+    test_functions = [
+        run_all_tests,
+        run_all_unit_tests,
+    ]
+    
+    results = []
+    failed_tests = []
+    error_messages = []
+    
+    for test_func in test_functions:
+        try:
+            print(f"\n{'='*40}")
+            print(f"Running: {test_func.__name__}")
+            print(f"{'='*40}")
+            test_func()
+            print(f"✅ {test_func.__name__}: PASSED")
+            results.append((test_func.__name__, True))
+        except KeyboardInterrupt:
+            print(f"\n⚠️  {test_func.__name__} interrupted by user")
+            results.append((test_func.__name__, False))
+            failed_tests.append(test_func.__name__)
+            error_messages.append(f"{test_func.__name__}: Interrupted by user")
+            break
+        except Exception as e:
+            error_msg = f"{e}"
+            print(f"❌ {test_func.__name__}: FAILED - {error_msg}")
+            import traceback
+            traceback.print_exc()
+            results.append((test_func.__name__, False))
+            failed_tests.append(test_func.__name__)
+            error_messages.append(f"{test_func.__name__}: {error_msg}")
+            # Continue with other tests instead of exiting
+    
+    # Summary
+    print(f"\n{'='*60}")
+    print("INTEGRATION TEST SUMMARY")
+    print('='*60)
+    
+    passed = sum(1 for _, result in results if result)
+    total = len(results)
+    
+    for test_name, result in results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{test_name}: {status}")
+    
+    print(f"\nOverall: {passed}/{total} integration tests passed")
+    
+    if failed_tests:
+        print(f"\nFailed tests: {', '.join(failed_tests)}")
+        
+        # Display error messages
+        if error_messages:
+            print(f"\n{'='*60}")
+            print("ERROR MESSAGES")
+            print('='*60)
+            for error_msg in error_messages:
+                print(f"❌ {error_msg}")
+    
+    if passed == total:
+        print("🎉 All integration tests passed!")
+    else:
+        print("💥 Some integration tests failed!")
+    
+    # Return tuple with success status and error messages if any
+    if error_messages:
+        return False, "; ".join(error_messages)
+    else:
+        return True
+
 if __name__ == "__main__":
-    run_all_unit_tests()
+    result = run_integration_tests()
+    if isinstance(result, tuple):
+        success, error_messages = result
+    else:
+        success = result
+    sys.exit(0 if success else 1) 

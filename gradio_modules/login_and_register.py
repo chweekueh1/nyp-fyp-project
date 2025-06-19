@@ -73,278 +73,295 @@ def login_interface(
     is_registering: gr.State,
     main_container: gr.Column,
     logout_button: gr.Button,
-    user_info: gr.Markdown
+    user_info: gr.Markdown,
+    login_container: gr.Column,  # <-- Add this
+    all_chat_histories_state: gr.State,
+    selected_chat_id_state: gr.State
 ) -> None:
     """Create the login interface with all necessary components and states."""
     
-    # Initialize states
-    states = {
-        'logged_in': logged_in_state,
-        'username': username_state,
-        'current_chat_id': current_chat_id_state,
-        'chat_history': chat_history_state,
-        'is_registering': is_registering,
-        'password_visible': gr.State(False)
-    }
-    
-    with gr.Column(visible=True) as login_container:
-        username = gr.Textbox(
-            label="Username",
-            placeholder="Enter your username",
-            show_label=True
-        )
+    # Use the passed-in login_container
+    with login_container:
+        # Initialize states
+        states = {
+            'logged_in': logged_in_state,
+            'username': username_state,
+            'current_chat_id': current_chat_id_state,
+            'chat_history': chat_history_state,
+            'is_registering': is_registering,
+            'password_visible': gr.State(False)
+        }
         
-        with gr.Row():
-            password = gr.Textbox(
-                label="Password",
-                placeholder="Enter your password",
+        with gr.Column(visible=True) as login_container:
+            username = gr.Textbox(
+                label="Username",
+                placeholder="Enter your username",
+                show_label=True
+            )
+            
+            with gr.Row():
+                password = gr.Textbox(
+                    label="Password",
+                    placeholder="Enter your password",
+                    show_label=True,
+                    type="password",
+                    elem_id="password_input"
+                )
+                password_visibility = gr.Button(
+                    "👁️",
+                    elem_id="password_visibility",
+                    size="sm"
+                )
+                
+            confirm_password = gr.Textbox(
+                label="Confirm Password",
+                placeholder="Confirm your password",
                 show_label=True,
                 type="password",
-                elem_id="password_input"
-            )
-            password_visibility = gr.Button(
-                "👁️",
-                elem_id="password_visibility",
-                size="sm"
+                visible=False
             )
             
-        confirm_password = gr.Textbox(
-            label="Confirm Password",
-            placeholder="Confirm your password",
-            show_label=True,
-            type="password",
-            visible=False
+            with gr.Row():
+                login_button = gr.Button("Login", elem_classes=["primary"])
+                to_register_button = gr.Button("Register", elem_classes=["secondary"])
+                register_account_button = gr.Button("Register Account", visible=False, elem_classes=["primary"])
+                back_to_login_button = gr.Button("Back to Login", visible=False, elem_classes=["secondary"])
+                
+            error_message = gr.Markdown(visible=False)
+    
+        # --- Event Handlers ---
+        def handle_login(username: str, password: str):
+            if not username or not password:
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="Please fill in all fields"),  # error_message
+                    "",     # user_info
+                    [],     # chat_history_state
+                    ""      # current_chat_id_state
+                )
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                backend_result = loop.run_until_complete(backend_login(username, password))
+                loop.close()
+                if backend_result.get('code') != '200':
+                    return (
+                        False,  # logged_in
+                        "",    # username
+                        gr.update(visible=True),   # login_container
+                        gr.update(visible=False),  # main_container
+                        gr.update(visible=False),  # logout_button
+                        gr.update(visible=True, value=backend_result.get('message', 'Invalid username or password')),  # error_message
+                        "",     # user_info
+                        [],     # chat_history_state
+                        ""      # current_chat_id_state
+                    )
+                # Load chat history and chat_id after successful login
+                from backend import get_chat_history
+                # You may want to select the most recent chat_id, here we just use a default or empty string
+                chat_id = ""
+                history = get_chat_history(chat_id, username)
+                history = [list(pair) for pair in history] if history else []
+                return (
+                    True,   # logged_in
+                    username,  # username
+                    gr.update(visible=False),  # login_container
+                    gr.update(visible=True),   # main_container
+                    gr.update(visible=True),   # logout_button
+                    gr.update(visible=False),  # error_message
+                    f"Welcome, {username}!",   # user_info
+                    history,                   # chat_history_state
+                    chat_id                    # current_chat_id_state
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error during login: {e}")
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="An unexpected error occurred"),  # error_message
+                    "",     # user_info
+                    [],     # chat_history_state
+                    ""      # current_chat_id_state
+                )
+        
+        def handle_register(username: str, password: str, confirm_password: str, is_registering: bool) -> Tuple[bool, str, Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], str]:
+            """Handle registration attempt."""
+            if not username or not password or not confirm_password:
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="All fields are required"),  # error_message
+                    ""     # user_info
+                )
+                
+            if password != confirm_password:
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="Passwords do not match"),  # error_message
+                    ""     # user_info
+                )
+                
+            is_valid, complexity_msg = validate_password(password)
+            if not is_valid:
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value=complexity_msg),  # error_message
+                    ""     # user_info
+                )
+                
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                backend_result = loop.run_until_complete(backend_register(username, password))
+                loop.close()
+                
+                if backend_result.get('code') != '200':
+                    return (
+                        False,  # logged_in
+                        "",    # username
+                        gr.update(visible=True),   # login_container
+                        gr.update(visible=False),  # main_container
+                        gr.update(visible=False),  # logout_button
+                        gr.update(visible=True, value=backend_result.get('message', 'Registration failed')),  # error_message
+                        ""     # user_info
+                    )
+                    
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="Registration successful! Please log in."),  # error_message
+                    ""     # user_info
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error during registration: {e}")
+                return (
+                    False,  # logged_in
+                    "",    # username
+                    gr.update(visible=True),   # login_container
+                    gr.update(visible=False),  # main_container
+                    gr.update(visible=False),  # logout_button
+                    gr.update(visible=True, value="An unexpected error occurred"),  # error_message
+                    ""     # user_info
+                )
+        
+        def toggle_password_visibility(current_visible: bool) -> Tuple[bool, Dict[str, Any], Dict[str, Any]]:
+            """Toggle password visibility."""
+            return (
+                not current_visible,
+                gr.update(type="text" if not current_visible else "password"),
+                gr.update(value="👁️" if not current_visible else "👁️‍🗨️")
+            )
+        
+        def switch_to_register(is_registering: bool) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], bool]:
+            """Switch to register mode."""
+            return (
+                gr.update(visible=False),  # login button
+                gr.update(visible=False),  # to_register_button
+                gr.update(visible=True),   # register_account_button
+                gr.update(visible=True),   # back_to_login_button
+                gr.update(visible=True),   # confirm_password
+                True                       # is_registering
+            )
+        
+        def switch_to_login(is_registering: bool) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], bool]:
+            """Switch to login mode."""
+            return (
+                gr.update(visible=True),   # login button
+                gr.update(visible=True),   # to_register_button
+                gr.update(visible=False),  # register_account_button
+                gr.update(visible=False),  # back_to_login_button
+                gr.update(visible=False),  # confirm_password
+                False                      # is_registering
+            )
+        
+        # --- Event Bindings ---
+        login_button.click(
+            fn=handle_login,
+            inputs=[username, password],
+            outputs=[
+                logged_in_state,
+                username_state,
+                login_container,
+                main_container,
+                logout_button,
+                error_message,
+                user_info,
+                all_chat_histories_state,   # <-- Add this
+                selected_chat_id_state      # <-- Add this
+            ],
+            api_name="login"
         )
         
-        with gr.Row():
-            login_button = gr.Button("Login", elem_classes=["primary"])
-            to_register_button = gr.Button("Register", elem_classes=["secondary"])
-            register_account_button = gr.Button("Register Account", visible=False, elem_classes=["primary"])
-            back_to_login_button = gr.Button("Back to Login", visible=False, elem_classes=["secondary"])
-            
-        error_message = gr.Markdown(visible=False)
-    
-    # --- Event Handlers ---
-    def handle_login(username: str, password: str) -> Tuple[bool, str, Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], str]:
-        """Handle login attempt."""
-        if not username or not password:
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="Please fill in all fields"),  # error_message
-                ""     # user_info
-            )
-            
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            backend_result = loop.run_until_complete(backend_login(username, password))
-            loop.close()
-            
-            if backend_result.get('code') != '200':
-                return (
-                    False,  # logged_in
-                    "",    # username
-                    gr.update(visible=True),   # login_container
-                    gr.update(visible=False),  # main_container
-                    gr.update(visible=False),  # logout_button
-                    gr.update(visible=True, value=backend_result.get('message', 'Invalid username or password')),  # error_message
-                    ""     # user_info
-                )
-                
-            return (
-                True,   # logged_in
-                username,  # username
-                gr.update(visible=False),  # login_container
-                gr.update(visible=True),   # main_container
-                gr.update(visible=True),   # logout_button
-                gr.update(visible=False),  # error_message
-                f"Welcome, {username}!"  # user_info
-            )
-        except Exception as e:
-            logger.error(f"Unexpected error during login: {e}")
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="An unexpected error occurred"),  # error_message
-                ""     # user_info
-            )
-    
-    def handle_register(username: str, password: str, confirm_password: str, is_registering: bool) -> Tuple[bool, str, Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], str]:
-        """Handle registration attempt."""
-        if not username or not password or not confirm_password:
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="All fields are required"),  # error_message
-                ""     # user_info
-            )
-            
-        if password != confirm_password:
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="Passwords do not match"),  # error_message
-                ""     # user_info
-            )
-            
-        is_valid, complexity_msg = validate_password(password)
-        if not is_valid:
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value=complexity_msg),  # error_message
-                ""     # user_info
-            )
-            
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            backend_result = loop.run_until_complete(backend_register(username, password))
-            loop.close()
-            
-            if backend_result.get('code') != '200':
-                return (
-                    False,  # logged_in
-                    "",    # username
-                    gr.update(visible=True),   # login_container
-                    gr.update(visible=False),  # main_container
-                    gr.update(visible=False),  # logout_button
-                    gr.update(visible=True, value=backend_result.get('message', 'Registration failed')),  # error_message
-                    ""     # user_info
-                )
-                
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="Registration successful! Please log in."),  # error_message
-                ""     # user_info
-            )
-        except Exception as e:
-            logger.error(f"Unexpected error during registration: {e}")
-            return (
-                False,  # logged_in
-                "",    # username
-                gr.update(visible=True),   # login_container
-                gr.update(visible=False),  # main_container
-                gr.update(visible=False),  # logout_button
-                gr.update(visible=True, value="An unexpected error occurred"),  # error_message
-                ""     # user_info
-            )
-    
-    def toggle_password_visibility(current_visible: bool) -> Tuple[bool, Dict[str, Any], Dict[str, Any]]:
-        """Toggle password visibility."""
-        return (
-            not current_visible,
-            gr.update(type="text" if not current_visible else "password"),
-            gr.update(value="👁️" if not current_visible else "👁️‍🗨️")
+        register_account_button.click(
+            fn=handle_register,
+            inputs=[username, password, confirm_password, states['is_registering']],
+            outputs=[
+                states['logged_in'],
+                states['username'],
+                login_container,  # This will be updated with visibility
+                main_container,   # This will be updated with visibility
+                logout_button,    # This will be updated with visibility
+                error_message,
+                user_info
+            ],
+            api_name="register"
         )
-    
-    def switch_to_register(is_registering: bool) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], bool]:
-        """Switch to register mode."""
-        return (
-            gr.update(visible=False),  # login button
-            gr.update(visible=False),  # to_register_button
-            gr.update(visible=True),   # register_account_button
-            gr.update(visible=True),   # back_to_login_button
-            gr.update(visible=True),   # confirm_password
-            True                       # is_registering
+        
+        password_visibility.click(
+            fn=toggle_password_visibility,
+            inputs=[states['password_visible']],
+            outputs=[states['password_visible'], password, password_visibility],
+            api_name="toggle_password"
         )
-    
-    def switch_to_login(is_registering: bool) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], bool]:
-        """Switch to login mode."""
-        return (
-            gr.update(visible=True),   # login button
-            gr.update(visible=True),   # to_register_button
-            gr.update(visible=False),  # register_account_button
-            gr.update(visible=False),  # back_to_login_button
-            gr.update(visible=False),  # confirm_password
-            False                      # is_registering
+        
+        to_register_button.click(
+            fn=switch_to_register,
+            inputs=[states['is_registering']],
+            outputs=[
+                login_button,
+                to_register_button,
+                register_account_button,
+                back_to_login_button,
+                confirm_password,
+                states['is_registering']
+            ],
+            api_name="to_register"
         )
-    
-    # --- Event Bindings ---
-    login_button.click(
-        fn=handle_login,
-        inputs=[username, password],
-        outputs=[
-            states['logged_in'],
-            states['username'],
-            login_container,  # This will be updated with visibility
-            main_container,   # This will be updated with visibility
-            logout_button,    # This will be updated with visibility
-            error_message,
-            user_info
-        ],
-        api_name="login"
-    )
-    
-    register_account_button.click(
-        fn=handle_register,
-        inputs=[username, password, confirm_password, states['is_registering']],
-        outputs=[
-            states['logged_in'],
-            states['username'],
-            login_container,  # This will be updated with visibility
-            main_container,   # This will be updated with visibility
-            logout_button,    # This will be updated with visibility
-            error_message,
-            user_info
-        ],
-        api_name="register"
-    )
-    
-    password_visibility.click(
-        fn=toggle_password_visibility,
-        inputs=[states['password_visible']],
-        outputs=[states['password_visible'], password, password_visibility],
-        api_name="toggle_password"
-    )
-    
-    to_register_button.click(
-        fn=switch_to_register,
-        inputs=[states['is_registering']],
-        outputs=[
-            login_button,
-            to_register_button,
-            register_account_button,
-            back_to_login_button,
-            confirm_password,
-            states['is_registering']
-        ],
-        api_name="to_register"
-    )
-    
-    back_to_login_button.click(
-        fn=switch_to_login,
-        inputs=[states['is_registering']],
-        outputs=[
-            login_button,
-            to_register_button,
-            register_account_button,
-            back_to_login_button,
-            confirm_password,
-            states['is_registering']
-        ],
-        api_name="to_login"
-    )
+        
+        back_to_login_button.click(
+            fn=switch_to_login,
+            inputs=[states['is_registering']],
+            outputs=[
+                login_button,
+                to_register_button,
+                register_account_button,
+                back_to_login_button,
+                confirm_password,
+                states['is_registering']
+            ],
+            api_name="to_login"
+        )
 
 # Export the functions needed by main_app.py
 __all__ = ['login_interface']

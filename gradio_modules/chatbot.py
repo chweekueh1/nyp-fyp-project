@@ -44,7 +44,11 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
             return gr.update(value=history), gr.update(value="Please enter a message."), gr.update(value=history)
         response_dict = backend.get_chatbot_response({'user': user, 'message': msg, 'history': history, 'chat_id': chat_id})
         new_history = response_dict.get('history', history)
-        return gr.update(value=new_history), gr.update(value=f"Bot: {response_dict.get('response', '')}"), gr.update(value=new_history)
+        # Always ensure the debug message is a string
+        response_val = response_dict.get('response', '')
+        if not isinstance(response_val, str):
+            response_val = str(response_val)
+        return gr.update(value=new_history), gr.update(value=f"Bot: {response_val}"), gr.update(value=new_history)
 
     send_btn.click(
         fn=send_message,

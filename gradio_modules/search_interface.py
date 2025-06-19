@@ -91,6 +91,8 @@ def _handle_search(query: str, username: str) -> Dict[str, Any]:
     try:
         # Get search results from backend
         results = search_chat_history(query, username)
+        # Always ensure results are strings for dropdown
+        results = [str(r) for r in results]
         return {"choices": results, "value": None}
     except Exception as e:
         logger.error(f"Error handling search: {e}")
@@ -114,7 +116,10 @@ def _handle_search_result(selected: str, username: str) -> List[List[str]]:
         # Get chat history for selected result
         history = get_chat_history(username, selected)
         # Convert tuples to lists to match the expected return type
-        return [[str(msg[0]), str(msg[1])] for msg in history] if history else []
+        if history:
+            return [[str(msg[0]), str(msg[1])] for msg in history]
+        else:
+            return []
     except Exception as e:
         logger.error(f"Error handling search result: {e}")
-        return [] 
+        return []

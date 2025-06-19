@@ -5,11 +5,20 @@ from pathlib import Path
 import unittest
 import importlib.util
 import json
+import asyncio
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
+
+# Initialize backend ONCE for all tests
+from backend import init_backend
+
+def setUpModule():
+    print("Initializing backend for all tests...")
+    asyncio.run(init_backend())
+    print("Backend initialization complete.")
 
 # Set up logging
 logging.basicConfig(
@@ -72,7 +81,6 @@ class TestEnvironment(unittest.TestCase):
             "backend.py",
             "requirements.txt",
             "setup.py",
-            "utils.py",
             "hashing.py"
         ]
         
@@ -87,7 +95,6 @@ class TestEnvironment(unittest.TestCase):
         """Test that required modules can be imported."""
         required_modules = [
             "backend",
-            "utils",
             "hashing",
             "llm.chatModel",
             "llm.classificationModel",

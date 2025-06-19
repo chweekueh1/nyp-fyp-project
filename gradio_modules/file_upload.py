@@ -40,9 +40,17 @@ def file_upload_ui(username_state: gr.State, chat_history_state: gr.State, chat_
             return gr.update(value=history), gr.update(value="Not logged in!"), gr.update(value=history)
         if not file_obj:
             return gr.update(value=history), gr.update(value="No file uploaded."), gr.update(value=history)
-        response_dict = backend.handle_uploaded_file({'user': user, 'file_obj': file_obj, 'history': history, 'chat_id': chat_id})
+        # Remove chat_id from upload context, only include if present and not empty
+        upload_dict = {'user': user, 'file_obj': file_obj, 'history': history}
+        if chat_id:
+            upload_dict['chat_id'] = chat_id
+        response_dict = backend.handle_uploaded_file(upload_dict)
         new_history = response_dict.get('history', history)
-        return gr.update(value=new_history), gr.update(value=f"Bot: {response_dict.get('response', '')}"), gr.update(value=new_history)
+        # Always ensure the debug message is a string
+        response_val = response_dict.get('response', '')
+        if not isinstance(response_val, str):
+            response_val = str(response_val)
+        return gr.update(value=new_history), gr.update(value=f"Bot: {response_val}"), gr.update(value=new_history)
 
     file_btn.click(
         fn=send_file,

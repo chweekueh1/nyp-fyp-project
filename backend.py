@@ -182,14 +182,21 @@ async def ensure_user_folder_file_exists_async(username, chat_id):
 async def save_message_async(username, chat_id, message):
     history_file = await ensure_user_folder_file_exists_async(username, chat_id)
     try:
-        history = []
+        # Load existing history
+        history_obj = {"messages": []}
         if await asyncio.to_thread(os.path.exists, history_file):
             with await asyncio.to_thread(open, history_file, "r") as f:
-                history = await asyncio.to_thread(json.load, f)
-        
-        history.append(message)
+                loaded = await asyncio.to_thread(json.load, f)
+                if isinstance(loaded, dict) and "messages" in loaded:
+                    history_obj = loaded
+                elif isinstance(loaded, list):  # migrate old format
+                    history_obj["messages"] = loaded
+
+        # Append new message
+        history_obj["messages"].append(message)
+
         with await asyncio.to_thread(open, history_file, "w") as f:
-            await asyncio.to_thread(json.dump, history, f, indent=2)
+            await asyncio.to_thread(json.dump, history_obj, f, indent=2)
         logging.info(f"Message saved to chat {chat_id}")
         return True
     except Exception as e:
@@ -270,6 +277,7 @@ async def data_classification(file_dict: dict) -> dict[str, str]:
         return {'answer': response['answer'], 'code': '200'}
 
 async def ask_question(question: str, chat_id: str, username: str) -> dict[str, str | dict]:
+    logging.error(f"ask_question called with question={question!r}, chat_id={chat_id!r}, username={username!r}")
     if not question or not chat_id or not username:
         return {'error': 'Invalid question or chat_id or username', 'code': '400'}
     if not await check_rate_limit(username):
@@ -283,6 +291,14 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
             logging.error("LLM/DB still not ready after re-initialization in ask_question.")
             return {'error': 'AI assistant is not fully initialized. Please try again later.', 'code': '500'}
         response = get_convo_hist_answer(sanitized_question, chat_id)
+        # Save user message
+        await save_message_async(username, chat_id, {"role": "user", "content": sanitized_question})
+        # Save bot response
+        if isinstance(response, dict) and "answer" in response:
+            answer = response["answer"]
+        else:
+            answer = str(response)
+        await save_message_async(username, chat_id, {"role": "assistant", "content": answer})
         return {'status': 'OK', 'code': '200', 'response': response}
     except Exception as e:
         logging.error(f"Error in ask_question: {e}")
@@ -378,7 +394,7 @@ def handle_uploaded_file(ui_state: dict) -> dict:
     username = ui_state.get('username')
     file_obj = ui_state.get('file_obj')
     history = ui_state.get('history', [])
-    chat_id = ui_state.get('chat_id', 'default')
+    chat_id = ui_state.get('chat_id')  # Now optional
     if not file_obj:
         return {'history': history, 'response': '[No file uploaded]', 'debug': 'No file.'}
     try:
@@ -390,12 +406,15 @@ def handle_uploaded_file(ui_state: dict) -> dict:
             return {'history': history, 'response': '[Error] AI assistant is not fully initialized. Please try again later.', 'debug': 'LLM/DB not ready.'}
         import tempfile, shutil
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            shutil.copyfileobj(file_obj, tmp)
+            with open(file_obj, "rb") as f:
+                shutil.copyfileobj(f, tmp)
             tmp_path = tmp.name
         # Process file
         dataProcessing(tmp_path)
         response = f"File '{getattr(file_obj, 'name', '[unknown]')}' uploaded and processed."
-        history = history + [[f"[File: {getattr(file_obj, 'name', '[unknown]')}]", response]]
+        # Only add to history if chat_id is provided (i.e., called from chat)
+        if chat_id:
+            history = history + [[f"[File: {getattr(file_obj, 'name', '[unknown]')}]", response]]
         response_dict = {'history': history, 'response': response, 'debug': 'File uploaded and processed.'}
         print(f"[DEBUG] backend.handle_uploaded_file returning: {response_dict}")
         return response_dict
@@ -438,18 +457,35 @@ def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
         return []
 
 def get_chat_history(chat_id: str, username: str) -> List[Tuple[str, str]]:
-    """Get chat history for a given chat ID.
-    
-    Args:
-        chat_id: The ID of the chat to retrieve
-        username: The username of the current user
-        
-    Returns:
-        List of (message, response) tuples
-    """
     try:
-        # TODO: Implement actual chat history retrieval
-        return []
+        if not chat_id or not username:
+            return []
+        user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+        chat_file = os.path.join(user_folder, f"{chat_id}.json")
+        if not os.path.exists(chat_file):
+            return []
+        with open(chat_file, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+            if isinstance(loaded, dict) and "messages" in loaded:
+                history = loaded["messages"]
+            else:
+                history = loaded  # fallback for old format
+        # ...existing logic to convert to pairs...
+        result = []
+        for entry in history:
+            if isinstance(entry, dict) and 'role' in entry and 'content' in entry:
+                if entry['role'] == 'user':
+                    user_msg = entry['content']
+                elif entry['role'] == 'assistant':
+                    if result:
+                        result[-1] = (result[-1][0], entry['content'])
+                    continue
+                else:
+                    continue
+                result.append((user_msg, ""))
+            elif isinstance(entry, list) and len(entry) == 2:
+                result.append((entry[0], entry[1]))
+        return result
     except Exception as e:
         logger.error(f"Error getting chat history: {e}")
         return []
@@ -493,7 +529,10 @@ async def do_login(username: str, password: str) -> Dict[str, str]:
         users = data.get("users", {})
         if username not in users:
             return {'code': '404', 'message': 'User not found'}
+        print(f"Attempting login for user: {username}")
+        print(f"Stored users: {list(users.keys())}")
         stored_hash = users[username].get('hashedPassword')
+        print(f"Stored hash for user: {stored_hash}")
         if not stored_hash or not verify_password(password, stored_hash):
             return {'code': '401', 'message': 'Invalid password'}
         return {'code': '200', 'message': 'Login successful'}
@@ -524,4 +563,16 @@ async def do_register(username: str, password: str) -> Dict[str, str]:
     except Exception as e:
         logging.error(f"Error in registration: {e}")
         return {'code': '500', 'message': 'Internal server error'}
+
+def list_user_chat_ids(username: str) -> list:
+    """Return a list of all chat IDs for the given user."""
+    try:
+        user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+        if not os.path.exists(user_folder):
+            return []
+        chat_files = [f for f in os.listdir(user_folder) if f.endswith('.json')]
+        return [os.path.splitext(f)[0] for f in chat_files]
+    except Exception as e:
+        logger.error(f"Error listing chat IDs: {e}")
+        return []
 
