@@ -1,180 +1,216 @@
 # gradio_modules/main_app.py
 import gradio as gr
-import os
 import sys
 from pathlib import Path
-import json
-from difflib import get_close_matches
+import os
 
 # Add parent directory to path for imports
-current_dir = Path(__file__).parent
-parent_dir = current_dir.parent
+parent_dir = Path(__file__).parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-import backend
-from utils import setup_logging
-from flexcyon_theme import flexcyon_theme
+from backend import list_user_chat_ids, get_chat_history, ask_question, CHAT_SESSIONS_PATH
+from gradio_modules.login_and_register import login_interface, register_interface
 
-from .login_and_register import login_interface
-from .chat_interface import chat_interface
-from .search_interface import search_interface
-from .file_upload import file_upload_ui
-from .audio_input import audio_input_ui
+def load_all_chats(username):
+    chat_ids = list_user_chat_ids(username)
+    all_histories = {}
+    for cid in chat_ids:
+        try:
+            hist = get_chat_history(cid, username)
+            all_histories[cid] = [list(pair) for pair in hist] if hist else []
+        except Exception as e:
+            all_histories[cid] = [["[Error loading chat]", str(e)]]
+    return all_histories
 
-logger = setup_logging()
+def create_new_chat_id():
+    import uuid
+    return str(uuid.uuid4())
 
-STYLES_DIR = parent_dir / "styles"
-CSS_PATH = STYLES_DIR / "styles.css"
+def send_message_to_chat(message, chat_id, all_histories, username):
+    if not message.strip():
+        return "", all_histories, chat_id, [["", "Please enter a message."]]
+    if not chat_id:
+        chat_id = create_new_chat_id()
+        all_histories[chat_id] = []
+    try:
+        import asyncio
+        result = asyncio.run(ask_question(message, chat_id, username))
+        if result.get("code") == "200":
+            answer = result.get("response", "")
+            if isinstance(answer, dict) and "answer" in answer:
+                answer = answer["answer"]
+            all_histories[chat_id].append([message, answer])
+        else:
+            all_histories[chat_id].append([message, f"Error: {result.get('error', 'Unknown error')}"])
+    except Exception as e:
+        all_histories[chat_id].append([message, f"Exception: {e}"])
+    return "", all_histories, chat_id, all_histories[chat_id]
 
-def ensure_styles_dir():
-    if STYLES_DIR.exists():
-        return str(CSS_PATH) if CSS_PATH.exists() else None
-    os.makedirs(STYLES_DIR, exist_ok=True)
-    print(f"Warning: Styles directory not found. Created at {STYLES_DIR}")
-    return None
+def fuzzy_find_chats(query, all_histories):
+    from difflib import get_close_matches
+    results = []
+    for cid, history in all_histories.items():
+        all_text = " ".join([msg[0] + " " + msg[1] for msg in history])
+        if query.lower() in all_text.lower() or get_close_matches(query, [all_text], n=1, cutoff=0.6):
+            results.append(f"Chat {cid}: {all_text[:100]}...")
+    return "\n\n".join(results) if results else "No matching chats found."
+
+def rename_chat(old_chat_id, new_chat_id, all_histories, username):
+    if not old_chat_id:
+        return all_histories, gr.update(value="No chat selected to rename."), old_chat_id
+    if not new_chat_id:
+        return all_histories, gr.update(value="Please enter a new chat name."), old_chat_id
+    user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+    old_path = os.path.join(user_folder, f"{old_chat_id}.json")
+    new_path = os.path.join(user_folder, f"{new_chat_id}.json")
+    if not os.path.exists(old_path):
+        return all_histories, gr.update(value="Chat not found."), old_chat_id
+    if os.path.exists(new_path):
+        return all_histories, gr.update(value="A chat with that name already exists."), old_chat_id
+    try:
+        os.rename(old_path, new_path)
+        all_histories[new_chat_id] = all_histories.pop(old_chat_id)
+        return all_histories, gr.update(value="Chat renamed."), new_chat_id
+    except Exception as e:
+        return all_histories, gr.update(value=f"Rename failed: {e}"), old_chat_id
 
 def main_app():
-    try:
-        css_path = ensure_styles_dir()
-        if not css_path:
-            logger.warning("Could not load CSS file")
-            
-        with gr.Blocks(theme=flexcyon_theme) as app:
-            # Initialize states
-            logged_in_state = gr.State(False)
-            username_state = gr.State("")
-            current_chat_id_state = gr.State("")
-            chat_history_state = gr.State([])
-            is_registering = gr.State(False)
-            all_chat_histories_state = gr.State({})
-            selected_chat_id_state = gr.State("")
-
-            # Sibling containers, not nested!
-            with gr.Column(visible=True) as login_container:
-                pass  # login_interface will populate this
-
-            with gr.Column(visible=False) as main_container:
-                user_info = gr.Markdown(visible=False)
-                logout_button = gr.Button("Logout", visible=False)
+    with gr.Blocks() as app:
+        # Inject external JS for keyboard shortcut (Ctrl+Shift+K)
+        gr.HTML('<script src="/file/scripts/scripts.js"></script>')
+        
+        # States
+        logged_in_state = gr.State(False)
+        username_state = gr.State("")
+        all_histories = gr.State({})
+        selected_chat_id = gr.State("")
+        
+        # Containers
+        with gr.Column(visible=True) as login_container:
+            error_message = gr.Markdown(visible=False)
+        with gr.Column(visible=False) as register_container:
+            pass
+        with gr.Column(visible=False) as main_container:
+            user_info = gr.Markdown(visible=True)
+            logout_btn = gr.Button("Logout")
+            with gr.Row():
                 chat_selector = gr.Dropdown(choices=[], label="Select Chat")
-                chatbot = gr.Chatbot(value=[], label="Chatbot")
-                with gr.Tabs() as main_tabs:
-                    with gr.TabItem("File Upload"):
-                        file_upload_ui(
-                            username_state=username_state,
-                            chat_history_state=chat_history_state,
-                            chat_id_state=current_chat_id_state
-                        )
-                    with gr.TabItem("Search Chat History"):
-                        search_interface(
-                            logged_in_state=logged_in_state,
-                            username_state=username_state,
-                            current_chat_id_state=current_chat_id_state,
-                            chat_history_state=chat_history_state
-                        )
+                new_chat_btn = gr.Button("New Chat")
+            chatbot = gr.Chatbot(label="Chatbot")
+            msg = gr.Textbox(label="Message", placeholder="Type your message here...")
+            send_btn = gr.Button("Send")
+            with gr.Row():
+                search_box = gr.Textbox(label="Fuzzy Search (Ctrl+Shift+K)", placeholder="Fuzzy Search (Ctrl+Shift+K)")
+                search_results = gr.Markdown()
+            with gr.Row():
+                rename_box = gr.Textbox(label="Rename Chat", placeholder="Enter new chat name")
+                rename_btn = gr.Button("Rename")
+                rename_status = gr.Markdown()
 
-            # --- Event Handlers ---
-            def update_user_info(username):
-                if not username:
-                    return gr.update(visible=False)
-                return gr.update(visible=True, value=f"Logged in as: {username}")
-            
-            username_state.change(
-                fn=update_user_info,
-                inputs=[username_state],
-                outputs=[user_info]
+        # Login/Register UI
+        login_interface(
+            logged_in_state=logged_in_state,
+            username_state=username_state,
+            main_container=main_container,
+            login_container=login_container,
+            error_message=error_message
+        )
+        register_interface(
+            logged_in_state=logged_in_state,
+            username_state=username_state,
+            main_container=main_container,
+            register_container=register_container,
+            error_message=error_message
+        )
+
+        # Show user info
+        def update_user_info(username):
+            if not username:
+                return gr.update(visible=False)
+            return gr.update(visible=True, value=f"Logged in as: {username}")
+        username_state.change(fn=update_user_info, inputs=[username_state], outputs=[user_info])
+
+        # Load chats after login
+        def on_login(logged_in, username):
+            if not logged_in or not username:
+                return {}, "", gr.update(choices=[], value=""), []
+            chats = load_all_chats(username)
+            chat_ids = list(chats.keys())
+            selected = chat_ids[0] if chat_ids else ""
+            return chats, selected, gr.update(choices=chat_ids, value=selected), chats[selected] if selected else []
+        logged_in_state.change(
+            fn=on_login,
+            inputs=[logged_in_state, username_state],
+            outputs=[all_histories, selected_chat_id, chat_selector, chatbot]
+        )
+
+        # New chat
+        def start_new_chat(all_histories, username):
+            new_id = create_new_chat_id()
+            all_histories[new_id] = []
+            return gr.update(choices=list(all_histories.keys()), value=new_id), new_id, all_histories, []
+        new_chat_btn.click(
+            start_new_chat,
+            inputs=[all_histories, username_state],
+            outputs=[chat_selector, selected_chat_id, all_histories, chatbot]
+        )
+
+        # Switch chat
+        def switch_chat(chat_id, all_histories):
+            return all_histories.get(chat_id, [])
+        chat_selector.change(
+            fn=switch_chat,
+            inputs=[chat_selector, all_histories],
+            outputs=[chatbot]
+        )
+
+        # Send message
+        send_btn.click(
+            fn=lambda msg, chat_id, all_histories, username: send_message_to_chat(msg, chat_id, all_histories, username),
+            inputs=[msg, selected_chat_id, all_histories, username_state],
+            outputs=[msg, all_histories, selected_chat_id, chatbot]
+        )
+
+        # Fuzzy search (Ctrl+Shift+K)
+        search_box.submit(
+            fn=fuzzy_find_chats,
+            inputs=[search_box, all_histories],
+            outputs=[search_results]
+        )
+
+        # Rename chat
+        rename_btn.click(
+            fn=lambda old_id, new_id, all_histories, username: rename_chat(old_id, new_id, all_histories, username),
+            inputs=[selected_chat_id, rename_box, all_histories, username_state],
+            outputs=[all_histories, rename_status, selected_chat_id]
+        )
+
+        # Update selector and chat when all_histories changes
+        def update_selector_and_chat(all_histories, selected_chat_id):
+            chat_ids = list(all_histories.keys())
+            selected = selected_chat_id if selected_chat_id in chat_ids else (chat_ids[0] if chat_ids else "")
+            return gr.update(choices=chat_ids, value=selected), all_histories.get(selected, [])
+        all_histories.change(
+            fn=update_selector_and_chat,
+            inputs=[all_histories, selected_chat_id],
+            outputs=[chat_selector, chatbot]
+        )
+
+        # Logout
+        def do_logout():
+            return (
+                False, "", {}, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False, value=""), gr.update(choices=[], value=""), gr.update(value=[]), gr.update(value=""), gr.update(value="")
             )
-            
-            def do_logout():
-                # Reset all states and show a logout message
-                return (
-                    False,  # logged_in_state
-                    "",    # username_state
-                    "",    # current_chat_id_state
-                    [],    # chat_history_state
-                    gr.update(visible=True),   # login_container
-                    gr.update(visible=False),  # main_container
-                    gr.update(visible=False),  # logout_button
-                    gr.update(visible=True, value="You have been logged out. Please log in again."),   # user_info
-                    gr.update(choices=[], value=""),  # chat_selector
-                    gr.update(value=[]),  # chatbot
-                    {},  # all_chat_histories_state
-                    ""   # selected_chat_id_state
-                )
-            
-            logout_button.click(
-                fn=do_logout,
-                outputs=[
-                    logged_in_state,
-                    username_state,
-                    current_chat_id_state,
-                    chat_history_state,
-                    login_container,
-                    main_container,
-                    logout_button,
-                    user_info,
-                    chat_selector,
-                    chatbot,
-                    all_chat_histories_state,
-                    selected_chat_id_state
-                ]
-            )
+        logout_btn.click(
+            fn=do_logout,
+            outputs=[
+                logged_in_state, username_state, all_histories, selected_chat_id,
+                login_container, main_container, error_message, chat_selector, chatbot, search_results, rename_status
+            ]
+        )
 
-            # --- Chat Selector Logic ---
-            def update_chat_selector_and_chatbot(all_histories, selected_chat_id):
-                chat_ids = list(all_histories.keys())
-                value = selected_chat_id if selected_chat_id in chat_ids else (chat_ids[0] if chat_ids else "")
-                chat_history = all_histories.get(value, [])
-                return (
-                    gr.update(choices=chat_ids, value=value),
-                    gr.update(value=chat_history)
-                )
-
-            chat_selector.change(
-                fn=lambda chat_id, all_histories: gr.update(value=all_histories.get(chat_id, [])),
-                inputs=[chat_selector, all_chat_histories_state],
-                outputs=[chatbot]
-            )
-
-            all_chat_histories_state.change(
-                fn=update_chat_selector_and_chatbot,
-                inputs=[all_chat_histories_state, selected_chat_id_state],
-                outputs=[chat_selector, chatbot]
-            )
-
-            # --- Login Interface ---
-            login_interface(
-                logged_in_state=logged_in_state,
-                username_state=username_state,
-                current_chat_id_state=current_chat_id_state,
-                chat_history_state=chat_history_state,
-                is_registering=is_registering,
-                main_container=main_container,
-                logout_button=logout_button,
-                user_info=user_info,
-                login_container=login_container,  # Pass the container to be used
-                all_chat_histories_state=all_chat_histories_state,
-                selected_chat_id_state=selected_chat_id_state
-            )
-
-            # --- Chatbot Logic ---
-            def update_chatbot_on_login(all_histories, selected_chat_id):
-                chat_ids = list(all_histories.keys())
-                value = selected_chat_id if selected_chat_id in chat_ids else (chat_ids[0] if chat_ids else "")
-                chat_history = all_histories.get(value, [])
-                return gr.update(value=chat_history)
-
-            selected_chat_id_state.change(
-                fn=update_chatbot_on_login,
-                inputs=[all_chat_histories_state, selected_chat_id_state],
-                outputs=[chatbot]
-            )
-
-        return app
-    except Exception as e:
-        logger.error(f"Error creating main app: {e}")
-        raise
+    return app
 
 if __name__ == "__main__":
     app = main_app()

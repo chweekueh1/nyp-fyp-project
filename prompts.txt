@@ -1,0 +1,10 @@
+let us go with a more minimal approach. We should start by making a tests/minimal_chatbot_repro.py file with the following:
+    - load chat history of username "test" to different gr.Chatbot instances contained in zero or many Tabs, with proper error handling should there be no chats created for the user.
+    - call actual backend functionality
+    - have a chatbot tab to create new chats by starting a conversation like ChatGPT, which would process in the backend and then spawn a gr.Chatbot instance
+    - able to access previously created chats and add messages to them
+    - scan the codebase on how to implement this
+    - save the updated chats whenever a new chat is created, updated or deleted
+    - ctrl + f to fuzzy find and navigate within the search history
+
+once you are done, abstract away the username

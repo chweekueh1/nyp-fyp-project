@@ -12,17 +12,8 @@ if str(parent_dir) not in sys.path:
 # Set up logging
 logger = setup_logging()
 
-def main():
-    """Main entry point for the application."""
-    try:
-        from gradio_modules.main_app import main_app
-        
-        # Create and launch the app
-        app = main_app()
-        app.launch(debug=True, share=False)
-    except Exception as e:
-        logger.error(f"Error starting application: {e}")
-        raise
+from gradio_modules.main_app import main_app
 
 if __name__ == "__main__":
-    main()
+    app = main_app()
+    app.launch(debug=True, share=False)

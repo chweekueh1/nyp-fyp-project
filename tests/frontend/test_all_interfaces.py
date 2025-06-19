@@ -6,7 +6,6 @@ parent_dir = Path(__file__).parent.parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-# Import backend functions for direct calls
 from backend import ask_question, upload_file, transcribe_audio, search_chat_history
 
 def test_all_interfaces():
@@ -22,19 +21,19 @@ def test_all_interfaces():
         gr.Markdown("# All Interfaces Test")
 
         # Login interface (hidden, but included for completeness)
+        with gr.Column(visible=True) as login_container:
+            error_message = gr.Markdown(visible=False)
         with gr.Column(visible=False) as main_container:
             user_info = gr.Markdown(visible=False)
             logout_button = gr.Button("Logout", visible=False)
+
         from gradio_modules.login_and_register import login_interface
         login_interface(
             logged_in_state=logged_in_state,
             username_state=username_state,
-            current_chat_id_state=current_chat_id_state,
-            chat_history_state=chat_history_state,
-            is_registering=is_registering,
             main_container=main_container,
-            logout_button=logout_button,
-            user_info=user_info
+            login_container=login_container,
+            error_message=error_message
         )
 
         with gr.Tab("💬 Chat"):
@@ -54,19 +53,14 @@ def test_all_interfaces():
                 current_chat_id_state=current_chat_id_state,
                 chat_history_state=chat_history_state
             )
-            # Add a search box with elem_id for Ctrl+K
-            search_box = gr.Textbox(label="Search", elem_id="search_box", visible=True)
-            gr.HTML("""
-            <script>
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey && e.key === 'k') {
-                    e.preventDefault();
-                    var search = document.querySelector('input#search_box');
-                    if (search) { search.focus(); }
-                }
-            });
-            </script>
-            """)
+            # Add a search box matching the main app's shortcut
+            search_box = gr.Textbox(
+                label="Fuzzy Search (Ctrl+Shift+K or Alt+K)",
+                placeholder="Fuzzy Search (Ctrl+Shift+K or Alt+K)",
+                visible=True
+            )
+            search_results = gr.Markdown()
+            # No need to inject JS here; rely on the global script in /file/scripts/scripts.js
 
         with gr.Tab("📁 File Upload"):
             from gradio_modules.file_upload import file_upload_ui
@@ -84,7 +78,7 @@ def test_all_interfaces():
                 chat_id_state=current_chat_id_state
             )
 
-        gr.Markdown("## Test Instructions\n- All features are integrated.\n- Use Ctrl+K to focus the search box.\n- Use username: `test` for all actions.\n- All backend calls are real.")
+        gr.Markdown("## Test Instructions\n- All features are integrated.\n- Use Ctrl+Shift+K or Alt+K to focus the search box.\n- Use username: `test` for all actions.\n- All backend calls are real.")
 
     return app
 
