@@ -17,30 +17,27 @@ def test_login_interface():
         # Initialize states
         logged_in_state = gr.State(False)
         username_state = gr.State("test")
-        current_chat_id_state = gr.State("")
-        chat_history_state = gr.State([])
-        is_registering = gr.State(False)
-        
+
         # Header
         gr.Markdown("# Login Interface Test")
-        
+
         # Create containers for login interface
+        with gr.Column(visible=True) as login_container:
+            error_message = gr.Markdown(visible=False)
+
         with gr.Column(visible=False) as main_container:
             user_info = gr.Markdown(visible=False)
             logout_button = gr.Button("Logout", visible=False)
-        
+
         # Import and create login interface
         from gradio_modules.login_and_register import login_interface
-        
+
         login_interface(
             logged_in_state=logged_in_state,
             username_state=username_state,
-            current_chat_id_state=current_chat_id_state,
-            chat_history_state=chat_history_state,
-            is_registering=is_registering,
             main_container=main_container,
-            logout_button=logout_button,
-            user_info=user_info
+            login_container=login_container,
+            error_message=error_message
         )
         
         # Status display

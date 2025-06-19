@@ -1,11 +1,12 @@
 from typing import Dict, Any, List, Tuple, Union
 import gradio as gr
+from backend import (
+    list_user_chat_ids, get_chat_history, ask_question, create_and_persist_new_chat
+)
 import logging
 import asyncio
-import os
 import sys
 from pathlib import Path
-import uuid
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -14,10 +15,29 @@ if str(parent_dir) not in sys.path:
 
 # Now import from parent directory
 from utils import setup_logging
-from backend import ask_question, get_chat_history
 
 # Set up logging
 logger = setup_logging()
+
+# Module-level function for testing
+async def _handle_chat_message(message, chat_history, username, chat_id):
+    """Handle chat message processing - module level function for testing."""
+    from backend import ask_question, create_and_persist_new_chat
+    if not message.strip():
+        return "", chat_history, {"visible": True, "value": "Please enter a message."}, chat_id
+    if not chat_id:
+        chat_id = create_and_persist_new_chat(username)
+        chat_history = []
+    result = await ask_question(message, chat_id, username)
+    if result.get("code") == "200":
+        answer = result.get("response", "")
+        if isinstance(answer, dict) and "answer" in answer:
+            answer = answer["answer"]
+        chat_history.append([message, answer])
+        return "", chat_history, {"visible": False, "value": ""}, chat_id
+    else:
+        chat_history.append([message, f"Error: {result.get('error', 'Unknown error')}"])
+        return "", chat_history, {"visible": True, "value": result.get("error", "Unknown error")}, chat_id
 
 def chat_interface(
     logged_in_state: gr.State,
@@ -40,101 +60,90 @@ def chat_interface(
         current_chat_id_state (gr.State): State for storing current chat ID
         chat_history_state (gr.State): State for storing chat history
     """
-    with gr.Column(visible=False) as chat_container:
-        chat_history = gr.Chatbot(
-            label="Chat History",
-            height=400,
-            show_label=True
-        )
-        error_msg = gr.Markdown(visible=False, value="", elem_classes=["error-message"])
-        with gr.Row():
-            msg = gr.Textbox(
-                label="Message",
-                placeholder="Type your message here...",
-                show_label=False,
-                container=False
-            )
-            send_button = gr.Button("Send")
+    with gr.Row():
+        chat_selector = gr.Dropdown(choices=[], label="Select Chat")
+        new_chat_btn = gr.Button("New Chat")
+    chatbot = gr.Chatbot(label="Chatbot")
+    msg = gr.Textbox(label="Message", placeholder="Type your message here...")
+    send_btn = gr.Button("Send")
+    with gr.Row(visible=False, elem_id="search-row"):
+        search_box = gr.Textbox(label="Fuzzy Search (Ctrl+Shift+K or Alt+K)", placeholder="Fuzzy Search (Ctrl+Shift+K or Alt+K)")
+        search_results = gr.Markdown()
 
-        # Ensure chat_id is initialized when chat starts
-        def ensure_chat_id(chat_id):
-            if not chat_id:
-                return str(uuid.uuid4())
-            return chat_id
+    def load_all_chats(username):
+        chat_ids = list_user_chat_ids(username)
+        all_histories = {}
+        for cid in chat_ids:
+            try:
+                hist = get_chat_history(cid, username)
+                all_histories[cid] = [list(pair) for pair in hist] if hist else []
+            except Exception as e:
+                all_histories[cid] = [["[Error loading chat]", str(e)]]
+        return all_histories
 
-        # Add send button click event
-        send_button.click(
-            fn=_handle_chat_message,
-            inputs=[
-                msg,
-                chat_history_state,
-                username_state,
-                current_chat_id_state
-            ],
-            outputs=[
-                msg,
-                chat_history_state,
-                error_msg
-            ]
-        )
-        current_chat_id_state.change(
-            fn=ensure_chat_id,
-            inputs=[current_chat_id_state],
-            outputs=[current_chat_id_state]
-        )
+    def on_start(username):
+        all_histories = load_all_chats(username)
+        chat_ids = list(all_histories.keys())
+        selected = chat_ids[0] if chat_ids else ""
+        return gr.update(choices=chat_ids, value=selected), selected, all_histories, all_histories[selected] if selected else []
 
-        # Update chat display when history changes
-        def update_chat_display(history):
-            if not history:
-                return []
-            return history
 
-        chat_history_state.change(
-            fn=update_chat_display,
-            inputs=[chat_history_state],
-            outputs=[chat_history]
-        )
+    def start_new_chat(all_histories, username):
+        new_id = create_and_persist_new_chat(username)
+        all_histories[new_id] = []
+        return gr.update(choices=list(all_histories.keys()), value=new_id), new_id, all_histories, []
 
-    # Show chat_container when logged_in_state is True
-    def show_chat(logged_in):
-        return gr.update(visible=bool(logged_in))
-
-    logged_in_state.change(
-        fn=show_chat,
-        inputs=[logged_in_state],
-        outputs=[chat_container]
+    new_chat_btn.click(
+        start_new_chat,
+        inputs=[chat_history_state, username_state],
+        outputs=[chat_selector, current_chat_id_state, chat_history_state, chatbot]
     )
 
-async def _handle_chat_message(msg: str, history: List[List[str]], username: str, chat_id: str):
-    """
-    Handle sending a chat message and updating the chat history.
-    Returns:
-        Tuple[Dict[str, Any], List[List[str]], Dict[str, Any], str]: Updated message input, chat history, error message state, and chat_id.
-    """
-    if not msg or not msg.strip():
-        return {"value": ""}, history or [], {"value": "Please enter a message.", "visible": True}, chat_id
+    def switch_chat(chat_id, all_histories):
+        return chat_id, all_histories.get(chat_id, [])
 
-    try:
-        temp_chat_id = chat_id or str(uuid.uuid4())
-        result = await ask_question(msg, temp_chat_id, username)
-        logger.debug(f"ask_question result: {result}")
+    chat_selector.change(
+        fn=switch_chat,
+        inputs=[chat_selector, chat_history_state],
+        outputs=[current_chat_id_state, chatbot]
+    )
 
-        # Use chat_id returned by backend if present, else fallback
-        chat_id = str(result.get('chat_id', temp_chat_id))
 
-        if result.get('code') == '200':
-            response = result.get('response')
-            if isinstance(response, dict) and 'answer' in response:
-                answer = response['answer']
-            else:
-                answer = response if isinstance(response, str) else str(response)
-            new_history = (history or []) + [[msg, answer]]
-            return {"value": ""}, new_history, {"value": "", "visible": False}, chat_id
+
+    def send_message_to_chat(message, chat_id, all_histories, username):
+        if not message.strip():
+            return "", all_histories, chat_id, [["", "Please enter a message."]]
+        if not chat_id:
+            chat_id = create_and_persist_new_chat(username)
+            all_histories[chat_id] = []
+        import asyncio
+        result = asyncio.run(ask_question(message, chat_id, username))
+        if result.get("code") == "200":
+            answer = result.get("response", "")
+            if isinstance(answer, dict) and "answer" in answer:
+                answer = answer["answer"]
+            all_histories[chat_id].append([message, answer])
         else:
-            error_msg = result.get('error', 'Unknown error')
-            logger.error(f"ask_question error: {error_msg}")
-            return {"value": msg}, history or [], {"value": f"Error: {error_msg}", "visible": True}, chat_id
-    except Exception as e:
-        logger.error(f"Error handling chat message: {e}")
-        new_history = (history or []) + [[msg, f"Error: {str(e)}"]]
-        return {"value": ""}, new_history, {"value": f"Error: {str(e)}", "visible": True}, chat_id
+            all_histories[chat_id].append([message, f"Error: {result.get('error', 'Unknown error')}"])
+        return "", all_histories, chat_id, all_histories[chat_id]
+
+    send_btn.click(
+        fn=send_message_to_chat,
+        inputs=[msg, current_chat_id_state, chat_history_state, username_state],
+        outputs=[msg, chat_history_state, current_chat_id_state, chatbot]
+    )
+
+    def fuzzy_find_chats(query, all_histories):
+        from difflib import get_close_matches
+        results = []
+        for cid, history in all_histories.items():
+            all_text = " ".join([msg[0] + " " + msg[1] for msg in history])
+            if query.lower() in all_text.lower() or get_close_matches(query, [all_text], n=1, cutoff=0.6):
+                results.append(f"Chat {cid}: {all_text[:100]}...")
+        return "\n\n".join(results) if results else "No matching chats found."
+
+    search_box.submit(
+        fn=fuzzy_find_chats,
+        inputs=[search_box, chat_history_state],
+        outputs=[search_results]
+    )

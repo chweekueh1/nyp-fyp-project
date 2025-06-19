@@ -4,14 +4,9 @@ Integration tests for backend API endpoints and LLM services.
 Tests the integration between frontend, backend, and LLM components.
 """
 
-import requests
 import os
 import sys
 import json
-import io # Needed for BytesIO for audio data
-import tempfile
-import shutil
-import pytest
 from pathlib import Path
 
 # Add the parent directory to the path to import modules
@@ -19,19 +14,14 @@ parent_dir = Path(__file__).parent.parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from gradio_modules.main_app import main_app
-from backend import ask_question, transcribe_audio, upload_file, data_classification, fuzzy_search_chats, render_all_chats
+from backend import ask_question, transcribe_audio_async, upload_file, data_classification, fuzzy_search_chats, render_all_chats
 import asyncio
 import wave
 import numpy as np
 
 """
-Audio and file upload tests will fail. This is intentional.
+Integration tests for backend functions (no Flask routes - this backend uses Gradio).
 """
-
-# --- Configuration ---
-# Ensure this matches the FLASK_HOST and FLASK_PORT in your main_app.py
-BASE_URL = "http://127.0.0.1:5001"
 
 # --- Dummy Files for Testing ---
 DUMMY_TEXT_FILENAME = "testdocument.txt"
@@ -69,95 +59,65 @@ def cleanup_dummy_files():
         os.remove(DUMMY_AUDIO_FILENAME)
         print(f"Removed dummy file: {DUMMY_AUDIO_FILENAME}")
 
-def test_route(name, method, url, data=None, files=None, json_data=None):
-    """Helper function to test a single route and print results."""
-    print(f"\n--- Testing {name} ({method.upper()} {url}) ---")
-    response = None # FIX: Initialize response to None to prevent unbound error
-    try:
-        if method.lower() == 'get':
-            response = requests.get(url, params=data, timeout=10)
-        elif method.lower() == 'post':
-            response = requests.post(url, data=data, files=files, json=json_data, timeout=30)
-        else:
-            print(f"Error: Unsupported method '{method}'")
-            return False
 
-        if response: # FIX: Check if response was successfully assigned before proceeding
-            response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
-            print(f"Status Code: {response.status_code}")
-            # Attempt to pretty-print JSON response if it exists
-            try:
-                print(f"Response JSON: {json.dumps(response.json(), indent=2)}")
-            except json.JSONDecodeError:
-                print(f"Response Body (not JSON): {response.text}") # Fallback for non-JSON responses
-            print(f"--- {name} Test PASSED ---")
-            return True
-        else:
-            print(f"--- {name} Test FAILED (No response due to unsupported method or other issue) ---")
-            return False
-    except requests.exceptions.ConnectionError as e:
-        print(f"Error: Could not connect to the backend at {url}. Is the Flask app running? (Error: {e})")
-        print(f"--- {name} Test FAILED ---")
-        return False
-    except requests.exceptions.Timeout:
-        print(f"Error: Request to {url} timed out.")
-        print(f"--- {name} Test FAILED ---")
-        return False
-    except requests.exceptions.RequestException as e:
-        print(f"Error during request to {url}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Error Response Body: {e.response.text}")
-        print(f"--- {name} Test FAILED ---")
-        return False
-    except Exception as e: # Catch any other unexpected errors
-        print(f"An unexpected error occurred during {name} test: {e}")
-        print(f"--- {name} Test FAILED ---")
-        return False
 
 def run_all_tests():
-    """Executes all backend route tests."""
-    print("Starting backend route tests...")
-    
+    """Executes backend function tests (no Flask routes since this backend doesn't use Flask)."""
+    print("Starting backend function tests...")
+    print("Note: This backend uses Gradio interface, not Flask routes.")
+
     # Create dummy files at the start of testing
     create_dummy_files()
 
-    # --- Test Health Check ---
-    test_route("Health Check", "GET", f"{BASE_URL}/")
-
-    # --- Test File Upload ---
     try:
-        with open(DUMMY_TEXT_FILENAME, "rb") as f:
-            files = {"file": (DUMMY_TEXT_FILENAME, f, "text/plain")}
-            data = {"username": "testuser_upload"} # Use a distinct username
-            test_route("File Upload", "POST", f"{BASE_URL}/upload", data=data, files=files)
-    except FileNotFoundError:
-        print(f"Error: Dummy text file '{DUMMY_TEXT_FILENAME}' not found. Please ensure it's created.")
+        # Test backend functions directly
+        print("\n--- Testing Backend Functions Directly ---")
 
-    # --- Test File Classification ---
-    try:
-        with open(DUMMY_TEXT_FILENAME, "rb") as f:
-            files = {"file": (DUMMY_TEXT_FILENAME, f, "text/plain")}
-            test_route("File Classification", "POST", f"{BASE_URL}/classify", files=files)
-    except FileNotFoundError:
-        print(f"Error: Dummy text file '{DUMMY_TEXT_FILENAME}' not found. Please ensure it's created.")
+        # Test check_health function
+        print("Testing check_health function...")
+        from backend import check_health
+        health_result = asyncio.run(check_health())
+        print(f"Health check result: {health_result}")
+        assert health_result.get('status') == 'OK'
+        print("✅ Health check passed")
 
-    # --- Test Ask Question ---
-    ask_payload = {
-        "question": "What are the common data security practices?",
-        "chat_id": "test_chat_ask_123", # Use a unique chat ID for testing
-        "username": "testuser_chat" # Use a distinct username
-    }
-    test_route("Ask Question", "POST", f"{BASE_URL}/ask", json_data=ask_payload)
+        # Test login/register functions
+        print("Testing login/register functions...")
+        from backend import do_login, do_register
 
-    # --- Test Audio Transcription ---
-    try:
-        with open(DUMMY_AUDIO_FILENAME, "rb") as f:
-            files = {"audio": (DUMMY_AUDIO_FILENAME, f, "audio/wav")} # Specify MIME type
-            test_route("Audio Transcription", "POST", f"{BASE_URL}/transcribe", files=files)
-    except FileNotFoundError:
-        print(f"Error: Dummy audio file '{DUMMY_AUDIO_FILENAME}' not found. Please ensure it's created.")
+        # Test registration
+        register_result = asyncio.run(do_register("testuser_integration", "testpass123"))
+        print(f"Registration result: {register_result}")
 
-    print("\n--- All Backend Tests Completed ---")
+        # Test login
+        login_result = asyncio.run(do_login("testuser_integration", "testpass123"))
+        print(f"Login result: {login_result}")
+        assert login_result.get('code') == '200'
+        print("✅ Login/register functions passed")
+
+        # Test chat functions
+        print("Testing chat functions...")
+        from backend import list_user_chat_ids, create_and_persist_new_chat
+
+        # Create a chat
+        chat_id = create_and_persist_new_chat("testuser_integration")
+        print(f"Created chat: {chat_id}")
+
+        # List user chats
+        user_chats = list_user_chat_ids("testuser_integration")
+        print(f"User chats: {user_chats}")
+        assert chat_id in user_chats
+        print("✅ Chat functions passed")
+
+        print("\n--- All Backend Function Tests Completed Successfully ---")
+
+    except Exception as e:
+        print(f"❌ Backend function test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+    finally:
+        cleanup_dummy_files()
 
 def setup_user_chats(tmp_path, user, chats):
     user_dir = tmp_path / "data" / "chat_sessions" / user
@@ -274,7 +234,7 @@ async def test_transcribe_audio():
     with open(DUMMY_AUDIO_FILENAME, "rb") as f:
         audio_file = f.read()
     username = "testuser_audio"
-    response = await transcribe_audio(audio_file, username)
+    response = await transcribe_audio_async(audio_file, username)
     print(f"Transcribe Audio Response: {response}")
     assert response.get('code') == '200'
 
@@ -282,17 +242,17 @@ async def test_upload_file():
     """Test the upload_file function directly."""
     with open(DUMMY_TEXT_FILENAME, "rb") as f:
         file_content = f.read()
-    file_dict = {"name": DUMMY_TEXT_FILENAME, "file": file_content, "username": "testuser_upload"}
-    response = await upload_file(file_dict)
+    filename = DUMMY_TEXT_FILENAME
+    username = "testuser_upload"
+    response = await upload_file(file_content, filename, username)
     print(f"Upload File Response: {response}")
     assert response.get('code') == '200'
 
 async def test_data_classification():
     """Test the data_classification function directly."""
-    with open(DUMMY_TEXT_FILENAME, "rb") as f:
-        file_content = f.read()
-    file_dict = {"name": DUMMY_TEXT_FILENAME, "file": file_content, "type": "text/plain"}
-    response = await data_classification(file_dict)
+    with open(DUMMY_TEXT_FILENAME, "r") as f:
+        content = f.read()
+    response = await data_classification(content)
     print(f"Data Classification Response: {response}")
     assert response.get('code') == '200'
 

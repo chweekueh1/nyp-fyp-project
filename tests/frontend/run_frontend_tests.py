@@ -120,7 +120,7 @@ def run_ui_state_interaction_tests():
     print("🔄 Running UI State Interaction Tests...")
     try:
         from .test_ui_state_interactions import run_ui_state_tests
-        
+
         success = run_ui_state_tests()
         return success
     except ImportError as e:
@@ -129,6 +129,24 @@ def run_ui_state_interaction_tests():
         return False
     except Exception as e:
         print(f"❌ UI State tests failed: {e}")
+        print(f"   Full traceback:")
+        traceback.print_exc()
+        return False
+
+def run_theme_styles_tests():
+    """Run theme and styles tests."""
+    print("🎨 Running Theme and Styles Tests...")
+    try:
+        from .test_theme_styles import run_theme_styles_tests
+
+        success = run_theme_styles_tests()
+        return success
+    except ImportError as e:
+        print(f"❌ Theme/Styles tests failed: Import error - {e}")
+        print(f"   This usually means the theme/styles modules are not available")
+        return False
+    except Exception as e:
+        print(f"❌ Theme/Styles tests failed: {e}")
         print(f"   Full traceback:")
         traceback.print_exc()
         return False
@@ -143,6 +161,7 @@ def run_all_tests():
         ("Search Tests", run_search_tests),
         ("File/Audio Tests", run_file_audio_tests),
         ("UI State Interaction Tests", run_ui_state_interaction_tests),
+        ("Theme/Styles Tests", run_theme_styles_tests),
     ]
     
     results = []
@@ -242,9 +261,13 @@ def launch_test_app(test_name):
         from .test_ui_state_interactions import run_ui_state_tests
         run_ui_state_tests()
         return True
+    elif test_name == "theme-styles":
+        from .test_theme_styles import run_theme_styles_tests
+        run_theme_styles_tests()
+        return True
     else:
         print(f"❌ Unknown test: {test_name}")
-        print("Available tests: login, simple-login, chat, chatbot, search, chat-history, file-upload, audio, ui-state, all")
+        print("Available tests: login, simple-login, chat, chatbot, search, chat-history, file-upload, audio, ui-state, theme-styles, all")
         return False
     
     print(f"✅ {test_name} test app created successfully")
@@ -262,7 +285,7 @@ def main():
     )
     parser.add_argument(
         "--test",
-        choices=["login", "simple-login", "chat", "chatbot", "search", "chat-history", "file-upload", "audio", "ui-state", "all"],
+        choices=["login", "simple-login", "chat", "chatbot", "search", "chat-history", "file-upload", "audio", "ui-state", "theme-styles", "all"],
         help="Specific test to run or launch"
     )
     
@@ -281,6 +304,8 @@ def main():
                 success = run_file_audio_tests()
             elif args.test == "ui-state":
                 success = run_ui_state_interaction_tests()
+            elif args.test == "theme-styles":
+                success = run_theme_styles_tests()
             else:
                 print(f"❌ Unknown test: {args.test}")
                 return 1
