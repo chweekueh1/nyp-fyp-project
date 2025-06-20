@@ -69,6 +69,8 @@ def run_all_tests():
     # Create dummy files at the start of testing
     create_dummy_files()
 
+    test_username = "testuser_integration"
+
     try:
         # Test backend functions directly
         print("\n--- Testing Backend Functions Directly ---")
@@ -86,11 +88,11 @@ def run_all_tests():
         from backend import do_login, do_register
 
         # Test registration
-        register_result = asyncio.run(do_register("testuser_integration", "testpass123"))
+        register_result = asyncio.run(do_register(test_username, "testpass123"))
         print(f"Registration result: {register_result}")
 
         # Test login
-        login_result = asyncio.run(do_login("testuser_integration", "testpass123"))
+        login_result = asyncio.run(do_login(test_username, "testpass123"))
         print(f"Login result: {login_result}")
         assert login_result.get('code') == '200'
         print("✅ Login/register functions passed")
@@ -100,11 +102,11 @@ def run_all_tests():
         from backend import list_user_chat_ids, create_and_persist_new_chat
 
         # Create a chat
-        chat_id = create_and_persist_new_chat("testuser_integration")
+        chat_id = create_and_persist_new_chat(test_username)
         print(f"Created chat: {chat_id}")
 
         # List user chats
-        user_chats = list_user_chat_ids("testuser_integration")
+        user_chats = list_user_chat_ids(test_username)
         print(f"User chats: {user_chats}")
         assert chat_id in user_chats
         print("✅ Chat functions passed")
@@ -117,6 +119,16 @@ def run_all_tests():
         traceback.print_exc()
         raise
     finally:
+        # Clean up test user
+        try:
+            from backend import delete_test_user
+            if delete_test_user(test_username):
+                print(f"✅ Cleaned up test user: {test_username}")
+            else:
+                print(f"⚠️ Warning: Could not clean up test user: {test_username}")
+        except Exception as cleanup_error:
+            print(f"⚠️ Warning: Error during test user cleanup: {cleanup_error}")
+
         cleanup_dummy_files()
 
 def setup_user_chats(tmp_path, user, chats):

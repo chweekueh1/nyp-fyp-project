@@ -24,26 +24,108 @@ def verify_password(password, hashed_password):
     print(f"Against stored hash: {hashed_password.decode('utf-8') if isinstance(hashed_password, bytes) else hashed_password}")
     return bcrypt.checkpw(password, hashed_password)
 
+# Function to validate email format
+def validate_email(email):
+    """Validate email format using regex."""
+    if not email or not email.strip():
+        return False, "Email is required."
+
+    # Basic email regex pattern
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email.strip()):
+        return False, "Please enter a valid email address."
+
+    return True, "Email is valid."
+
+# Function to validate email against allowed list
+def validate_email_allowed(email, allowed_emails=None):
+    """Validate email against allowed domains/addresses."""
+    if not email or not email.strip():
+        return False, "Email is required."
+
+    # First check basic format
+    format_valid, format_msg = validate_email(email)
+    if not format_valid:
+        return False, format_msg
+
+    email = email.strip().lower()
+
+    # If no allowed list provided, accept any valid email
+    if not allowed_emails:
+        return True, "Email is valid."
+
+    # Check if exact email is in allowed list
+    if email in [allowed.lower() for allowed in allowed_emails if '@' in allowed]:
+        return True, "Email is authorized."
+
+    # Check if email domain is in allowed domains
+    email_domain = email.split('@')[1] if '@' in email else ''
+    allowed_domains = [allowed.lower() for allowed in allowed_emails if '@' not in allowed]
+
+    if email_domain in allowed_domains:
+        return True, "Email domain is authorized."
+
+    return False, f"Email not authorized. Please use an email from: {', '.join(allowed_emails[:3])}{'...' if len(allowed_emails) > 3 else ''}"
+
+# Function to validate username
+def validate_username(username):
+    """Validate username requirements."""
+    if not username or not username.strip():
+        return False, "Username is required."
+
+    username = username.strip()
+
+    # Check length
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long."
+
+    if len(username) > 20:
+        return False, "Username must be no more than 20 characters long."
+
+    # Check for valid characters (alphanumeric and underscore only)
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores."
+
+    # Check that it doesn't start with a number
+    if username[0].isdigit():
+        return False, "Username cannot start with a number."
+
+    return True, "Username is valid."
+
 # Function to validate password complexity
 def is_password_complex(password):
-    # Check length requirement
-    if len(password) < 10:
-        return False, "Password must be at least 10 characters long."
-    
-    # Check for at least one letter
-    if not re.search(r'[a-zA-Z]', password):
-        return False, "Password must contain at least one letter."
-    
+    """Validate password complexity with updated requirements."""
+    if not password:
+        return False, "Password is required."
+
+    errors = []
+
+    # Check length requirement (reduced from 10 to 8 for better UX)
+    if len(password) < 8:
+        errors.append("at least 8 characters long")
+
+    # Check for uppercase letter
+    if not re.search(r'[A-Z]', password):
+        errors.append("at least one uppercase letter")
+
+    # Check for lowercase letter
+    if not re.search(r'[a-z]', password):
+        errors.append("at least one lowercase letter")
+
     # Check for at least one digit
     if not re.search(r'\d', password):
-        return False, "Password must contain at least one digit."
-    
+        errors.append("at least one number")
+
     # Check for at least one symbol (non-alphanumeric character)
     if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-        return False, "Password must contain at least one symbol (!@#$%^&*(),.?\":{}|<>)."
-    
+        errors.append("at least one special character (!@#$%^&*)")
+
+    # If there are errors, return them
+    if errors:
+        return False, f"Password must contain: {', '.join(errors)}."
+
     # If all checks pass
-    return True, "Password is valid."
+    return True, "Password meets all requirements."
 
 # --- Example Usage ---
 if __name__ == "__main__":

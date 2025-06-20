@@ -154,7 +154,16 @@ def run_theme_styles_tests():
 def run_all_tests():
     """Run all frontend tests."""
     print("🚀 Running All Frontend Tests...")
-    
+
+    # Clean up any existing test users before starting
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from test_utils import cleanup_test_users
+        print("🧹 Cleaning up any existing test users...")
+        cleanup_test_users()
+    except Exception as e:
+        print(f"⚠️ Warning: Could not clean up test users: {e}")
+
     tests = [
         ("Login Tests", run_login_tests),
         ("Chat Tests", run_chat_tests),
@@ -208,10 +217,10 @@ def run_all_tests():
         print(f"{test_name}: {status}")
     
     print(f"\nOverall: {passed}/{total} test suites passed")
-    
+
     if failed_tests:
         print(f"\nFailed test suites: {', '.join(failed_tests)}")
-        
+
         # Display error messages
         if error_messages:
             print(f"\n{'='*50}")
@@ -219,7 +228,15 @@ def run_all_tests():
             print('='*50)
             for error_msg in error_messages:
                 print(f"❌ {error_msg}")
-    
+
+    # Clean up test users after all tests
+    try:
+        from test_utils import cleanup_test_users
+        print(f"\n🧹 Cleaning up test users after test run...")
+        cleanup_test_users()
+    except Exception as e:
+        print(f"⚠️ Warning: Could not clean up test users after tests: {e}")
+
     # Return tuple with success status and error messages if any
     if error_messages:
         return False, "; ".join(error_messages)

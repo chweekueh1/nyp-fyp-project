@@ -287,12 +287,26 @@ def main_app():
             outputs=[logged_in_state, username_state, login_container, main_container, error_message, register_container]
         )
 
+        # Also allow login on Enter key in password field
+        password_input.submit(
+            fn=handle_login,
+            inputs=[username_input, password_input],
+            outputs=[logged_in_state, username_state, login_container, main_container, error_message, register_container]
+        )
+
         register_btn.click(
             fn=switch_to_register,
             outputs=[login_container, register_container]
         )
 
         register_submit_btn.click(
+            fn=handle_register,
+            inputs=[register_username, register_password, register_confirm],
+            outputs=[logged_in_state, username_state, login_container, register_container, register_error_message, main_container]
+        )
+
+        # Also allow register on Enter key in confirm password field
+        register_confirm.submit(
             fn=handle_register,
             inputs=[register_username, register_password, register_confirm],
             outputs=[logged_in_state, username_state, login_container, register_container, register_error_message, main_container]

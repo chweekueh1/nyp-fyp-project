@@ -37,6 +37,26 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHAT_SESSIONS_PATH = os.path.join(get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', r'data\chat_sessions'))
 USER_DB_PATH = os.path.join(get_chatbot_dir(), os.getenv('USER_DB_PATH', r'data\user_info\users.json'))
 
+# Test database path (separate from production)
+TEST_USER_DB_PATH = os.path.join(get_chatbot_dir(), r'data\user_info\test_users.json')
+
+# Allowed email domains/addresses for registration
+ALLOWED_EMAILS = [
+    # NYP email domains
+    "student.nyp.edu.sg",
+    "nyp.edu.sg",
+
+    # Development/testing emails
+    "test@example.com",
+    "demo@nyp.edu.sg",
+    "admin@nyp.edu.sg",
+
+    # Add more allowed emails here as needed
+    "user@nyp.edu.sg",
+    "faculty@nyp.edu.sg",
+    "staff@nyp.edu.sg",
+]
+
 class RateLimiter:
     def __init__(self, max_requests: int = 60, time_window: int = 60):
         self.max_requests = max_requests
@@ -420,46 +440,117 @@ def get_completion(prompt: str, model: str = "gpt-3.5-turbo", max_tokens: int = 
         logger.error(f"Error getting completion: {e}")
         return {"error": str(e)}
 
-async def do_login(username: str, password: str) -> Dict[str, str]:
-    """Handle user login."""
+async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
+    """Handle user login with username or email support."""
     try:
         if not os.path.exists(USER_DB_PATH):
             return {'code': '404', 'message': 'User database not found'}
+
         with open(USER_DB_PATH, 'r') as f:
             data = json.load(f)
         users = data.get("users", {})
-        if username not in users:
+
+        # Find user by username or email
+        actual_username = None
+        user_data = None
+
+        # First, try direct username lookup
+        if username_or_email in users:
+            actual_username = username_or_email
+            user_data = users[username_or_email]
+            print(f"Found user by username: {actual_username}")
+        else:
+            # Try email lookup
+            username_or_email_lower = username_or_email.lower()
+            for username, data in users.items():
+                if data.get('email', '').lower() == username_or_email_lower:
+                    actual_username = username
+                    user_data = data
+                    print(f"Found user by email: {username_or_email} -> username: {actual_username}")
+                    break
+
+        if not actual_username or not user_data:
+            print(f"User not found: {username_or_email}")
+            print(f"Available users: {list(users.keys())}")
+            print(f"Available emails: {[data.get('email', 'N/A') for data in users.values()]}")
             return {'code': '404', 'message': 'User not found'}
-        print(f"Attempting login for user: {username}")
-        print(f"Stored users: {list(users.keys())}")
-        stored_hash = users[username].get('hashedPassword')
+
+        print(f"Attempting login for user: {actual_username}")
+        stored_hash = user_data.get('hashedPassword')
         print(f"Stored hash for user: {stored_hash}")
+        print(f"Against stored hash: {stored_hash}")
+
         if not stored_hash or not verify_password(password, stored_hash):
             return {'code': '401', 'message': 'Invalid password'}
-        return {'code': '200', 'message': 'Login successful'}
+
+        return {
+            'code': '200',
+            'message': 'Login successful',
+            'username': actual_username  # Return the actual username
+        }
     except Exception as e:
         logging.error(f"Error in login: {e}")
         return {'code': '500', 'message': 'Internal server error'}
 
-async def do_register(username: str, password: str) -> Dict[str, str]:
-    """Handle user registration."""
+async def do_register(username: str, password: str, email: str = "") -> Dict[str, str]:
+    """Handle user registration with validation."""
     try:
+        from hashing import validate_username, is_password_complex, validate_email_allowed, hash_password
+
+        # Validate username
+        username_valid, username_msg = validate_username(username)
+        if not username_valid:
+            return {'code': '400', 'message': username_msg}
+
+        # Validate password complexity
+        password_valid, password_msg = is_password_complex(password)
+        if not password_valid:
+            return {'code': '400', 'message': password_msg}
+
+        # Validate email if provided
+        if email:
+            email_valid, email_msg = validate_email_allowed(email, ALLOWED_EMAILS)
+            if not email_valid:
+                return {'code': '400', 'message': email_msg}
+
+        # Check if user database exists
         if not os.path.exists(USER_DB_PATH):
             os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
             with open(USER_DB_PATH, 'w') as f:
                 json.dump({"users": {}}, f)
+
+        # Load existing users
         with open(USER_DB_PATH, 'r') as f:
             data = json.load(f)
         users = data.get("users", {})
+
+        # Check if username already exists
         if username in users:
             return {'code': '409', 'message': 'Username already exists'}
+
+        # Check if email already exists (if email provided)
+        if email:
+            for existing_user, user_data in users.items():
+                if user_data.get('email', '').lower() == email.lower():
+                    return {'code': '409', 'message': 'Email already registered'}
+
+        # Hash password and create user
         hashed_pw = hash_password(password)
-        users[username] = {
+        user_data = {
             'hashedPassword': hashed_pw,
             'created_at': str(datetime.now(timezone.utc))
         }
+
+        # Add email if provided
+        if email:
+            user_data['email'] = email.strip().lower()
+
+        users[username] = user_data
+
+        # Save updated users
         with open(USER_DB_PATH, 'w') as f:
             json.dump({"users": users}, f, indent=2)
+
         return {'code': '200', 'message': 'Registration successful'}
     except Exception as e:
         logging.error(f"Error in registration: {e}")
@@ -677,4 +768,159 @@ def render_all_chats(username: str) -> list:
     except Exception as e:
         logger.error(f"Error rendering all chats: {e}")
         return []
+
+# Test-specific functions that don't persist to production database
+async def do_register_test(username: str, password: str, email: str = "") -> Dict[str, str]:
+    """Handle user registration for testing (uses test database)."""
+    try:
+        from hashing import validate_username, is_password_complex, validate_email_allowed, hash_password
+
+        # Validate username
+        username_valid, username_msg = validate_username(username)
+        if not username_valid:
+            return {'code': '400', 'message': username_msg}
+
+        # Validate password complexity
+        password_valid, password_msg = is_password_complex(password)
+        if not password_valid:
+            return {'code': '400', 'message': password_msg}
+
+        # Validate email if provided
+        if email:
+            email_valid, email_msg = validate_email_allowed(email, ALLOWED_EMAILS)
+            if not email_valid:
+                return {'code': '400', 'message': email_msg}
+
+        # Use test database
+        test_db_path = TEST_USER_DB_PATH
+
+        # Check if test database exists
+        if not os.path.exists(test_db_path):
+            os.makedirs(os.path.dirname(test_db_path), exist_ok=True)
+            with open(test_db_path, 'w') as f:
+                json.dump({"users": {}}, f)
+
+        # Load existing test users
+        with open(test_db_path, 'r') as f:
+            data = json.load(f)
+        users = data.get("users", {})
+
+        # Check if username already exists
+        if username in users:
+            return {'code': '409', 'message': 'Username already exists'}
+
+        # Check if email already exists (if email provided)
+        if email:
+            for existing_user, user_data in users.items():
+                if user_data.get('email', '').lower() == email.lower():
+                    return {'code': '409', 'message': 'Email already registered'}
+
+        # Hash password and create user
+        hashed_pw = hash_password(password)
+        user_data = {
+            'hashedPassword': hashed_pw,
+            'created_at': str(datetime.now(timezone.utc))
+        }
+
+        # Add email if provided
+        if email:
+            user_data['email'] = email.strip().lower()
+
+        users[username] = user_data
+
+        # Save updated test users
+        with open(test_db_path, 'w') as f:
+            json.dump({"users": users}, f, indent=2)
+
+        return {'code': '200', 'message': 'Registration successful'}
+    except Exception as e:
+        logging.error(f"Error in test registration: {e}")
+        return {'code': '500', 'message': 'Internal server error'}
+
+async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]:
+    """Handle user login for testing (uses test database)."""
+    try:
+        test_db_path = TEST_USER_DB_PATH
+
+        if not os.path.exists(test_db_path):
+            return {'code': '404', 'message': 'Test user database not found'}
+
+        with open(test_db_path, 'r') as f:
+            data = json.load(f)
+        users = data.get("users", {})
+
+        # Find user by username or email
+        actual_username = None
+        user_data = None
+
+        # First, try direct username lookup
+        if username_or_email in users:
+            actual_username = username_or_email
+            user_data = users[username_or_email]
+        else:
+            # Try email lookup
+            username_or_email_lower = username_or_email.lower()
+            for username, data in users.items():
+                if data.get('email', '').lower() == username_or_email_lower:
+                    actual_username = username
+                    user_data = data
+                    break
+
+        if not actual_username or not user_data:
+            return {'code': '404', 'message': 'User not found'}
+
+        stored_hash = user_data.get('hashedPassword')
+
+        if not stored_hash or not verify_password(password, stored_hash):
+            return {'code': '401', 'message': 'Invalid password'}
+
+        return {
+            'code': '200',
+            'message': 'Login successful',
+            'username': actual_username
+        }
+    except Exception as e:
+        logging.error(f"Error in test login: {e}")
+        return {'code': '500', 'message': 'Internal server error'}
+
+def cleanup_test_user(username: str) -> bool:
+    """Remove a test user from the test database."""
+    try:
+        test_db_path = TEST_USER_DB_PATH
+
+        if not os.path.exists(test_db_path):
+            return True  # Nothing to clean up
+
+        with open(test_db_path, 'r') as f:
+            data = json.load(f)
+        users = data.get("users", {})
+
+        if username in users:
+            del users[username]
+
+            with open(test_db_path, 'w') as f:
+                json.dump({"users": users}, f, indent=2)
+
+            logger.info(f"Cleaned up test user: {username}")
+            return True
+
+        return True  # User didn't exist, nothing to clean up
+    except Exception as e:
+        logger.error(f"Error cleaning up test user {username}: {e}")
+        return False
+
+def cleanup_all_test_users() -> bool:
+    """Remove all test users and reset test database."""
+    try:
+        test_db_path = TEST_USER_DB_PATH
+
+        if os.path.exists(test_db_path):
+            with open(test_db_path, 'w') as f:
+                json.dump({"users": {}}, f, indent=2)
+            logger.info("Cleaned up all test users")
+
+        return True
+    except Exception as e:
+        logger.error(f"Error cleaning up all test users: {e}")
+        return False
 
