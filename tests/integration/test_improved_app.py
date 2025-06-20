@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 def test_backend_performance():
@@ -109,12 +109,12 @@ def test_chatbot_integration():
             
             # This should work without errors
             components = chatbot_ui(username_state, chat_history_state, chat_id_state, setup_events=False)
-            
-            if len(components) == 6:
+
+            if len(components) == 11:
                 print("  ✅ Chatbot UI components created successfully")
                 print(f"    - Components: {[type(c).__name__ for c in components]}")
             else:
-                print(f"  ❌ Expected 6 components, got {len(components)}")
+                print(f"  ❌ Expected 11 components, got {len(components)}")
                 return False
         
         # Test load_all_chats function

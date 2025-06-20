@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import gradio as gr
@@ -154,9 +154,8 @@ def test_ui_components():
     chat_id_state = gr.State("test_chat_id")
     
     # Test UI creation (without event setup to avoid Blocks context requirement)
-    chat_selector, new_chat_btn, chatbot, chat_input, send_btn, debug_md = chatbot_ui(
-        username_state, chat_history_state, chat_id_state, setup_events=False
-    )
+    components = chatbot_ui(username_state, chat_history_state, chat_id_state, setup_events=False)
+    chat_selector, new_chat_btn, chatbot, chat_input, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md = components
     
     # Verify components
     assert chat_selector is not None, "Chat selector should be created"

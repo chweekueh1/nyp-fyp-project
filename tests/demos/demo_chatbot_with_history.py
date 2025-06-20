@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from gradio_modules.chatbot import chatbot_ui
@@ -62,10 +62,8 @@ def create_demo_app():
             chat_id_state = gr.State("")
             
             # Chat management row
-            with gr.Row():
-                chat_selector, new_chat_btn, chatbot, chat_input, send_btn, debug_md = chatbot_ui(
-                    username_state, chat_history_state, chat_id_state
-                )
+            components = chatbot_ui(username_state, chat_history_state, chat_id_state)
+            # Components are automatically displayed by the chatbot_ui function
         
         def handle_login(username):
             """Handle user login and show chatbot interface."""

@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 def setup_test_environment():
@@ -227,11 +227,11 @@ def test_chatbot_ui_integration():
             chat_id_state = gr.State("")
             
             components = chatbot_ui(username_state, chat_history_state, chat_id_state, setup_events=False)
-            
-            # Should return 9 components now (including search)
-            assert len(components) == 9, f"Expected 9 components, got {len(components)}"
-            
-            chat_selector, new_chat_btn, chatbot, chat_input, send_btn, search_input, search_btn, search_results, debug_md = components
+
+            # Should return 11 components now (including search and rename)
+            assert len(components) == 11, f"Expected 11 components, got {len(components)}"
+
+            chat_selector, new_chat_btn, chatbot, chat_input, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md = components
             
             # Verify all components exist
             assert chat_selector is not None, "Chat selector should exist"
@@ -242,9 +242,11 @@ def test_chatbot_ui_integration():
             assert search_input is not None, "Search input should exist"
             assert search_btn is not None, "Search button should exist"
             assert search_results is not None, "Search results should exist"
+            assert rename_input is not None, "Rename input should exist"
+            assert rename_btn is not None, "Rename button should exist"
             assert debug_md is not None, "Debug markdown should exist"
-            
-            print(f"  ✅ All 9 components created successfully")
+
+            print(f"  ✅ All 11 components created successfully")
             print(f"    - Components: {[type(c).__name__ for c in components]}")
         
         print("✅ Chatbot UI integration test passed")

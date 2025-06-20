@@ -139,9 +139,9 @@ OPENAI_API_KEY = add_your_own_api_key
 
 ## 🧪 Testing
 
-The project includes a comprehensive test suite organized by category:
+The project includes a comprehensive, organized test suite with automated runners and interactive demos.
 
-### Quick Test Commands
+### 🚀 Quick Test Commands
 
 **⚠️ Important**: Make sure your virtual environment is activated before running tests.
 
@@ -153,131 +153,102 @@ The project includes a comprehensive test suite organized by category:
 # macOS/Linux
 source .venv/bin/activate
 
-# Run all tests
-python -m tests.run_all_tests
+# Run comprehensive test suite (recommended)
+python tests/comprehensive_test_suite.py
 
-# Run specific test categories
-python -m tests.run_all_tests --category frontend
-python -m tests.run_all_tests --category backend
-python -m tests.run_all_tests --category llm
-python -m tests.run_all_tests --category integration
-
-# Launch frontend UI for testing
-python -m tests.run_all_tests --launch-ui
+# Run legacy test runners
+python tests/run_all_tests.py
+python tests/run_tests.py
 ```
 
-### Test Categories
+### 🎭 Interactive Demos
 
-- **Frontend Tests**: UI components, login, chat, search interfaces
-- **Backend Tests**: API functions, utility functions, data processing
-- **LLM Tests**: Language model services and interactions
-- **Integration Tests**: End-to-end functionality testing
+Experience the chatbot features with interactive demonstrations:
+
+```bash
+# Complete working chatbot demo (all features)
+python tests/demos/demo_final_working_chatbot.py
+
+# Enhanced features showcase
+python tests/demos/demo_enhanced_chatbot.py
+
+# Chat history management demo
+python tests/demos/demo_chatbot_with_history.py
+
+# Full application integration demo
+python tests/demos/demo_integrated_main_app.py
+```
+
+### 📁 Organized Test Structure
+
+- **`tests/backend/`** - Backend component tests (API, database, core logic)
+- **`tests/frontend/`** - UI component tests (login, chat, search interfaces)
+- **`tests/integration/`** - Feature integration and end-to-end tests
+- **`tests/llm/`** - Language model and AI functionality tests
+- **`tests/demos/`** - Interactive demonstrations and showcases
+- **`tests/utils/`** - Testing utilities and diagnostic tools
+
+### 🎯 Test Categories
+
+- **Unit Tests**: Individual component testing in isolation
+- **Integration Tests**: Component interaction and workflow testing
+- **Frontend Tests**: UI components, user interactions, state management
+- **Demo Tests**: Interactive feature demonstrations and user experience validation
 
 For detailed testing information, see [tests/README.md](tests/README.md).
 
-## 📋 Comprehensive Test Suite
+## 📋 Test Execution Options
 
-The project includes a comprehensive test suite with multiple test files:
+### Comprehensive Test Suite (Recommended)
 
-### Test Files Overview
+The main test runner provides organized execution of all test categories:
 
-1. **`tests/run_all_tests.py`** - Main test runner
-   - Runs all test suites: frontend, backend, LLM, and integration
-   - Provides detailed results and timing information
-   - Supports individual suite execution
-   - Run with: `python -m tests.run_all_tests`
-
-2. **`tests/frontend/run_frontend_tests.py`** - Frontend UI tests
-   - Tests all Gradio UI components and interactions
-   - Validates UI component creation and state management
-   - Tests login, chat, search, file upload, and audio interfaces
-   - Run with: `python tests/frontend/run_frontend_tests.py test`
-
-3. **`tests/backend/test_backend.py`** - Backend functionality tests
-   - Tests API endpoints and business logic
-   - Validates authentication, chat history, and data processing
-   - Tests rate limiting and error handling
-   - Tests utility functions from utils.py
-   - Run with: `python tests/backend/test_backend.py`
-
-4. **`tests/llm/test_llm.py`** - LLM service tests
-   - Tests language model services and functionality
-   - Validates classification, data processing, and model caching
-   - Tests backward compatibility functions
-   - Run with: `python tests/llm/test_llm.py`
-
-5. **`tests/integration/test_integration.py`** - Integration tests
-   - End-to-end system testing with API calls
-   - Tests file upload, audio transcription, and chat functionality
-   - Requires backend server to be running
-   - Run with: `python tests/integration/test_integration.py`
-
-6. **`tests/run_tests.py`** - Environment validation tests
-   - Tests environment variables, file existence, and module imports
-   - Quick validation of project setup
-   - Run with: `python tests/run_tests.py`
-
-### Running Tests
-
-#### Run All Tests (Recommended)
 ```bash
-python -m tests.run_all_tests
+# Run complete test suite with detailed reporting
+python tests/comprehensive_test_suite.py
 ```
 
-#### Run Individual Test Suites
+**Features:**
+- Organized test execution by category (unit, integration, frontend)
+- Detailed timing and success rate reporting
+- Automatic discovery of available demos
+- Comprehensive summary with actionable results
+
+### Individual Test Categories
+
+Run specific test categories when working on particular components:
+
 ```bash
-# Run only frontend tests
-python -m tests.run_all_tests --category frontend
+# Backend tests (API, database, core logic)
+python tests/backend/test_backend.py
+python tests/backend/test_backend_fixes_and_rename.py
 
-# Run only backend tests
-python -m tests.run_all_tests --category backend
+# Frontend tests (UI components, interactions)
+python tests/frontend/test_ui_fixes.py
+python tests/frontend/test_login_ui.py
+python tests/frontend/run_frontend_tests.py
 
-# Run only LLM tests
-python -m tests.run_all_tests --category llm
+# Integration tests (end-to-end workflows)
+python tests/integration/test_enhanced_chatbot_features.py
+python tests/integration/test_improved_app.py
 
-# Run only integration tests
-python -m tests.run_all_tests --category integration
+# LLM tests (AI functionality)
+python tests/llm/test_llm.py
 ```
 
-#### Run Individual Test Files
+### Legacy Test Runners
+
+For compatibility, the original test runners are still available:
+
 ```bash
-# Make sure virtual environment is activated first
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-
-# Frontend tests
-cd tests/frontend
-python run_frontend_tests.py test --test login
-python run_frontend_tests.py test --test chat
-python run_frontend_tests.py test --test search
-python run_frontend_tests.py test --test file-upload
-
-# Backend tests
-cd tests/backend
-python test_backend.py
-
-# LLM tests
-cd tests/llm
-python test_llm.py
-
-# Integration tests
-cd tests/integration
-python test_integration.py
+# Legacy comprehensive runner
+python tests/run_all_tests.py
 
 # Environment validation
-cd tests
-python run_tests.py
-```
+python tests/run_tests.py
 
-#### Launch Test UIs
-```bash
-# Make sure virtual environment is activated first
-cd tests/frontend
-python run_frontend_tests.py launch --test all
-python run_frontend_tests.py launch --test login
-python run_frontend_tests.py launch --test chat
-python run_frontend_tests.py launch --test search
-python run_frontend_tests.py launch --test file-upload
+# Frontend-specific runner
+python tests/frontend/run_frontend_tests.py test
 ```
 
 ### Test Coverage
