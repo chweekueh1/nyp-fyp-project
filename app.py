@@ -490,16 +490,32 @@ def create_app_with_loading():
                 gr.Markdown("## 🎉 Welcome!")
                 user_info = gr.Markdown("", elem_id="user_info")
 
-                # Placeholder for other interfaces
-                gr.Markdown("### 📋 Available Interfaces:")
-                gr.Markdown("""
-                - [x] 🔐 Login Interface ✅
-                - [ ] 💬 Chat Interface (Coming Next)
-                - [ ] 🔍 Search Interface
-                - [ ] 📁 File Upload Interface
-                - [ ] 🎤 Audio Interface
-                - [ ] 🎨 Theme & Styling
-                """)
+                # Enhanced Chatbot Interface
+                gr.Markdown("### 💬 Enhanced Chatbot")
+
+                # Import the enhanced chatbot UI
+                try:
+                    from gradio_modules.chatbot import chatbot_ui
+
+                    # Create states for the enhanced chatbot interface
+                    chat_history_state = gr.State([])
+                    selected_chat_id = gr.State("")
+
+                    # Create the enhanced chatbot interface
+                    chat_selector, new_chat_btn, chatbot, msg, send_btn, chat_debug = chatbot_ui(
+                        username_state, chat_history_state, selected_chat_id, setup_events=True
+                    )
+
+                    # Debug info will be displayed automatically as part of the chatbot interface
+
+                except ImportError as e:
+                    gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
+                    gr.Markdown("Using basic text interface as fallback.")
+
+                    # Fallback basic interface
+                    basic_chat_input = gr.Textbox(label="Message", placeholder="Type your message here...")
+                    basic_send_btn = gr.Button("Send", variant="primary")
+                    basic_output = gr.Textbox(label="Response", interactive=False)
 
                 logout_btn = gr.Button("Logout", variant="secondary", elem_id="logout_btn")
 

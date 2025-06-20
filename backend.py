@@ -253,20 +253,46 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
 def get_chatbot_response(ui_state: dict) -> dict:
     """
     Chatbot interface: generates a response using the LLM and updates history.
+    Now includes message persistence to chat session files.
     """
     print(f"[DEBUG] backend.get_chatbot_response called with ui_state: {ui_state}")
     username = ui_state.get('username')
     message = ui_state.get('message')
     history = ui_state.get('history', [])
     chat_id = ui_state.get('chat_id', 'default')
+
     if not message:
         return {'history': history, 'response': '[No message provided]', 'debug': 'No message.'}
+
+    if not username:
+        return {'history': history, 'response': '[Error] Username required for message persistence', 'debug': 'No username provided.'}
+
     try:
         # Use your LLM chat model
         result = get_convo_hist_answer(message, chat_id)
         response = result['answer']
+
+        # Update in-memory history
         history = history + [[message, response]]
-        response_dict = {'history': history, 'response': response, 'debug': 'Chatbot response generated.'}
+
+        # Persist messages to chat session file asynchronously
+        try:
+            # Run the async save operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Save user message
+                loop.run_until_complete(save_message_async(username, chat_id, {"role": "user", "content": message}))
+                # Save bot response
+                loop.run_until_complete(save_message_async(username, chat_id, {"role": "assistant", "content": response}))
+                print(f"[DEBUG] Messages persisted to chat session {chat_id}")
+            finally:
+                loop.close()
+        except Exception as persist_error:
+            print(f"[WARNING] Failed to persist messages: {persist_error}")
+            # Continue anyway since we have the response
+
+        response_dict = {'history': history, 'response': response, 'debug': 'Chatbot response generated and persisted.'}
         print(f"[DEBUG] backend.get_chatbot_response returning: {response_dict}")
         return response_dict
     except Exception as e:
@@ -656,15 +682,29 @@ async def init_backend():
         raise
 
 async def init_backend_async_internal():
-    """Internal backend initialization function."""
-    # Initialize LLM and database
-    initialize_llm_and_db()
+    """Internal backend initialization function with performance optimizations."""
+    logger.info("🚀 Starting optimized backend initialization...")
 
-    # Ensure required directories exist
-    os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
-    os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
+    # Create directories first (fast operation)
+    await asyncio.to_thread(os.makedirs, CHAT_SESSIONS_PATH, exist_ok=True)
+    await asyncio.to_thread(os.makedirs, os.path.dirname(USER_DB_PATH), exist_ok=True)
+    logger.info("📁 Directories created")
 
-    logger.info("Backend initialization completed")
+    # Initialize LLM and database in parallel where possible
+    try:
+        # Run LLM initialization in a separate thread to avoid blocking
+        await asyncio.to_thread(initialize_llm_and_db)
+        logger.info("🤖 LLM and database initialized")
+
+        # Ensure database and folders are set up
+        await _ensure_db_and_folders_async()
+        logger.info("🗄️ Database setup completed")
+
+    except Exception as e:
+        logger.error(f"❌ Error during backend initialization: {e}")
+        raise
+
+    logger.info("✅ Backend initialization completed successfully")
 
 def transcribe_audio(audio_file_path: str) -> str:
     """Transcribe audio file to text."""

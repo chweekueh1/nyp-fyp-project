@@ -10,42 +10,11 @@ parent_dir = Path(__file__).parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+import backend
 from backend import list_user_chat_ids, get_chat_history, ask_question, CHAT_SESSIONS_PATH, create_and_persist_new_chat
+from chatbot import chatbot_ui, load_all_chats
 
-def load_all_chats(username):
-    chat_ids = list_user_chat_ids(username)
-    all_histories = {}
-    for cid in chat_ids:
-        try:
-            hist = get_chat_history(cid, username)
-            all_histories[cid] = [list(pair) for pair in hist] if hist else []
-        except Exception as e:
-            all_histories[cid] = [["[Error loading chat]", str(e)]]
-    return all_histories
-
-def create_new_chat_id():
-    import uuid
-    return str(uuid.uuid4())
-
-def send_message_to_chat(message, chat_id, all_histories, username):
-    if not message.strip():
-        return "", all_histories, chat_id, [["", "Please enter a message."]]
-    if not chat_id:
-        chat_id = create_new_chat_id()
-        all_histories[chat_id] = []
-    try:
-        import asyncio
-        result = asyncio.run(ask_question(message, chat_id, username))
-        if result.get("code") == "200":
-            answer = result.get("response", "")
-            if isinstance(answer, dict) and "answer" in answer:
-                answer = answer["answer"]
-            all_histories[chat_id].append([message, answer])
-        else:
-            all_histories[chat_id].append([message, f"Error: {result.get('error', 'Unknown error')}"])
-    except Exception as e:
-        all_histories[chat_id].append([message, f"Exception: {e}"])
-    return "", all_histories, chat_id, all_histories[chat_id]
+# Note: Old chat functions removed - now handled by enhanced chatbot interface
 
 def fuzzy_find_chats(query, all_histories):
     from difflib import get_close_matches
@@ -161,20 +130,17 @@ def main_app():
                     user_info = gr.Markdown(visible=True)
                     logout_btn = gr.Button("Logout", variant="secondary")
 
-                # Global chat selector and new chat button
-                with gr.Row():
-                    chat_selector = gr.Dropdown(choices=[], label="Select Chat", scale=3)
-                    new_chat_btn = gr.Button("New Chat", variant="primary", scale=1)
-
                 # Tabbed interface for different functionalities
                 with gr.Tabs() as tabs:
-                    # Chat Tab
+                    # Chat Tab with Enhanced Interface
                     with gr.TabItem("💬 Chat", id="chat_tab"):
-                        chatbot = gr.Chatbot(label="Chat History", height=400)
-                        with gr.Row():
-                            msg = gr.Textbox(label="Message", placeholder="Type your message here...", scale=4)
-                            send_btn = gr.Button("Send", variant="primary", scale=1)
-                        chat_error = gr.Markdown(visible=False, elem_classes=["error-message"])
+                        # Create states for the enhanced chatbot interface
+                        chat_history_state = gr.State([])
+
+                        # Use the enhanced chatbot interface
+                        chat_selector, new_chat_btn, chatbot, msg, send_btn, chat_debug = chatbot_ui(
+                            username_state, chat_history_state, selected_chat_id, setup_events=False
+                        )
 
                     # File Upload Tab
                     with gr.TabItem("📁 File Upload", id="file_tab"):
@@ -324,53 +290,96 @@ def main_app():
             return gr.update(visible=True, value=f"Logged in as: {username}")
         username_state.change(fn=update_user_info, inputs=[username_state], outputs=[user_info])
 
-        # Load chats after login
-        def on_login(logged_in, username):
-            if not logged_in or not username:
-                return {}, "", gr.update(choices=[], value=None), []
-            chats = load_all_chats(username)
-            chat_ids = list(chats.keys())
-            selected = chat_ids[0] if chat_ids else None
-            # Ensure selected value is in choices or None
-            dropdown_value = selected if selected in chat_ids else None
-            return chats, selected or "", gr.update(choices=chat_ids, value=dropdown_value), chats[selected] if selected else []
-        logged_in_state.change(
-            fn=on_login,
-            inputs=[logged_in_state, username_state],
-            outputs=[all_histories, selected_chat_id, chat_selector, chatbot]
-        )
-
-        # New chat
-        def start_new_chat(all_histories, username):
+        # Enhanced chatbot event handlers
+        def initialize_chats(username):
+            """Initialize chat selector with user's existing chats."""
             if not username:
-                return gr.update(), "", all_histories, []
-            new_id = create_and_persist_new_chat(username)
-            all_histories[new_id] = []
-            chat_ids = list(all_histories.keys())
-            return gr.update(choices=chat_ids, value=new_id), new_id, all_histories, []
-        new_chat_btn.click(
-            start_new_chat,
-            inputs=[all_histories, username_state],
-            outputs=[chat_selector, selected_chat_id, all_histories, chatbot]
+                return gr.update(choices=[], value=None), "", []
+
+            all_chats = load_all_chats(username)
+            chat_ids = list(all_chats.keys())
+            selected = chat_ids[0] if chat_ids else None
+            history = all_chats.get(selected, []) if selected else []
+
+            return gr.update(choices=chat_ids, value=selected), selected or "", history
+
+        def on_chat_select(username, selected_chat_id):
+            """Handle chat selection from dropdown."""
+            if not username or not selected_chat_id:
+                return [], ""
+            try:
+                hist = backend.get_chat_history(selected_chat_id, username)
+                history = [list(pair) for pair in hist] if hist else []
+                return history, selected_chat_id
+            except Exception as e:
+                return [["[Error loading chat]", str(e)]], selected_chat_id
+
+        def create_new_chat(username):
+            """Create a new chat session."""
+            if not username:
+                return gr.update(), "", []
+
+            # Create new chat and get its ID
+            new_chat_id = create_and_persist_new_chat(username)
+
+            # Get updated list of chats
+            all_chats = load_all_chats(username)
+            chat_ids = list(all_chats.keys())
+
+            return gr.update(choices=chat_ids, value=new_chat_id), new_chat_id, []
+
+        def send_message_enhanced(user, msg, history, chat_id):
+            """Enhanced message sending with proper persistence."""
+            if not user:
+                return msg, history, "Not logged in!"
+            if not msg.strip():
+                return msg, history, "Please enter a message."
+
+            # Create new chat if none exists
+            if not chat_id:
+                chat_id = create_and_persist_new_chat(user)
+
+            # Get response from backend with enhanced persistence
+            response_dict = backend.get_chatbot_response({
+                'username': user,
+                'message': msg,
+                'history': history,
+                'chat_id': chat_id
+            })
+
+            new_history = response_dict.get('history', history)
+            response_val = response_dict.get('response', '')
+            if not isinstance(response_val, str):
+                response_val = str(response_val)
+
+            return "", new_history, f"Message sent successfully"
+
+        # Set up enhanced chatbot event handlers
+        username_state.change(
+            fn=initialize_chats,
+            inputs=[username_state],
+            outputs=[chat_selector, selected_chat_id, chatbot]
         )
 
-        # Switch chat
-        def switch_chat(chat_id, all_histories):
-            if not chat_id or chat_id not in all_histories:
-                return "", []
-            return chat_id, all_histories.get(chat_id, [])
         chat_selector.change(
-            fn=switch_chat,
-            inputs=[chat_selector, all_histories],
-            outputs=[selected_chat_id, chatbot]
+            fn=on_chat_select,
+            inputs=[username_state, chat_selector],
+            outputs=[chatbot, selected_chat_id]
         )
 
-        # Send message
-        send_btn.click(
-            fn=lambda msg, chat_id, all_histories, username: send_message_to_chat(msg, chat_id, all_histories, username),
-            inputs=[msg, selected_chat_id, all_histories, username_state],
-            outputs=[msg, all_histories, selected_chat_id, chatbot]
+        new_chat_btn.click(
+            fn=create_new_chat,
+            inputs=[username_state],
+            outputs=[chat_selector, selected_chat_id, chatbot]
         )
+
+        send_btn.click(
+            fn=send_message_enhanced,
+            inputs=[username_state, msg, chatbot, selected_chat_id],
+            outputs=[msg, chatbot, chat_debug]
+        )
+
+        # Note: Old chat management handlers removed - now handled by enhanced chatbot interface
 
         # File upload handler with improved error messages
         def handle_file_upload(file_obj, chat_id, all_histories, username):

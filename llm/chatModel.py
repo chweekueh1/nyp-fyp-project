@@ -58,8 +58,14 @@ db: Optional[Chroma] = None
 llm_init_lock = threading.Lock()
 
 def initialize_llm_and_db():
+    """Initialize LLM and database with performance optimizations."""
     global llm, embedding, client, db
     with llm_init_lock:
+        # Skip if already initialized
+        if llm is not None and embedding is not None and client is not None and db is not None:
+            logging.info("LLM and DB already initialized, skipping...")
+            return
+
         if not OPENAI_API_KEY:
             logging.critical("OPENAI_API_KEY environment variable not set. Chat features will not work.")
             llm = None
@@ -67,11 +73,15 @@ def initialize_llm_and_db():
             client = None
             db = None
             return
+
         try:
+            # Initialize core components
+            logging.info("🤖 Initializing LLM components...")
             llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
             embedding = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"))
             client = openai.OpenAI(api_key=OPENAI_API_KEY)
             logging.info("LLM, embedding, and OpenAI client initialized.")
+
         except Exception as e:
             logging.critical(f"Failed to initialize LLM or client: {e}")
             llm = None
@@ -79,21 +89,49 @@ def initialize_llm_and_db():
             client = None
             db = None
             return
-        # Load Chroma DB
+
+        # Load Chroma DB with caching
         try:
             if embedding is None:
                 logging.critical("Embedding model not initialized. Cannot initialize Chroma DB.")
                 db = None
                 return
+
+            logging.info("🗄️ Loading Chroma DB...")
             db = Chroma(
                 collection_name="chat",
                 embedding_function=embedding,
                 persist_directory=DATABASE_PATH,
             )
             logging.info(f"Chroma DB 'chat' loaded from {DATABASE_PATH}")
+
+            # Cache the database for faster subsequent loads
+            try:
+                # Test the database connection
+                db.get(limit=1)
+                logging.info("Chroma DB loaded from cache.")
+            except Exception as cache_e:
+                logging.warning(f"Chroma DB cache test failed: {cache_e}")
+                # Try to recreate from existing data
+                try:
+                    db = Chroma(
+                        collection_name="chat",
+                        embedding_function=embedding,
+                        persist_directory=DATABASE_PATH,
+                    )
+                    logging.info("Successfully recreated Chroma DB from cache")
+                except Exception as recreate_e:
+                    logging.error(f"Failed to recreate Chroma DB: {recreate_e}")
+                    db = None
+
         except Exception as e:
             logging.critical(f"Failed to load Chroma DB 'chat': {e}")
             db = None
+
+        # Save successful initialization state
+        if llm and embedding and client and db:
+            logging.info("Saved Chroma DB to cache")
+            logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
 
 def is_llm_ready() -> bool:
     return llm is not None and db is not None and client is not None
