@@ -55,14 +55,15 @@ llm: Optional[ChatOpenAI] = None
 embedding: Optional[OpenAIEmbeddings] = None
 client: Optional[openai.OpenAI] = None
 db: Optional[Chroma] = None
+app = None  # LangGraph workflow app
 llm_init_lock = threading.Lock()
 
 def initialize_llm_and_db():
     """Initialize LLM and database with performance optimizations."""
-    global llm, embedding, client, db
+    global llm, embedding, client, db, app
     with llm_init_lock:
         # Skip if already initialized
-        if llm is not None and embedding is not None and client is not None and db is not None:
+        if llm is not None and embedding is not None and client is not None and db is not None and app is not None:
             logging.info("LLM and DB already initialized, skipping...")
             return
 
@@ -128,19 +129,50 @@ def initialize_llm_and_db():
             logging.critical(f"Failed to load Chroma DB 'chat': {e}")
             db = None
 
+        # Initialize LangGraph workflow
+        try:
+            if llm and embedding and client and db:
+                logging.info("🔗 Initializing LangGraph workflow...")
+                _initialize_langgraph_workflow()
+                logging.info("LangGraph workflow initialized successfully.")
+        except Exception as e:
+            logging.error(f"Failed to initialize LangGraph workflow: {e}")
+            app = None
+
         # Save successful initialization state
         if llm and embedding and client and db:
             logging.info("Saved Chroma DB to cache")
             logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
 
+def _initialize_langgraph_workflow():
+    """Initialize the LangGraph workflow for conversational AI."""
+    global app
+
+    # Import required modules
+    import sqlite3
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    # Create the workflow
+    workflow = StateGraph(state_schema=State)
+    workflow.add_node("model", call_model)
+    workflow.add_edge(START, "model")
+
+    try:
+        logging.info(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
+        conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
+        sqlite_saver = SqliteSaver(conn)
+        app = workflow.compile(checkpointer=sqlite_saver)
+        logging.info(f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}")
+    except Exception as e:
+        logging.warning(f"Failed to connect to SQLite checkpoint: {e}")
+        app = workflow.compile()  # Compile without checkpointer if it fails
+        logging.warning("LangGraph compiled without checkpointing. State will not persist across runs.")
+
 def is_llm_ready() -> bool:
-    return llm is not None and db is not None and client is not None
+    return llm is not None and db is not None and client is not None and app is not None
 
-# Call at module load
-def _init():
-    initialize_llm_and_db()
-
-_init()
+# Initialize only when explicitly called, not at module load
+# This prevents initialization loops and allows controlled startup
 
 # --- Prompt Templates ---
 multi_query_template = PromptTemplate( 
@@ -429,24 +461,6 @@ if llm and db and client:
     else:
         logging.info("Chroma DB not found in cache, using initialized instance.")
         # db is already initialized above
-    
-    # Don't try to cache the LangGraph workflow as it contains non-picklable objects
-    workflow = StateGraph(state_schema=State)
-    workflow.add_node("model", call_model)
-    workflow.add_edge(START, "model")
-    
-    try:
-        print(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
-        print(f"Parent directory for SQLite: {os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)}")
-        conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
-        sqlite_saver = SqliteSaver(conn)
-        app = workflow.compile(checkpointer=sqlite_saver)
-        logging.info(f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}")
-    except Exception as e:
-        logging.critical(f"Failed to connect to SQLite checkpoint or compile LangGraph: {e}", exc_info=True)
-        app = workflow.compile() # Compile without checkpointer if it fails
-        logging.warning("LangGraph compiled without checkpointing due to error. State will not persist across runs.")
-        print(e)
     
     # Only save Chroma DB metadata to cache, not the full object
     if db is not None:

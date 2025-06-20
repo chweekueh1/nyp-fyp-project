@@ -227,10 +227,7 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
     sanitized_question = sanitize_input(question)
     try:
         if not is_llm_ready():
-            logging.warning("LLM/DB not ready in ask_question. Attempting re-initialization.")
-            initialize_llm_and_db()
-        if not is_llm_ready():
-            logging.error("LLM/DB still not ready after re-initialization in ask_question.")
+            logging.error("LLM/DB not ready in ask_question. Backend may not be fully initialized.")
             return {'error': 'AI assistant is not fully initialized. Please try again later.', 'code': '500'}
         response = get_convo_hist_answer(sanitized_question, chat_id)
         # Save user message
@@ -312,10 +309,7 @@ def audio_to_text(ui_state: dict) -> dict:
         return {'history': history, 'response': '[No audio file provided]', 'debug': 'No audio.'}
     try:
         if not is_llm_ready():
-            logging.warning("LLM/DB not ready in audio_to_text. Attempting re-initialization.")
-            initialize_llm_and_db()
-        if not is_llm_ready():
-            logging.error("LLM/DB still not ready after re-initialization in audio_to_text.")
+            logging.error("LLM/DB not ready in audio_to_text. Backend may not be fully initialized.")
             return {'history': history, 'response': '[Error] AI assistant is not fully initialized. Please try again later.', 'debug': 'LLM/DB not ready.'}
         with open(audio_file, "rb") as f:
             transcript = client.audio.transcriptions.create(
@@ -346,10 +340,7 @@ def handle_uploaded_file(ui_state: dict) -> dict:
         return {'history': history, 'response': '[No file uploaded]', 'debug': 'No file.'}
     try:
         if not is_llm_ready():
-            logging.warning("LLM/DB not ready in handle_uploaded_file. Attempting re-initialization.")
-            initialize_llm_and_db()
-        if not is_llm_ready():
-            logging.error("LLM/DB still not ready after re-initialization in handle_uploaded_file.")
+            logging.error("LLM/DB not ready in handle_uploaded_file. Backend may not be fully initialized.")
             return {'history': history, 'response': '[Error] AI assistant is not fully initialized. Please try again later.', 'debug': 'LLM/DB not ready.'}
         import tempfile, shutil
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -387,18 +378,76 @@ def get_chat_response(message: str, username: str) -> str:
         return "Sorry, I encountered an error. Please try again."
 
 def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
-    """Search chat history for a given query.
-    
+    """Search chat history for a given query with comprehensive matching.
+
     Args:
         query: The search query
         username: The username of the current user
-        
+
     Returns:
-        List of chat history entries matching the query
+        List of chat history entries matching the query with context
     """
     try:
-        # TODO: Implement actual chat search logic
-        return []
+        if not query or not query.strip():
+            return []
+
+        query = query.strip().lower()
+        results = []
+
+        # Get all chat IDs for the user
+        chat_ids = list_user_chat_ids(username)
+
+        for chat_id in chat_ids:
+            try:
+                # Get chat history
+                history = get_chat_history(chat_id, username)
+                if not history:
+                    continue
+
+                # Search through messages
+                matching_messages = []
+                for i, (user_msg, bot_msg) in enumerate(history):
+                    user_match = query in user_msg.lower() if user_msg else False
+                    bot_match = query in bot_msg.lower() if bot_msg else False
+
+                    if user_match or bot_match:
+                        # Include context (previous and next message if available)
+                        context_start = max(0, i - 1)
+                        context_end = min(len(history), i + 2)
+                        context_messages = history[context_start:context_end]
+
+                        matching_messages.append({
+                            'message_index': i,
+                            'user_message': user_msg,
+                            'bot_message': bot_msg,
+                            'user_match': user_match,
+                            'bot_match': bot_match,
+                            'context': context_messages
+                        })
+
+                if matching_messages:
+                    # Get chat name and first message for preview
+                    first_message = history[0][0] if history else ""
+                    chat_preview = first_message[:50] + "..." if len(first_message) > 50 else first_message
+
+                    results.append({
+                        'chat_id': chat_id,
+                        'chat_name': get_chat_name(chat_id, username),
+                        'chat_preview': chat_preview,
+                        'total_messages': len(history),
+                        'matching_messages': matching_messages,
+                        'match_count': len(matching_messages)
+                    })
+
+            except Exception as e:
+                logger.warning(f"Error searching chat {chat_id}: {e}")
+                continue
+
+        # Sort results by relevance (number of matches, then by recency)
+        results.sort(key=lambda x: (-x['match_count'], x['chat_id']), reverse=False)
+
+        return results
+
     except Exception as e:
         logger.error(f"Error searching chat history: {e}")
         return []
@@ -597,8 +646,76 @@ def list_user_chat_ids(username: str) -> list:
 from datetime import datetime
 
 def create_new_chat_id(username: str) -> str:
+    """Create a new chat ID with timestamp."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     return f"Chat {timestamp}"
+
+def generate_smart_chat_name(first_message: str) -> str:
+    """Generate a smart chat name based on the first message content.
+
+    Args:
+        first_message: The first message in the chat
+
+    Returns:
+        A meaningful chat name based on the message content
+    """
+    try:
+        if not first_message or not first_message.strip():
+            return f"Chat {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
+
+        # Clean the message
+        message = first_message.strip()
+
+        # Remove common prefixes
+        prefixes_to_remove = [
+            "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+            "can you", "could you", "please", "i need", "i want", "help me",
+            "what is", "what are", "how do", "how can", "tell me"
+        ]
+
+        message_lower = message.lower()
+        for prefix in prefixes_to_remove:
+            if message_lower.startswith(prefix):
+                message = message[len(prefix):].strip()
+                break
+
+        # Extract key topics/keywords
+        words = message.split()
+
+        # Filter out common words
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have',
+            'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+            'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you',
+            'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'
+        }
+
+        meaningful_words = [word for word in words if word.lower() not in stop_words and len(word) > 2]
+
+        if meaningful_words:
+            # Take first 3-4 meaningful words
+            key_words = meaningful_words[:4]
+            chat_name = " ".join(key_words)
+
+            # Capitalize first letter of each word
+            chat_name = " ".join(word.capitalize() for word in chat_name.split())
+
+            # Limit length
+            if len(chat_name) > 30:
+                chat_name = chat_name[:27] + "..."
+
+            return chat_name
+        else:
+            # Fallback: use first few words of the original message
+            fallback = " ".join(message.split()[:3])
+            if len(fallback) > 30:
+                fallback = fallback[:27] + "..."
+            return fallback.capitalize() if fallback else f"Chat {datetime.now().strftime('%H-%M')}"
+
+    except Exception as e:
+        logger.warning(f"Error generating smart chat name: {e}")
+        return f"Chat {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
 
 def create_and_persist_new_chat(username: str) -> str:
     """Create a new chat with a human-readable name and persist it, returning the chat_id."""
@@ -610,6 +727,41 @@ def create_and_persist_new_chat(username: str) -> str:
         with open(chat_file, "w", encoding="utf-8") as f:
             json.dump({"messages": []}, f, indent=2)
     return chat_id
+
+def create_and_persist_smart_chat(username: str, first_message: str) -> str:
+    """Create a new chat with a smart name based on the first message.
+
+    Args:
+        username: The username
+        first_message: The first message to base the name on
+
+    Returns:
+        The chat ID of the created chat
+    """
+    try:
+        # Generate smart name
+        smart_name = generate_smart_chat_name(first_message)
+
+        # Create user folder
+        user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+        os.makedirs(user_folder, exist_ok=True)
+
+        # Use smart name as chat ID (with timestamp to ensure uniqueness)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        chat_id = f"{smart_name} ({timestamp})"
+
+        # Create chat file
+        chat_file = os.path.join(user_folder, f"{chat_id}.json")
+        with open(chat_file, "w", encoding="utf-8") as f:
+            json.dump({"messages": []}, f, indent=2)
+
+        logger.info(f"Created smart chat '{chat_id}' for user {username}")
+        return chat_id
+
+    except Exception as e:
+        logger.error(f"Error creating smart chat: {e}")
+        # Fallback to regular chat creation
+        return create_and_persist_new_chat(username)
 
 # Additional functions for test compatibility
 def generateUniqueFilename(prefix: str, username: str, extension: str) -> str:
@@ -646,15 +798,61 @@ def get_chat_name(chat_id: str, username: str) -> str:
         logger.error(f"Error getting chat name: {e}")
         return chat_id
 
-def set_chat_name(chat_id: str, username: str, name: str) -> bool:
-    """Set a custom name for a chat."""
+def rename_chat(old_chat_id: str, new_chat_name: str, username: str) -> Dict[str, Any]:
+    """Rename a chat by creating a new file with the new name and removing the old one.
+
+    Args:
+        old_chat_id: Current chat ID/name
+        new_chat_name: New name for the chat
+        username: Username of the chat owner
+
+    Returns:
+        Dict with success status and new chat ID
+    """
     try:
-        # For now, this is a placeholder that always returns True
-        # In the future, this could be extended to support custom names
-        return True
+        if not old_chat_id or not new_chat_name or not username:
+            return {"success": False, "error": "Missing required parameters"}
+
+        # Clean the new name
+        new_chat_name = new_chat_name.strip()
+        if not new_chat_name:
+            return {"success": False, "error": "New name cannot be empty"}
+
+        # Ensure new name is safe for filename
+        import re
+        safe_name = re.sub(r'[<>:"/\\|?*]', '_', new_chat_name)
+        if len(safe_name) > 100:
+            safe_name = safe_name[:100]
+
+        # Add timestamp to ensure uniqueness
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_chat_id = f"{safe_name} ({timestamp})"
+
+        user_folder = os.path.join(CHAT_SESSIONS_PATH, username)
+        old_file = os.path.join(user_folder, f"{old_chat_id}.json")
+        new_file = os.path.join(user_folder, f"{new_chat_id}.json")
+
+        # Check if old file exists
+        if not os.path.exists(old_file):
+            return {"success": False, "error": "Original chat not found"}
+
+        # Check if new file already exists
+        if os.path.exists(new_file):
+            return {"success": False, "error": "A chat with this name already exists"}
+
+        # Copy the file content to new file
+        import shutil
+        shutil.copy2(old_file, new_file)
+
+        # Remove old file
+        os.remove(old_file)
+
+        logger.info(f"Renamed chat '{old_chat_id}' to '{new_chat_id}' for user {username}")
+        return {"success": True, "new_chat_id": new_chat_id}
+
     except Exception as e:
-        logger.error(f"Error setting chat name: {e}")
-        return False
+        logger.error(f"Error renaming chat: {e}")
+        return {"success": False, "error": str(e)}
 
 def rename_chat_file(old_chat_id: str, new_chat_id: str, username: str) -> bool:
     """Rename a chat file."""
@@ -681,30 +879,45 @@ async def init_backend():
         logger.error(f"Error initializing backend: {e}")
         raise
 
+# Global flag to prevent multiple initializations
+_backend_initialized = False
+_init_lock = asyncio.Lock()
+
 async def init_backend_async_internal():
     """Internal backend initialization function with performance optimizations."""
-    logger.info("🚀 Starting optimized backend initialization...")
+    global _backend_initialized
 
-    # Create directories first (fast operation)
-    await asyncio.to_thread(os.makedirs, CHAT_SESSIONS_PATH, exist_ok=True)
-    await asyncio.to_thread(os.makedirs, os.path.dirname(USER_DB_PATH), exist_ok=True)
-    logger.info("📁 Directories created")
+    # Use async lock to prevent concurrent initializations
+    async with _init_lock:
+        if _backend_initialized:
+            logger.info("✅ Backend already initialized, skipping...")
+            return
 
-    # Initialize LLM and database in parallel where possible
-    try:
-        # Run LLM initialization in a separate thread to avoid blocking
-        await asyncio.to_thread(initialize_llm_and_db)
-        logger.info("🤖 LLM and database initialized")
+        logger.info("🚀 Starting optimized backend initialization...")
 
-        # Ensure database and folders are set up
-        await _ensure_db_and_folders_async()
-        logger.info("🗄️ Database setup completed")
+        # Create directories first (fast operation)
+        await asyncio.to_thread(os.makedirs, CHAT_SESSIONS_PATH, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, os.path.dirname(USER_DB_PATH), exist_ok=True)
+        logger.info("📁 Directories created")
 
-    except Exception as e:
-        logger.error(f"❌ Error during backend initialization: {e}")
-        raise
+        # Initialize LLM and database in parallel where possible
+        try:
+            # Run LLM initialization in a separate thread to avoid blocking
+            await asyncio.to_thread(initialize_llm_and_db)
+            logger.info("🤖 LLM and database initialized")
 
-    logger.info("✅ Backend initialization completed successfully")
+            # Ensure database and folders are set up (only if not already done)
+            await _ensure_db_and_folders_async()
+            logger.info("🗄️ Database setup completed")
+
+            # Mark as initialized
+            _backend_initialized = True
+
+        except Exception as e:
+            logger.error(f"❌ Error during backend initialization: {e}")
+            raise
+
+        logger.info("✅ Backend initialization completed successfully")
 
 def transcribe_audio(audio_file_path: str) -> str:
     """Transcribe audio file to text."""

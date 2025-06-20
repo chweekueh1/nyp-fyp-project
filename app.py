@@ -502,7 +502,7 @@ def create_app_with_loading():
                     selected_chat_id = gr.State("")
 
                     # Create the enhanced chatbot interface
-                    chat_selector, new_chat_btn, chatbot, msg, send_btn, chat_debug = chatbot_ui(
+                    chat_selector, new_chat_btn, chatbot, msg, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, chat_debug = chatbot_ui(
                         username_state, chat_history_state, selected_chat_id, setup_events=True
                     )
 
