@@ -32,40 +32,46 @@ def ensure_chatbot_dir_exists():
 
 def get_chatbot_dir():
     """
-    Returns the absolute path to the current user's home directory.
+    Returns the absolute path to the .nypai-chatbot directory in the user's home folder.
     This method is robust and works across Windows, Linux, and macOS.
     """
-    user_folder = f"{os.environ.get('USERPROFILE')}\\.nypai-chatbot\\"
-    return user_folder
+    if os.name == 'nt':  # Windows
+        user_home = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+    else:  # Linux/macOS
+        user_home = os.environ.get('HOME', os.path.expanduser('~'))
+
+    chatbot_dir = os.path.join(user_home, '.nypai-chatbot')
+    return chatbot_dir
 
 def setup_logging():
     """Set up centralized logging configuration.
-    
+
     This function configures logging to:
-    1. Write to app.log in the project root
+    1. Write to app.log in ~/.nypai-chatbot/logs/
     2. Rotate logs when they reach 5MB
     3. Keep 3 backup files
     4. Log all levels (DEBUG and above)
     5. Format logs with timestamp, level, module, and message
     """
-    # Get the project root directory
-    root_dir = Path(__file__).parent
-    
+    # Get the logs directory
+    logs_dir = Path(get_chatbot_dir()) / 'logs'
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
     # Configure the root logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-    
+
     # Clear any existing handlers
     logger.handlers = []
-    
+
     # Create formatter
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     # Create rotating file handler
-    log_file = root_dir / 'app.log'
+    log_file = logs_dir / 'app.log'
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=5*1024*1024,  # 5MB
@@ -74,16 +80,16 @@ def setup_logging():
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
-    
+
     # Add handler to root logger
     logger.addHandler(file_handler)
-    
+
     # Also log to console with INFO level
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
+
     # Clear the log file
     with open(log_file, 'w') as f:
         f.write('')

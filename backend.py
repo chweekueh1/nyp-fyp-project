@@ -394,13 +394,16 @@ def audio_to_text(ui_state: dict) -> dict:
 
 def handle_uploaded_file(ui_state: dict) -> dict:
     """
-    File upload interface: processes the file and returns a message.
+    File upload interface: processes the file and saves it permanently.
     """
     print(f"[DEBUG] backend.handle_uploaded_file called with ui_state: {ui_state}")
     username = ui_state.get('username')
     file_obj = ui_state.get('file_obj')
     history = ui_state.get('history', [])
     chat_id = ui_state.get('chat_id')  # Now optional
+
+    if not username:
+        return {'history': history, 'response': '[Error] Username required for file upload', 'debug': 'No username.'}
     if not file_obj:
         return {'history': history, 'response': '[No file uploaded]', 'debug': 'No file.'}
     try:
@@ -416,14 +419,31 @@ def handle_uploaded_file(ui_state: dict) -> dict:
             logging.error("Data processing functions not available.")
             return {'history': history, 'response': '[Error] File processing not available.', 'debug': 'Data processing not ready.'}
 
+        # Save file permanently to user's uploads directory
         import tempfile, shutil
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            with open(file_obj, "rb") as f:
-                shutil.copyfileobj(f, tmp)
-            tmp_path = tmp.name
-        # Process file
-        data_funcs['dataProcessing'](tmp_path)
-        response = f"File '{getattr(file_obj, 'name', '[unknown]')}' uploaded and processed."
+        from gradio_modules.file_classification import save_uploaded_file
+
+        try:
+            # Save file to permanent location
+            saved_path, original_filename = save_uploaded_file(file_obj, username)
+            print(f"[DEBUG] File saved to: {saved_path}")
+
+            # Process the saved file
+            data_funcs['dataProcessing'](saved_path)
+
+            response = f"File '{original_filename}' uploaded, saved, and processed successfully."
+
+        except Exception as save_error:
+            # Fallback to temporary processing if permanent save fails
+            print(f"[WARNING] Failed to save file permanently: {save_error}")
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                with open(file_obj, "rb") as f:
+                    shutil.copyfileobj(f, tmp)
+                tmp_path = tmp.name
+            # Process file
+            data_funcs['dataProcessing'](tmp_path)
+            response = f"File '{getattr(file_obj, 'name', '[unknown]')}' uploaded and processed (temporary)."
+
         # Only add to history if chat_id is provided (i.e., called from chat)
         if chat_id:
             history = history + [[f"[File: {getattr(file_obj, 'name', '[unknown]')}]", response]]

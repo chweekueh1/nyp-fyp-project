@@ -175,9 +175,21 @@ python tests/demos/demo_enhanced_chatbot.py
 # Chat history management demo
 python tests/demos/demo_chatbot_with_history.py
 
-# Full application integration demo
-python tests/demos/demo_integrated_main_app.py
+# File classification interface demo
+python tests/demos/demo_file_classification.py
+
+# Enhanced classification system demo
+python tests/demos/demo_enhanced_classification.py
+
+# Audio input interface demo
+python tests/demos/demo_audio_interface.py
 ```
+
+**📋 Demo Features:**
+- **Chatbot Demos**: Complete chat interface with history, search, and smart naming
+- **File Classification**: Upload and classify documents with security analysis
+- **Enhanced Classification**: Advanced file processing with pandoc and OCR
+- **Audio Interface**: Voice input, transcription, and audio file processing
 
 ### 📁 Organized Test Structure
 
@@ -309,17 +321,6 @@ nyp-fyp-project/
 ├── styles/                # CSS and theming
 ├── scripts/               # JavaScript and client-side code
 ├── tests/                 # Test suite
-├── dependencies/          # External dependencies (Pandoc, Tesseract, etc.)
-└── data/                  # Application data (created on first run)
-```
-
-## 🔧 Configuration
-
-### Backend Server
-For integration tests, ensure the backend server is running:
-```bash
-# The tests expect the server at http://127.0.0.1:5001
-python app.py
 ```
 
 ## 📊 Features

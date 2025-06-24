@@ -21,7 +21,6 @@ def verify_password(password, hashed_password):
     # and re-hashes the plaintext password with that salt for comparison.
     hashed_password = hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
     password = password.encode('utf-8') if isinstance(password, str) else password
-    print(f"Against stored hash: {hashed_password.decode('utf-8') if isinstance(hashed_password, bytes) else hashed_password}")
     return bcrypt.checkpw(password, hashed_password)
 
 # Function to validate email format

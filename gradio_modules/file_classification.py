@@ -9,7 +9,6 @@ import gradio as gr
 import os
 import json
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Tuple, Dict, Any, List
 from datetime import datetime
@@ -127,30 +126,55 @@ def save_uploaded_file(file_obj, username: str) -> Tuple[str, str]:
     
     return saved_path, original_filename
 
-def extract_file_content(file_path: str) -> str:
-    """Extract text content from uploaded file."""
+def extract_file_content(file_path: str) -> Dict[str, Any]:
+    """Enhanced file content extraction with multiple methods."""
     try:
-        # Lazy import to avoid early ChromaDB initialization
-        from llm.dataProcessing import ExtractText
-
-        documents = ExtractText(file_path)
-        if documents:
-            # Combine all document content
-            content = "\n\n".join([doc.page_content for doc in documents])
-            return content
-        else:
-            return "No content could be extracted from the file."
-    except Exception as e:
-        raise Exception(f"Error extracting content: {str(e)}")
+        # Use enhanced extraction
+        from gradio_modules.enhanced_content_extraction import enhanced_extract_file_content
+        return enhanced_extract_file_content(file_path)
+    except ImportError:
+        # Fallback to original method
+        try:
+            from llm.dataProcessing import ExtractText
+            documents = ExtractText(file_path)
+            if documents:
+                content = "\n\n".join([doc.page_content for doc in documents])
+                return {
+                    'content': content,
+                    'method': 'fallback_original',
+                    'error': None,
+                    'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                    'file_type': Path(file_path).suffix.lower(),
+                    'extraction_methods_tried': ['fallback_original']
+                }
+            else:
+                return {
+                    'content': '',
+                    'method': 'error',
+                    'error': 'No content could be extracted from the file',
+                    'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                    'file_type': Path(file_path).suffix.lower(),
+                    'extraction_methods_tried': ['fallback_original']
+                }
+        except Exception as e:
+            return {
+                'content': '',
+                'method': 'error',
+                'error': f"Error extracting content: {str(e)}",
+                'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                'file_type': Path(file_path).suffix.lower(),
+                'extraction_methods_tried': ['fallback_original']
+            }
 
 def classify_file_content(content: str) -> Dict[str, Any]:
-    """Classify the extracted file content."""
+    """Classify the extracted file content with enhanced error handling."""
     try:
         if not content or not content.strip():
             return {
                 "classification": "Unknown",
                 "sensitivity": "Unknown",
-                "reasoning": "No content available for classification"
+                "reasoning": "No content available for classification",
+                "confidence": 0.0
             }
 
         # Lazy import to avoid early ChromaDB initialization
@@ -158,31 +182,44 @@ def classify_file_content(content: str) -> Dict[str, Any]:
 
         # Use the classification model
         result = classify_text(content)
-        
+
         # Extract the answer which should be JSON
         answer = result.get('answer', '{}')
-        
+
         # Try to parse JSON response
         try:
             if isinstance(answer, str):
                 classification_result = json.loads(answer)
             else:
                 classification_result = answer
+
+            # Ensure required fields exist
+            if 'classification' not in classification_result:
+                classification_result['classification'] = 'Official(Open)'
+            if 'sensitivity' not in classification_result:
+                classification_result['sensitivity'] = 'Non-Sensitive'
+            if 'reasoning' not in classification_result:
+                classification_result['reasoning'] = 'Classification completed successfully'
+            if 'confidence' not in classification_result:
+                classification_result['confidence'] = 0.8  # Default confidence
+
         except json.JSONDecodeError:
             # Fallback if JSON parsing fails
             classification_result = {
                 "classification": "Official(Open)",
                 "sensitivity": "Non-Sensitive",
-                "reasoning": f"Classification completed. Raw response: {answer}"
+                "reasoning": f"Classification completed. Raw response: {answer}",
+                "confidence": 0.5
             }
-        
+
         return classification_result
-        
+
     except Exception as e:
         return {
             "classification": "Error",
             "sensitivity": "Error",
-            "reasoning": f"Classification failed: {str(e)}"
+            "reasoning": f"Classification failed: {str(e)}",
+            "confidence": 0.0
         }
 
 def file_classification_interface(username_state):
@@ -276,6 +313,13 @@ def file_classification_interface(username_state):
                     placeholder="Reasoning will appear here...",
                     lines=4
                 )
+
+                # Enhanced summary section
+                summary_result = gr.Markdown(
+                    value="",
+                    label="Classification Summary",
+                    visible=False
+                )
         
         # Upload history section
         with gr.Group():
@@ -350,7 +394,7 @@ def file_classification_interface(username_state):
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
                 gr.update(visible=False),
-                "", "", "", "", "Please log in to view upload history.",
+                "", "", "", "", gr.update(visible=False, value=""), "Please log in to view upload history.",
                 hide_loading(),
                 refresh_file_dropdown(username)
             )
@@ -359,7 +403,7 @@ def file_classification_interface(username_state):
             return (
                 gr.update(visible=True, value="❌ **Error:** Please select a file to upload"),
                 gr.update(visible=False),
-                "", "", "", "", get_upload_history(username),
+                "", "", "", "", gr.update(visible=False, value=""), get_upload_history(username),
                 hide_loading(),
                 refresh_file_dropdown(username)
             )
@@ -369,32 +413,64 @@ def file_classification_interface(username_state):
             saved_path, original_filename = save_uploaded_file(file_obj, username)
 
             # Extract and classify content
-            content = extract_file_content(saved_path)
-            classification = classify_file_content(content)
+            extraction_result = extract_file_content(saved_path)
+            content_text = extraction_result.get('content', '')
+            classification = classify_file_content(content_text)
 
-            # Prepare results
-            file_size = os.path.getsize(saved_path)
-            file_info_text = f"**Filename:** {original_filename}\n**Size:** {file_size:,} bytes\n**Saved:** {os.path.basename(saved_path)}"
-            success_msg = f"✅ **Success:** {original_filename} uploaded and classified!"
+            # Format results using enhanced formatter
+            try:
+                from gradio_modules.classification_formatter import format_classification_response
 
-            return (
-                gr.update(visible=True, value=success_msg),
-                gr.update(visible=True),
-                classification.get('classification', 'Unknown'),
-                classification.get('sensitivity', 'Unknown'),
-                file_info_text,
-                classification.get('reasoning', 'No reasoning provided'),
-                get_upload_history(username),
-                hide_loading(),
-                refresh_file_dropdown(username)
-            )
+                file_info = {
+                    'filename': original_filename,
+                    'size': str(os.path.getsize(saved_path)),
+                    'saved_name': os.path.basename(saved_path)
+                }
+
+                formatted_results = format_classification_response(
+                    classification, extraction_result, file_info
+                )
+
+                success_msg = f"✅ **Success:** {original_filename} uploaded and classified!"
+
+                return (
+                    gr.update(visible=True, value=success_msg),
+                    gr.update(visible=True),
+                    formatted_results['classification'],
+                    formatted_results['sensitivity'],
+                    formatted_results['file_info'],
+                    formatted_results['reasoning'],
+                    gr.update(visible=True, value=formatted_results['summary']),
+                    get_upload_history(username),
+                    hide_loading(),
+                    refresh_file_dropdown(username)
+                )
+
+            except ImportError:
+                # Fallback to simple formatting
+                file_size = os.path.getsize(saved_path)
+                file_info_text = f"**Filename:** {original_filename}\n**Size:** {file_size:,} bytes\n**Saved:** {os.path.basename(saved_path)}"
+                success_msg = f"✅ **Success:** {original_filename} uploaded and classified!"
+
+                return (
+                    gr.update(visible=True, value=success_msg),
+                    gr.update(visible=True),
+                    classification.get('classification', 'Unknown'),
+                    classification.get('sensitivity', 'Unknown'),
+                    file_info_text,
+                    classification.get('reasoning', 'No reasoning provided'),
+                    gr.update(visible=False, value=""),  # No enhanced summary in fallback
+                    get_upload_history(username),
+                    hide_loading(),
+                    refresh_file_dropdown(username)
+                )
 
         except Exception as e:
             error_msg = f"❌ **Error:** {str(e)}"
             return (
                 gr.update(visible=True, value=error_msg),
                 gr.update(visible=False),
-                "", "", "", "", get_upload_history(username),
+                "", "", "", "", gr.update(visible=False, value=""), get_upload_history(username),
                 hide_loading(),
                 refresh_file_dropdown(username)
             )
@@ -405,7 +481,7 @@ def file_classification_interface(username_state):
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
                 gr.update(visible=False),
-                "", "", "", "", "Please log in to view upload history.",
+                "", "", "", "", gr.update(visible=False, value=""), "Please log in to view upload history.",
                 hide_loading()
             )
 
@@ -413,7 +489,7 @@ def file_classification_interface(username_state):
             return (
                 gr.update(visible=True, value="❌ **Error:** Please select a file to classify"),
                 gr.update(visible=False),
-                "", "", "", "", get_upload_history(username),
+                "", "", "", "", gr.update(visible=False, value=""), get_upload_history(username),
                 hide_loading()
             )
 
@@ -424,31 +500,62 @@ def file_classification_interface(username_state):
                 raise Exception(f"File not found: {selected_file}")
 
             # Extract and classify content
-            content = extract_file_content(file_path)
-            classification = classify_file_content(content)
+            extraction_result = extract_file_content(file_path)
+            content_text = extraction_result.get('content', '')
+            classification = classify_file_content(content_text)
 
-            # Prepare results
-            file_size = os.path.getsize(file_path)
-            file_info_text = f"**Filename:** {selected_file}\n**Size:** {file_size:,} bytes\n**Path:** {os.path.basename(file_path)}"
-            success_msg = f"✅ **Success:** {selected_file} classified!"
+            # Format results using enhanced formatter
+            try:
+                from gradio_modules.classification_formatter import format_classification_response
 
-            return (
-                gr.update(visible=True, value=success_msg),
-                gr.update(visible=True),
-                classification.get('classification', 'Unknown'),
-                classification.get('sensitivity', 'Unknown'),
-                file_info_text,
-                classification.get('reasoning', 'No reasoning provided'),
-                get_upload_history(username),
-                hide_loading()
-            )
+                file_info = {
+                    'filename': selected_file,
+                    'size': str(os.path.getsize(file_path)),
+                    'saved_name': os.path.basename(file_path)
+                }
+
+                formatted_results = format_classification_response(
+                    classification, extraction_result, file_info
+                )
+
+                success_msg = f"✅ **Success:** {selected_file} classified!"
+
+                return (
+                    gr.update(visible=True, value=success_msg),
+                    gr.update(visible=True),
+                    formatted_results['classification'],
+                    formatted_results['sensitivity'],
+                    formatted_results['file_info'],
+                    formatted_results['reasoning'],
+                    gr.update(visible=True, value=formatted_results['summary']),
+                    get_upload_history(username),
+                    hide_loading()
+                )
+
+            except ImportError:
+                # Fallback to simple formatting
+                file_size = os.path.getsize(file_path)
+                file_info_text = f"**Filename:** {selected_file}\n**Size:** {file_size:,} bytes\n**Path:** {os.path.basename(file_path)}"
+                success_msg = f"✅ **Success:** {selected_file} classified!"
+
+                return (
+                    gr.update(visible=True, value=success_msg),
+                    gr.update(visible=True),
+                    classification.get('classification', 'Unknown'),
+                    classification.get('sensitivity', 'Unknown'),
+                    file_info_text,
+                    classification.get('reasoning', 'No reasoning provided'),
+                    gr.update(visible=False, value=""),  # No enhanced summary in fallback
+                    get_upload_history(username),
+                    hide_loading()
+                )
 
         except Exception as e:
             error_msg = f"❌ **Error:** {str(e)}"
             return (
                 gr.update(visible=True, value=error_msg),
                 gr.update(visible=False),
-                "", "", "", "", get_upload_history(username),
+                "", "", "", "", gr.update(visible=False, value=""), get_upload_history(username),
                 hide_loading()
             )
 
@@ -466,6 +573,7 @@ def file_classification_interface(username_state):
             sensitivity_result,
             file_info,
             reasoning_result,
+            summary_result,
             history_md,
             loading_indicator,
             file_dropdown
@@ -485,6 +593,7 @@ def file_classification_interface(username_state):
             sensitivity_result,
             file_info,
             reasoning_result,
+            summary_result,
             history_md,
             loading_indicator
         ]
@@ -517,6 +626,6 @@ def file_classification_interface(username_state):
     return (
         file_upload, upload_btn, status_md, results_section,
         classification_result, sensitivity_result, file_info,
-        reasoning_result, history_md, refresh_history_btn,
+        reasoning_result, summary_result, history_md, refresh_history_btn,
         file_dropdown, refresh_files_btn, classify_existing_btn, loading_indicator
     )

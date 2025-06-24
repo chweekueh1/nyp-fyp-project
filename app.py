@@ -14,6 +14,7 @@ from performance_utils import (
     log_startup_performance, apply_all_optimizations, memory_optimizer,
     start_app_startup_tracking, mark_startup_milestone, complete_app_startup_tracking
 )
+from flexcyon_theme import FlexcyonTheme
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent
@@ -111,14 +112,20 @@ def load_css_file(filename):
 def create_main_app():
     """Create the main application with performance optimizations."""
 
-    # Load optimized CSS
+    # Load optimized CSS and theme
     mark_startup_milestone("loading_css")
-    css_content = load_css_file("performance.css")
+    performance_css = load_css_file("performance.css")
+    styles_css = load_css_file("styles.css")
+    combined_css = performance_css + "\n" + styles_css
+
+    # Create custom theme
+    custom_theme = FlexcyonTheme()
 
     mark_startup_milestone("creating_gradio_blocks")
     with gr.Blocks(
         title="NYP FYP Chatbot",
-        css=css_content
+        theme=custom_theme,
+        css=combined_css
     ) as app:
 
         # State variables

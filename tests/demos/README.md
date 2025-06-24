@@ -42,16 +42,41 @@ python tests/demos/demo_enhanced_chatbot.py
 python tests/demos/demo_chatbot_with_history.py
 ```
 
-### `demo_integrated_main_app.py`
-**Full Application Integration**
-- 🔐 Login/registration system
-- 💬 Complete chatbot interface
-- 🎨 Theme integration
-- 📱 Full UI experience
+### `demo_file_classification.py`
+**File Classification Interface**
+- 📁 File upload with validation
+- 🔍 Security classification analysis
+- 📊 Sensitivity level detection
+- 💾 Upload history tracking
 
 **Usage:**
 ```bash
-python tests/demos/demo_integrated_main_app.py
+python tests/demos/demo_file_classification.py
+```
+
+### `demo_enhanced_classification.py`
+**Enhanced Classification System**
+- 🔧 Multiple extraction methods (pandoc, tesseract OCR)
+- 🎨 Beautiful response formatting with emojis
+- ⚡ Performance optimization demonstrations
+- 📄 Support for multiple file types
+- 🔍 Dependency detection and installation guidance
+
+**Usage:**
+```bash
+python tests/demos/demo_enhanced_classification.py
+```
+
+### `demo_audio_interface.py`
+**Audio Input Interface**
+- 🎤 Voice input functionality
+- 🔊 Audio processing capabilities
+- 📝 Speech-to-text conversion
+- 🎵 Audio file handling
+
+**Usage:**
+```bash
+python tests/demos/demo_audio_interface.py
 ```
 
 ## 🎯 Demo Features
@@ -105,6 +130,22 @@ python tests/demos/demo_integrated_main_app.py
 1. **Create Multiple Chats:** Try different topics (Python, JavaScript, databases)
 2. **Test Search:** Search for keywords across all chats
 3. **Verify Persistence:** Close and reopen to see saved conversations
+
+### For `demo_enhanced_classification.py`:
+1. **Dependency Check:** See which dependencies (pandoc, tesseract) are available
+2. **Content Extraction:** Test with different file types (.txt, .docx, .pdf, .png)
+3. **Performance Test:** Observe processing speed with large files
+4. **Formatting Demo:** See beautiful classification responses with emojis
+
+### For `demo_file_classification.py`:
+1. **Upload Test:** Upload different file types and see classification
+2. **History Test:** Check upload history and file management
+3. **User Management:** Test with different demo usernames
+
+### For `demo_audio_interface.py`:
+1. **Voice Input:** Test microphone input functionality
+2. **Audio Files:** Upload and process audio files
+3. **Speech Recognition:** Test speech-to-text conversion
 
 ## 📋 Demo Requirements
 

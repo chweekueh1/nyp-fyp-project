@@ -1,6 +1,1 @@
-- [x] Fix the Gradio UI (split into modules, test and integrate them)
-    - [x] Fix post login logic (loading chat history code)
-- [x] Create a ./tests/test_backend.py to test backend functions
-- [x] Add file upload with classification, file upload preview, allowed file formats
-- [x] Add audio input and combined input
-- [x] Remove or refactor finished working `app.py` into `gradio_modules`
+- [ ] Integrate scripts.js to trigger search in each relevant tab
