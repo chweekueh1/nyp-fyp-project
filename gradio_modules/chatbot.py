@@ -1,6 +1,6 @@
 from typing import Tuple, Any, List, Dict
 import gradio as gr
-import backend
+# Backend import moved to function level to avoid early ChromaDB initialization
 
 def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
     """Load all chat histories for a user.
@@ -13,6 +13,9 @@ def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
     """
     if not username:
         return {}
+
+    # Lazy import to avoid early ChromaDB initialization
+    import backend
 
     chat_ids = backend.list_user_chat_ids(username)
     all_histories = {}
@@ -30,6 +33,9 @@ def handle_search(username: str, query: str) -> str:
         return "Please enter a search query."
 
     try:
+        # Lazy import to avoid early ChromaDB initialization
+        import backend
+
         # Get search results from backend
         results = backend.search_chat_history(query.strip(), username)
 
@@ -49,7 +55,7 @@ def handle_search(username: str, query: str) -> str:
             formatted_results.append(f"**Matches:** {match_count} | **Preview:** {chat_preview}")
 
             # Show first few matching messages
-            for j, match in enumerate(result['matching_messages'][:2]):  # Show max 2 matches per chat
+            for match in result['matching_messages'][:2]:  # Show max 2 matches per chat
                 user_msg = match['user_message']
                 bot_msg = match['bot_message']
 
@@ -94,53 +100,73 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         Chat selector, new chat button, chatbot, message input, send button,
         search input, search button, search results, rename input, rename button, and debug markdown.
     """
-    # Chat management components
-    with gr.Row():
-        chat_selector = gr.Dropdown(choices=[], label="Select Chat", scale=3)
-        new_chat_btn = gr.Button("New Chat", variant="primary", scale=1)
+    # Chat management components with wider styling
+    with gr.Group(elem_classes=["chat-interface-container"]):
+        gr.Markdown("### 💬 Chat Management")
+        with gr.Row():
+            chat_selector = gr.Dropdown(choices=[], label="Select Chat")
+            new_chat_btn = gr.Button("New Chat", variant="primary", size="sm")
 
-    # Chat renaming components
-    with gr.Row():
-        rename_input = gr.Textbox(label="Rename current chat", placeholder="Enter new name for current chat...", scale=4)
-        rename_btn = gr.Button("🏷️ Rename", variant="secondary", scale=1)
+    # Chat controls
+    with gr.Group():
+        gr.Markdown("### 🔧 Chat Controls")
 
-    # Search components
-    with gr.Row():
-        search_input = gr.Textbox(label="Search chat history", placeholder="Search through all your chats...", scale=4)
-        search_btn = gr.Button("🔍 Search", variant="secondary", scale=1)
+        # Chat renaming components
+        with gr.Row():
+            rename_input = gr.Textbox(label="Rename current chat", placeholder="Enter new name for current chat...")
+            rename_btn = gr.Button("🏷️ Rename", variant="secondary", size="sm")
 
-    # Search results (initially visible but empty)
-    search_results = gr.Markdown(value="", label="Search Results")
+        # Search components
+        with gr.Row():
+            search_input = gr.Textbox(label="Search chat history", placeholder="Search through all your chats...")
+            search_btn = gr.Button("🔍 Search", variant="secondary", size="sm")
 
-    # Chat interface components
-    chatbot = gr.Chatbot(label="Chat History", height=400)
-    chat_input = gr.Textbox(label="Type your message", placeholder="Type your message here...")
-    send_btn = gr.Button("Send", variant="primary")
-    debug_md = gr.Markdown(visible=True)
+        # Search results (initially visible but empty)
+        search_results = gr.Markdown(value="", label="Search Results")
 
-    def load_chat_history(username: str, chat_id: str) -> List[List[str]]:
+    # Main chat interface
+    with gr.Group():
+        gr.Markdown("### 💬 Chat Interface")
+        chatbot = gr.Chatbot(label="Chat History", height=400, type="messages")
+
+        with gr.Row():
+            chat_input = gr.Textbox(label="Type your message", placeholder="Type your message here...", scale=4)
+            send_btn = gr.Button("Send", variant="primary", scale=1)
+
+        debug_md = gr.Markdown(visible=True)
+
+    def load_chat_history(username: str, chat_id: str) -> List[Dict[str, str]]:
         """Load chat history for a specific chat ID."""
         if not username or not chat_id:
             return []
         try:
+            # Lazy import to avoid early ChromaDB initialization
+            import backend
             hist = backend.get_chat_history(chat_id, username)
-            return [list(pair) for pair in hist] if hist else []
+            # Convert tuples to messages format
+            messages = []
+            for user_msg, bot_msg in hist:
+                messages.append({"role": "user", "content": user_msg})
+                messages.append({"role": "assistant", "content": bot_msg})
+            return messages
         except Exception as e:
-            return [["[Error loading chat]", str(e)]]
+            return [{"role": "assistant", "content": f"[Error loading chat] {str(e)}"}]
 
-    def on_chat_select(username: str, selected_chat_id: str) -> Tuple[List[List[str]], str]:
+    def on_chat_select(username: str, selected_chat_id: str) -> Tuple[List[Dict[str, str]], str]:
         """Handle chat selection from dropdown."""
         if not username or not selected_chat_id:
             return [], ""
         history = load_chat_history(username, selected_chat_id)
         return history, selected_chat_id
 
-    def create_new_chat(username: str) -> Tuple[Dict[str, Any], str, List[List[str]]]:
+    def create_new_chat(username: str) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
         """Create a new chat session."""
         if not username:
             return gr.update(), "", []
 
         # Create new chat and get its ID
+        # Lazy import to avoid early ChromaDB initialization
+        import backend
         new_chat_id = backend.create_and_persist_new_chat(username)
 
         # Get updated list of chats
@@ -149,18 +175,18 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
 
         return gr.update(choices=chat_ids, value=new_chat_id), new_chat_id, []
 
-    def send_message(user: str, msg: str, history: List[List[str]], chat_id: str) -> Tuple[str, List[List[str]], str, Dict[str, Any], str]:
+    def send_message(user: str, msg: str, history: List[Dict[str, str]], chat_id: str) -> Tuple[str, List[Dict[str, str]], str, Dict[str, Any], str]:
         """
         Handle sending a message and updating the chat history with smart naming.
 
         Args:
             user (str): Current username.
             msg (str): The message to send.
-            history (List[List[str]]): Current chat history.
+            history (List[Dict[str, str]]): Current chat history in messages format.
             chat_id (str): Current chat ID.
 
         Returns:
-            Tuple[str, List[List[str]], str, Dict[str, Any], str]:
+            Tuple[str, List[Dict[str, str]], str, Dict[str, Any], str]:
             Empty input, updated chat history, debug message, updated chat selector, new chat ID.
         """
         if not user:
@@ -168,24 +194,41 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         if not msg.strip():
             return msg, history, "Please enter a message.", gr.update(), chat_id
 
+        # Lazy import to avoid early ChromaDB initialization
+        import backend
+
         # Create new smart chat if none exists
         new_chat_created = False
         if not chat_id:
             chat_id = backend.create_and_persist_smart_chat(user, msg.strip())
             new_chat_created = True
 
+        # Convert messages format to tuples for backend compatibility
+        tuple_history = []
+        for i in range(0, len(history), 2):
+            if i + 1 < len(history):
+                user_msg = history[i].get('content', '')
+                bot_msg = history[i + 1].get('content', '')
+                tuple_history.append([user_msg, bot_msg])
+
         # Get response from backend
         response_dict = backend.get_chatbot_response({
             'username': user,  # Changed from 'user' to 'username' to match backend expectation
             'message': msg,
-            'history': history,
+            'history': tuple_history,  # Backend expects tuples format
             'chat_id': chat_id
         })
 
-        new_history = response_dict.get('history', history)
+        backend_history = response_dict.get('history', tuple_history)
         response_val = response_dict.get('response', '')
         if not isinstance(response_val, str):
             response_val = str(response_val)
+
+        # Convert backend response back to messages format
+        new_history = []
+        for user_msg, bot_msg in backend_history:
+            new_history.append({"role": "user", "content": user_msg})
+            new_history.append({"role": "assistant", "content": bot_msg})
 
         # Update chat selector if new chat was created
         chat_selector_update = gr.update()
@@ -199,7 +242,7 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
 
         return "", new_history, f"Message sent successfully", chat_selector_update, chat_id
 
-    def initialize_chats(username: str) -> Tuple[Dict[str, Any], str, List[List[str]]]:
+    def initialize_chats(username: str) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
         """Initialize chat selector with user's existing chats."""
         if not username:
             return gr.update(choices=[], value=None), "", []
@@ -207,9 +250,18 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         all_chats = load_all_chats(username)
         chat_ids = list(all_chats.keys())
         selected = chat_ids[0] if chat_ids else None
-        history = all_chats.get(selected, []) if selected else []
 
-        return gr.update(choices=chat_ids, value=selected), selected or "", history
+        # Convert to messages format
+        if selected:
+            tuple_history = all_chats.get(selected, [])
+            messages_history = []
+            for user_msg, bot_msg in tuple_history:
+                messages_history.append({"role": "user", "content": user_msg})
+                messages_history.append({"role": "assistant", "content": bot_msg})
+        else:
+            messages_history = []
+
+        return gr.update(choices=chat_ids, value=selected), selected or "", messages_history
 
 
 
@@ -219,6 +271,8 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
             return "Please enter a new name for the chat.", gr.update(), current_chat_id
 
         try:
+            # Lazy import to avoid early ChromaDB initialization
+            import backend
             # Call backend rename function
             result = backend.rename_chat(current_chat_id, new_name.strip(), username)
 

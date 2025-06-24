@@ -76,8 +76,8 @@ def create_final_demo():
         # Login simulation
         with gr.Row():
             username_input = gr.Textbox(
-                label="Username", 
-                value="demo_user",
+                label="Username",
+                value="test",
                 placeholder="Enter username to start"
             )
             login_btn = gr.Button("🚀 Start Demo", variant="primary")

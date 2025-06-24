@@ -16,7 +16,7 @@ def check_file_structure():
     print("🔍 Checking file structure...")
     
     required_files = [
-        "gradio_modules/main_app.py",
+        "app.py",
         "gradio_modules/chatbot.py",
         "backend.py"
     ]
@@ -61,10 +61,10 @@ def check_imports():
         return False
     
     try:
-        from gradio_modules.main_app import main_app
-        print("  ✅ main_app imported")
+        from gradio_modules.file_classification import file_classification_interface
+        print("  ✅ file_classification imported")
     except Exception as e:
-        print(f"  ❌ main_app import failed: {e}")
+        print(f"  ❌ file_classification import failed: {e}")
         return False
     
     print("✅ All imports successful")
@@ -85,17 +85,15 @@ def check_chatbot_ui_creation():
         
         # Test creating components without events
         components = chatbot_ui(username_state, chat_history_state, chat_id_state, setup_events=False)
-        
-        if len(components) == 6:
-            chat_selector, new_chat_btn, chatbot, msg, send_btn, debug_md = components
-            print(f"  ✅ Chat selector: {type(chat_selector).__name__}")
-            print(f"  ✅ New chat button: {type(new_chat_btn).__name__}")
-            print(f"  ✅ Chatbot: {type(chatbot).__name__}")
-            print(f"  ✅ Message input: {type(msg).__name__}")
-            print(f"  ✅ Send button: {type(send_btn).__name__}")
-            print(f"  ✅ Debug markdown: {type(debug_md).__name__}")
+
+        print(f"  ✅ Chatbot UI created with {len(components)} components")
+        print(f"  ✅ Component types: {[type(c).__name__ for c in components]}")
+
+        # Check that we have the expected minimum components
+        if len(components) >= 6:
+            print("  ✅ Sufficient components returned")
         else:
-            print(f"  ❌ Expected 6 components, got {len(components)}")
+            print(f"  ❌ Expected at least 6 components, got {len(components)}")
             return False
         
         print("✅ Chatbot UI components created successfully")
@@ -108,28 +106,23 @@ def check_chatbot_ui_creation():
         return False
 
 def check_main_app_structure():
-    """Check the main app structure."""
-    print("\n🔍 Checking main app structure...")
-    
+    """Check the main app components."""
+    print("\n🔍 Checking main app components...")
+
     try:
-        from gradio_modules.main_app import main_app
-        
-        app = main_app()
-        print("  ✅ Main app created successfully")
-        
-        # Check if it's a Gradio Blocks object
-        import gradio as gr
-        if isinstance(app, gr.Blocks):
-            print("  ✅ App is a valid Gradio Blocks object")
-        else:
-            print(f"  ❌ App is not a Gradio Blocks object: {type(app)}")
-            return False
-        
-        print("✅ Main app structure is correct")
+        from gradio_modules.login_and_register import login_interface
+        from gradio_modules.file_classification import file_classification_interface
+        from gradio_modules.audio_input import audio_interface
+
+        print("  ✅ Login interface can be imported")
+        print("  ✅ File classification interface can be imported")
+        print("  ✅ Audio interface can be imported")
+
+        print("✅ Main app components are available")
         return True
-        
+
     except Exception as e:
-        print(f"  ❌ Main app creation failed: {e}")
+        print(f"  ❌ Main app component import failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -193,9 +186,10 @@ def create_test_app():
             
             # Create chatbot UI
             gr.Markdown("## Chatbot Interface")
-            chat_selector, new_chat_btn, chatbot, msg, send_btn, debug_md = chatbot_ui(
+            chatbot_components = chatbot_ui(
                 username_state, chat_history_state, chat_id_state, setup_events=True
             )
+            print(f"  ✅ Chatbot UI created with {len(chatbot_components)} components")
         
         print("  ✅ Test app created successfully")
         return test_app

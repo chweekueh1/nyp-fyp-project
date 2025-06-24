@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-NYP FYP Chatbot Application - Clean Build
-Building each interface step by step with thorough testing.
+NYP FYP Chatbot Application - Modular Interface Design
+Organized with tabbed interfaces and modular components.
 """
 
 import sys
@@ -9,6 +9,11 @@ import asyncio
 from pathlib import Path
 import gradio as gr
 from utils import setup_logging
+from performance_utils import (
+    perf_monitor, optimize_gradio_performance, get_optimized_launch_config,
+    log_startup_performance, apply_all_optimizations, memory_optimizer,
+    start_app_startup_tracking, mark_startup_milestone, complete_app_startup_tracking
+)
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent
@@ -18,722 +23,422 @@ if str(parent_dir) not in sys.path:
 # Set up logging
 logger = setup_logging()
 
-def initialize_backend():
-    """Initialize the backend before loading interfaces."""
-    logger.info("🚀 Initializing backend services...")
+# Start comprehensive app startup tracking
+start_app_startup_tracking()
 
-    try:
-        # Import backend initialization
-        from backend import init_backend
+# Apply all performance optimizations immediately
+apply_all_optimizations()
+mark_startup_milestone("optimizations_applied")
 
-        # Initialize backend asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+# Start performance monitoring
+perf_monitor.start_timer("app_startup")
 
+def initialize_backend_in_background():
+    """Initialize the backend in a separate thread (truly non-blocking)."""
+    import threading
+    import tempfile
+    import os
+
+    # Create a status file to track initialization
+    status_file = os.path.join(tempfile.gettempdir(), "nyp_chatbot_backend_status.txt")
+
+    def background_init():
+        """Background thread function for backend initialization."""
         try:
-            loop.run_until_complete(init_backend())
-            logger.info("✅ Backend initialization completed successfully")
-            return True
-        finally:
-            loop.close()
+            # Write initializing status
+            with open(status_file, 'w') as f:
+                f.write("initializing")
 
-    except Exception as e:
-        logger.error(f"❌ Backend initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+            logger.info("🚀 Starting background backend initialization...")
+            logger.info("⏳ This will initialize ChromaDB and AI models...")
 
-def create_loading_app():
-    """Create a loading screen while backend initializes."""
+            # Delay the import until we're ready to initialize
+            # This prevents ChromaDB from initializing during module import
+            import importlib
 
-    with gr.Blocks(title="NYP FYP Chatbot - Loading") as app:
-        with gr.Column(elem_id="loading_container"):
-            gr.Markdown("# 🚀 NYP FYP Chatbot")
-            gr.Markdown("## ⏳ Initializing Backend Services...")
+            # Initialize backend asynchronously
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-            # Loading animation using HTML/CSS
-            gr.HTML("""
-            <div style="display: flex; justify-content: center; align-items: center; margin: 20px;">
-                <div style="
-                    border: 4px solid #f3f3f3;
-                    border-top: 4px solid #3498db;
-                    border-radius: 50%;
-                    width: 50px;
-                    height: 50px;
-                    animation: spin 1s linear infinite;
-                "></div>
-            </div>
-            <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
-            """)
+            try:
+                # Import backend module (this will trigger ChromaDB init)
+                backend_module = importlib.import_module('backend')
 
-            gr.Markdown("""
-            **Please wait while we:**
-            - 🤖 Initialize AI models
-            - 🗄️ Connect to databases
-            - 🔐 Set up authentication
-            - 📊 Load vector stores
-            """)
+                # Call the initialization function
+                loop.run_until_complete(backend_module.init_backend())
+                logger.info("✅ Backend initialization completed successfully")
+                # Write success status
+                with open(status_file, 'w') as f:
+                    f.write("ready")
+            finally:
+                loop.close()
 
-            gr.Markdown("*This may take a few moments...*")
+        except Exception as e:
+            logger.warning(f"⚠️ Backend initialization failed: {e}")
+            # Write failure status
+            with open(status_file, 'w') as f:
+                f.write("failed")
 
-    return app
+    # Start background thread
+    thread = threading.Thread(target=background_init, daemon=True)
+    thread.start()
+    logger.info("🔄 Backend initialization started in background thread")
 
-def create_app_with_login():
-    """Create app with integrated login interface."""
+def get_backend_status():
+    """Get the current backend status from file."""
+    import tempfile
+    import os
 
-    with gr.Blocks(title="NYP FYP Chatbot - With Login") as app:
-        gr.Markdown("# 🚀 NYP FYP Chatbot")
+    status_file = os.path.join(tempfile.gettempdir(), "nyp_chatbot_backend_status.txt")
+    try:
+        if os.path.exists(status_file):
+            with open(status_file, 'r') as f:
+                return f.read().strip()
+        else:
+            return "initializing"
+    except Exception:
+        return "initializing"
+
+def load_css_file(filename):
+    """Load CSS from external file for better performance."""
+    try:
+        with open(f"styles/{filename}", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.warning(f"CSS file {filename} not found, using minimal styles")
+        return ".gradio-container { max-width: 1200px !important; margin: 0 auto !important; }"
+
+def create_main_app():
+    """Create the main application with performance optimizations."""
+
+    # Load optimized CSS
+    mark_startup_milestone("loading_css")
+    css_content = load_css_file("performance.css")
+
+    mark_startup_milestone("creating_gradio_blocks")
+    with gr.Blocks(
+        title="NYP FYP Chatbot",
+        css=css_content
+    ) as app:
 
         # State variables
         logged_in_state = gr.State(False)
         username_state = gr.State("")
+        backend_status_state = gr.State("initializing")  # "initializing", "ready", "failed"
 
-        # Create main containers
-        with gr.Column(visible=True) as login_container:
-            gr.Markdown("## 🔐 Login")
-            gr.Markdown("Please log in to access the chatbot.")
-
-            username_input = gr.Textbox(
-                label="Username or Email",
-                placeholder="Enter your username or email",
-                elem_id="username_input"
-            )
-
-            with gr.Row():
-                password_input = gr.Textbox(
-                    label="Password",
-                    placeholder="Enter your password",
-                    type="password",
-                    elem_id="password_input",
-                    scale=4
-                )
-                show_password_btn = gr.Button("👁️", elem_id="show_password_btn", scale=1, size="sm")
-
-            with gr.Row():
-                login_btn = gr.Button("Login", variant="primary", elem_id="login_btn")
-                register_btn = gr.Button("Register", variant="secondary", elem_id="register_btn")
-
-        with gr.Column(visible=False) as register_container:
-            gr.Markdown("## 📝 Register")
-            gr.Markdown("Create a new account to access the chatbot.")
-
-            register_username = gr.Textbox(
-                label="Username",
-                placeholder="Choose a username (3-20 characters)",
-                elem_id="register_username"
-            )
-
-            register_email = gr.Textbox(
-                label="Email",
-                placeholder="Enter your authorized email address",
-                elem_id="register_email"
-            )
-
-            # Show allowed email domains
-            gr.Markdown("""
-            **Authorized Email Domains:**
-            - @nyp.edu.sg (NYP staff/faculty)
-            - @student.nyp.edu.sg (NYP students)
-            - Selected test emails for development
-            """, elem_id="allowed_emails_info")
-
-            with gr.Row():
-                register_password = gr.Textbox(
-                    label="Password",
-                    placeholder="Choose a strong password (min 8 characters)",
-                    type="password",
-                    elem_id="register_password",
-                    scale=4
-                )
-                show_reg_password_btn = gr.Button("👁️", elem_id="show_reg_password_btn", scale=1, size="sm")
-
-            with gr.Row():
-                register_confirm = gr.Textbox(
-                    label="Confirm Password",
-                    placeholder="Confirm your password",
-                    type="password",
-                    elem_id="register_confirm",
-                    scale=4
-                )
-                show_reg_confirm_btn = gr.Button("👁️", elem_id="show_reg_confirm_btn", scale=1, size="sm")
-
-            # Password requirements
-            gr.Markdown("""
-            **Password Requirements:**
-            - At least 8 characters long
-            - Contains uppercase and lowercase letters
-            - Contains at least one number
-            - Contains at least one special character (!@#$%^&*)
-            """)
-
-            with gr.Row():
-                register_submit_btn = gr.Button("Register Account", variant="primary", elem_id="register_submit_btn")
-                back_to_login_btn = gr.Button("Back to Login", variant="secondary", elem_id="back_to_login_btn")
-
-        with gr.Column(visible=False) as main_container:
-            gr.Markdown("## 🎉 Welcome!")
-            user_info = gr.Markdown("", elem_id="user_info")
-
-            # Placeholder for other interfaces
-            gr.Markdown("### 📋 Available Interfaces:")
-            gr.Markdown("""
-            - [x] 🔐 Login Interface ✅
-            - [ ] 💬 Chat Interface (Coming Next)
-            - [ ] 🔍 Search Interface
-            - [ ] 📁 File Upload Interface
-            - [ ] 🎤 Audio Interface
-            - [ ] 🎨 Theme & Styling
-            """)
-
-            logout_btn = gr.Button("Logout", variant="secondary", elem_id="logout_btn")
-
-        # Error/success messages
-        error_message = gr.Markdown(visible=False, elem_id="error_message")
-
-        # Login handler
-        def handle_login(username, password):
-            logger.info(f"Login attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Username is required"), ""
-            if not password or not password.strip():
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Password is required"), ""
-
-            try:
-                import asyncio
-                from backend import do_login
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(do_login(username.strip(), password))
-                loop.close()
-
-                if result.get("code") == "200":
-                    actual_username = result.get("username", username.strip())
-                    logger.info(f"Login successful for user: {actual_username}")
-                    return True, actual_username, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), f"**Logged in as:** {actual_username}"
-                else:
-                    error_msg = result.get("message", "Login failed")
-                    logger.warning(f"Login failed for user {username}: {error_msg}")
-                    return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"❌ **Login failed:** {error_msg}"), ""
-            except Exception as e:
-                logger.error(f"Login error for user {username}: {e}")
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"❌ **System error:** {str(e)}"), ""
-
-        # Register handler
-        def handle_register(username, email, password, confirm):
-            logger.info(f"Registration attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Username is required"), ""
-            if not email or not email.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Email is required"), ""
-            if not password or not password.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Password is required"), ""
-            if not confirm or not confirm.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Please confirm your password"), ""
-            if password != confirm:
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Passwords do not match"), ""
-
-            try:
-                import asyncio
-                from backend import do_register
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(do_register(username.strip(), password, email.strip()))
-                loop.close()
-
-                if result.get("code") == "200":
-                    logger.info(f"Registration successful for user: {username}")
-                    return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="✅ **Registration successful!** Please log in with your new account."), ""
-                else:
-                    error_msg = result.get("message", "Registration failed")
-                    logger.warning(f"Registration failed for user {username}: {error_msg}")
-                    return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value=f"❌ **Registration failed:** {error_msg}"), ""
-            except Exception as e:
-                logger.error(f"Registration error for user {username}: {e}")
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value=f"❌ **System error:** {str(e)}"), ""
-
-        # Navigation handlers
-        def switch_to_register():
-            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
-
-        def switch_to_login():
-            return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
-
-        def do_logout():
-            logger.info("User logged out")
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), ""
-
-        # Wire up events
-        login_btn.click(
-            fn=handle_login,
-            inputs=[username_input, password_input],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        register_btn.click(
-            fn=switch_to_register,
-            outputs=[login_container, register_container, main_container, error_message]
-        )
-
-        register_submit_btn.click(
-            fn=handle_register,
-            inputs=[register_username, register_email, register_password, register_confirm],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        back_to_login_btn.click(
-            fn=switch_to_login,
-            outputs=[login_container, register_container, main_container, error_message]
-        )
-
-        logout_btn.click(
-            fn=do_logout,
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        # Add Enter key support
-        password_input.submit(
-            fn=handle_login,
-            inputs=[username_input, password_input],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        register_confirm.submit(
-            fn=handle_register,
-            inputs=[register_username, register_email, register_password, register_confirm],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-    return app
-
-def create_app_with_loading():
-    """Create app that shows loading screen while backend initializes, then switches to login."""
-
-    with gr.Blocks(title="NYP FYP Chatbot", css="""
-        /* Password toggle button styling */
-        #show_password_btn, #show_reg_password_btn, #show_reg_confirm_btn {
-            min-width: 40px !important;
-            padding: 8px !important;
-            font-size: 16px !important;
-            border-radius: 6px !important;
-            background: #f8f9fa !important;
-            border: 1px solid #dee2e6 !important;
-            cursor: pointer !important;
-        }
-
-        #show_password_btn:hover, #show_reg_password_btn:hover, #show_reg_confirm_btn:hover {
-            background: #e9ecef !important;
-            border-color: #adb5bd !important;
-        }
-
-        /* Loading animation styling */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Improve form layout */
-        .gradio-container {
-            max-width: 500px !important;
-            margin: 0 auto !important;
-        }
-    """) as app:
-        # State to track initialization
-        backend_ready = gr.State(False)
-
-        # Loading screen container
-        with gr.Column(visible=True, elem_id="loading_container") as loading_screen:
+        # Loading screen (visible initially)
+        with gr.Column(visible=True) as loading_section:
             gr.Markdown("# 🚀 NYP FYP Chatbot")
-            gr.Markdown("## ⏳ Initializing Backend Services...")
+            gr.Markdown("## ⏳ Loading Application...")
 
-            # Loading animation
+            # Loading spinner
             gr.HTML("""
             <div style="display: flex; justify-content: center; align-items: center; margin: 30px;">
-                <div style="
-                    border: 6px solid #f3f3f3;
-                    border-top: 6px solid #3498db;
-                    border-radius: 50%;
-                    width: 60px;
-                    height: 60px;
-                    animation: spin 1s linear infinite;
-                "></div>
+                <div class="loading-spinner"></div>
             </div>
-            <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
             """)
 
-            # Status updates
-            status_text = gr.Markdown("🔧 **Starting backend initialization...**")
+            loading_status = gr.Markdown("🎨 **Loading user interface...** Please wait...")
 
             gr.Markdown("""
-            **Please wait while we:**
-            - 🤖 Initialize AI models
-            - 🗄️ Connect to databases
-            - 🔐 Set up authentication
-            - 📊 Load vector stores
-            - 🎨 Prepare user interface
+            **Initializing:**
+            - 🎨 User interface components
+            - 🔐 Authentication system
+            - 🤖 AI models (in background)
+            - 🗄️ Database connections (in background)
+            - 📊 Vector stores (in background)
 
-            *This may take a few moments on first startup...*
+            *The interface will load first, then backend services will initialize in the background.*
             """)
 
-        # Main login interface (hidden initially)
-        with gr.Column(visible=False, elem_id="main_interface") as main_interface:
-            # State variables for login
-            logged_in_state = gr.State(False)
-            username_state = gr.State("")
+            # Button to manually proceed if backend takes too long
+            start_backend_btn = gr.Button("⚡ Proceed Anyway (Limited Mode)", variant="secondary", visible=True)
 
-            # State variables for password visibility
-            login_password_visible = gr.State(False)
-            register_password_visible = gr.State(False)
-            register_confirm_visible = gr.State(False)
+        # Login interface container (hidden initially)
+        mark_startup_milestone("creating_login_interface")
+        with gr.Column(visible=False) as login_section:
+            # Import and create login interface
+            try:
+                from gradio_modules.login_and_register import login_interface
+                login_components = login_interface(setup_events=True)
 
-            # Login container
-            with gr.Column(visible=True) as login_container:
-                gr.Markdown("# 🚀 NYP FYP Chatbot")
-                gr.Markdown("## 🔐 Login")
-                gr.Markdown("Please log in to access the chatbot.")
+                # Unpack new dynamic login components
+                (logged_in_state, username_state, is_register_mode, main_container, error_message,
+                 username_input, email_input, password_input, confirm_password_input,
+                 primary_btn, secondary_btn, show_password_btn, show_confirm_btn,
+                 password_visible, confirm_password_visible,
+                 header_subtitle, header_instruction, email_info, password_requirements) = login_components
 
-                username_input = gr.Textbox(
-                    label="Username or Email",
-                    placeholder="Enter your username or email",
-                    elem_id="username_input"
-                )
+            except ImportError as e:
+                gr.Markdown(f"⚠️ **Login interface not available:** {e}")
+                gr.Markdown("Please check the gradio_modules.login_and_register module.")
 
-                with gr.Row():
-                    password_input = gr.Textbox(
-                        label="Password",
-                        placeholder="Enter your password",
-                        type="password",
-                        elem_id="password_input",
-                        scale=4
-                    )
-                    show_password_btn = gr.Button("👁️", elem_id="show_password_btn", scale=1, size="sm")
+        # Main application container (hidden initially)
+        mark_startup_milestone("creating_main_interface")
+        with gr.Column(visible=False) as main_section:
+            gr.Markdown("# 🎉 Welcome to NYP FYP Chatbot!")
 
-                with gr.Row():
-                    login_btn = gr.Button("Login", variant="primary", elem_id="login_btn")
-                    register_btn = gr.Button("Register", variant="secondary", elem_id="register_btn")
-
-            # Register container
-            with gr.Column(visible=False) as register_container:
-                gr.Markdown("## 📝 Register")
-                gr.Markdown("Create a new account to access the chatbot.")
-
-                register_username = gr.Textbox(
-                    label="Username",
-                    placeholder="Choose a username (3-20 characters)",
-                    elem_id="register_username"
-                )
-
-                register_email = gr.Textbox(
-                    label="Email",
-                    placeholder="Enter your authorized email address",
-                    elem_id="register_email"
-                )
-
-                # Show allowed email domains
-                gr.Markdown("""
-                **Authorized Email Domains:**
-                - @nyp.edu.sg (NYP staff/faculty)
-                - @student.nyp.edu.sg (NYP students)
-                - Selected test emails for development
-                """, elem_id="allowed_emails_info")
-
-                with gr.Row():
-                    register_password = gr.Textbox(
-                        label="Password",
-                        placeholder="Choose a strong password (min 8 characters)",
-                        type="password",
-                        elem_id="register_password",
-                        scale=4
-                    )
-                    show_reg_password_btn = gr.Button("👁️", elem_id="show_reg_password_btn", scale=1, size="sm")
-
-                with gr.Row():
-                    register_confirm = gr.Textbox(
-                        label="Confirm Password",
-                        placeholder="Confirm your password",
-                        type="password",
-                        elem_id="register_confirm",
-                        scale=4
-                    )
-                    show_reg_confirm_btn = gr.Button("👁️", elem_id="show_reg_confirm_btn", scale=1, size="sm")
-
-                # Password requirements
-                gr.Markdown("""
-                **Password Requirements:**
-                - At least 8 characters long
-                - Contains uppercase and lowercase letters
-                - Contains at least one number
-                - Contains at least one special character (!@#$%^&*)
-                """)
-
-                with gr.Row():
-                    register_submit_btn = gr.Button("Register Account", variant="primary", elem_id="register_submit_btn")
-                    back_to_login_btn = gr.Button("Back to Login", variant="secondary", elem_id="back_to_login_btn")
-
-            # Main app container (after login)
-            with gr.Column(visible=False) as main_container:
-                gr.Markdown("## 🎉 Welcome!")
+            # User info and logout
+            with gr.Row():
                 user_info = gr.Markdown("", elem_id="user_info")
+                logout_btn = gr.Button("🚪 Logout", variant="secondary", size="sm")
 
-                # Enhanced Chatbot Interface
-                gr.Markdown("### 💬 Enhanced Chatbot")
+            # Tabbed interface for different functionalities
+            mark_startup_milestone("creating_tabbed_interface")
+            with gr.Tabs() as tabs:
+                # Chat Tab
+                with gr.TabItem("💬 Chat", id="chat_tab"):
+                    try:
+                        from gradio_modules.chatbot import chatbot_ui
 
-                # Import the enhanced chatbot UI
-                try:
-                    from gradio_modules.chatbot import chatbot_ui
+                        # Create states for the chatbot interface
+                        chat_history_state = gr.State([])
+                        selected_chat_id = gr.State("")
 
-                    # Create states for the enhanced chatbot interface
-                    chat_history_state = gr.State([])
-                    selected_chat_id = gr.State("")
+                        # Create the chatbot interface
+                        chatbot_components = chatbot_ui(username_state, chat_history_state, selected_chat_id, setup_events=True)
 
-                    # Create the enhanced chatbot interface
-                    chat_selector, new_chat_btn, chatbot, msg, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, chat_debug = chatbot_ui(
-                        username_state, chat_history_state, selected_chat_id, setup_events=True
+                    except ImportError as e:
+                        gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
+                        gr.Markdown("Using basic fallback interface.")
+
+                        # Fallback basic interface
+                        basic_chat_input = gr.Textbox(label="Message", placeholder="Type your message here...")
+                        basic_send_btn = gr.Button("Send", variant="primary")
+                        basic_output = gr.Textbox(label="Response", interactive=False)
+
+                # File Classification Tab
+                with gr.TabItem("📄 File Classification", id="classification_tab"):
+                    try:
+                        from gradio_modules.file_classification import file_classification_interface
+
+                        # Create the file classification interface
+                        file_class_components = file_classification_interface(username_state)
+
+                    except ImportError as e:
+                        gr.Markdown(f"⚠️ **File classification interface not available:** {e}")
+                        gr.Markdown("Please check the gradio_modules.file_classification module.")
+
+                # Audio Input Tab
+                with gr.TabItem("🎤 Audio Input", id="audio_tab"):
+                    try:
+                        from gradio_modules.audio_input import audio_interface
+
+                        # Create the audio interface
+                        audio_components = audio_interface(username_state, setup_events=True)
+
+                    except ImportError as e:
+                        gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
+                        gr.Markdown("Please check the gradio_modules.audio_input module.")
+
+                        # Fallback basic interface
+                        basic_audio_input = gr.Audio(label="Record Audio", type="filepath")
+                        basic_audio_btn = gr.Button("Process Audio", variant="primary")
+                        basic_audio_output = gr.Textbox(label="Transcription", interactive=False)
+
+# File Upload Tab removed - functionality integrated into File Classification tab
+
+        # Backend status indicator
+        with gr.Row():
+            backend_status = gr.Markdown("🔄 **Backend Status:** Checking...", visible=False)
+            refresh_status_btn = gr.Button("🔄 Refresh Status", size="sm", visible=False)
+
+
+        # Event handlers for login/logout
+        def handle_login_success(logged_in, username, backend_status_state):
+            """Handle successful login."""
+            if logged_in and username:
+                # Check current backend status from file
+                current_status = get_backend_status()
+                if current_status == "ready":
+                    status_msg = "✅ **Backend ready!** All features available."
+                elif current_status == "failed":
+                    status_msg = "⚠️ **Limited mode:** Some features may not be available."
+                else:
+                    status_msg = "🔄 **Backend initializing...** Please wait for full functionality."
+
+                return (
+                    gr.update(visible=False),  # Hide login section
+                    gr.update(visible=True),   # Show main section
+                    f"**Logged in as:** {username}",  # Update user info
+                    gr.update(visible=True, value=status_msg),  # Show backend status
+                    gr.update(visible=True)  # Show refresh button
+                )
+            else:
+                return (
+                    gr.update(visible=True),   # Show login section
+                    gr.update(visible=False),  # Hide main section
+                    "",  # Clear user info
+                    gr.update(visible=False),  # Hide backend status
+                    gr.update(visible=False)   # Hide refresh button
+                )
+
+        def handle_logout():
+            """Handle logout with proper state reset for dynamic login interface."""
+            logger.info("User logged out")
+            return (
+                False,  # Reset logged_in_state to False
+                "",     # Reset username_state to empty
+                False,  # Reset is_register_mode to False (login mode)
+                gr.update(visible=True),   # Show login section
+                gr.update(visible=False),  # Hide main section
+                "",  # Clear user info
+                gr.update(visible=False),  # Hide backend status
+                gr.update(visible=False),  # Hide refresh button
+                "",  # Clear username input
+                "",  # Clear email input
+                "",  # Clear password input
+                "",  # Clear confirm password input
+                gr.update(visible=False),  # Hide error message
+                gr.update(value="## 🔐 Login"),  # Reset header to login mode
+                gr.update(value="Please log in to access the chatbot."),  # Reset instruction
+                gr.update(visible=False),  # Hide email info
+                gr.update(visible=False),  # Hide password requirements
+                gr.update(visible=False),  # Hide confirm password input
+                gr.update(visible=False),  # Hide confirm password button
+                gr.update(value="Login", variant="primary"),  # Reset primary button
+                gr.update(value="Register", variant="secondary")  # Reset secondary button
+            )
+
+        # Wire up logout event with proper state reset for dynamic login interface
+        logout_btn.click(
+            fn=handle_logout,
+            outputs=[
+                logged_in_state, username_state, is_register_mode,  # Reset login states
+                login_section, main_section, user_info, backend_status, refresh_status_btn,  # UI updates
+                username_input, email_input, password_input, confirm_password_input, error_message,  # Clear form inputs
+                header_subtitle, header_instruction, email_info, password_requirements,  # Reset form content
+                confirm_password_input, show_confirm_btn, primary_btn, secondary_btn  # Reset form controls
+            ]
+        )
+
+        # Monitor login state changes
+        logged_in_state.change(
+            fn=handle_login_success,
+            inputs=[logged_in_state, username_state, backend_status_state],
+            outputs=[login_section, main_section, user_info, backend_status, refresh_status_btn]
+        )
+
+        def check_backend_status():
+            """Check the current backend initialization status."""
+            current_status = get_backend_status()
+            if current_status == "initializing":
+                return gr.update(value="🔄 **Initializing backend...** Please wait...")
+            elif current_status == "ready":
+                return gr.update(value="✅ **Backend ready!** All features available.")
+            else:
+                return gr.update(value="⚠️ **Limited mode:** Some features may not be available.")
+
+        # Wire up refresh status button
+        refresh_status_btn.click(
+            fn=check_backend_status,
+            outputs=[backend_status]
+        )
+
+        # Wire up refresh status button
+        refresh_status_btn.click(
+            fn=check_backend_status,
+            outputs=[backend_status]
+        )
+
+        # UI Loading sequence - start backend, wait for completion, then show login
+        def start_backend_and_wait_for_completion():
+            """Start backend initialization and wait for it to complete before showing login."""
+            import time
+
+            # Step 1: Start backend initialization in background (non-blocking)
+            initialize_backend_in_background()
+
+            # Step 2: Wait for backend initialization to complete
+            max_wait_time = 120  # Maximum 2 minutes wait
+            poll_interval = 3    # Check every 3 seconds
+            elapsed_time = 0
+
+            while elapsed_time < max_wait_time:
+                status = get_backend_status()
+
+                if status == "ready":
+                    # Backend is ready, show login interface
+                    return (
+                        gr.update(visible=False),  # Hide loading screen
+                        gr.update(visible=True),   # Show login interface
+                        "✅ **Backend ready!** You can now log in."  # Update status
+                    )
+                elif status == "failed":
+                    # Backend failed, show login interface anyway (limited mode)
+                    return (
+                        gr.update(visible=False),  # Hide loading screen
+                        gr.update(visible=True),   # Show login interface
+                        "⚠️ **Limited mode:** Backend initialization failed. Some features may not be available."
                     )
 
-                    # Debug info will be displayed automatically as part of the chatbot interface
+                # Still initializing, wait and check again
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
 
-                except ImportError as e:
-                    gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
-                    gr.Markdown("Using basic text interface as fallback.")
+            # Timeout reached, show login interface anyway
+            return (
+                gr.update(visible=False),  # Hide loading screen
+                gr.update(visible=True),   # Show login interface
+                "⚠️ **Timeout:** Backend initialization took too long. You can log in but some features may not be available."
+            )
 
-                    # Fallback basic interface
-                    basic_chat_input = gr.Textbox(label="Message", placeholder="Type your message here...")
-                    basic_send_btn = gr.Button("Send", variant="primary")
-                    basic_output = gr.Textbox(label="Response", interactive=False)
-
-                logout_btn = gr.Button("Logout", variant="secondary", elem_id="logout_btn")
-
-            # Error/success messages
-            error_message = gr.Markdown(visible=False, elem_id="error_message")
-
-        # Backend initialization function
-        def initialize_backend_async():
-            """Initialize backend and update UI accordingly."""
-            try:
-                logger.info("🔧 Starting backend initialization...")
-                yield gr.update(value="🔧 **Initializing AI models...**"), gr.update(visible=True), gr.update(visible=False), False
-
-                # Initialize backend
-                success = initialize_backend()
-
-                if success:
-                    logger.info("✅ Backend initialization completed")
-                    yield gr.update(value="✅ **Backend ready! Loading interface...**"), gr.update(visible=False), gr.update(visible=True), True
-                else:
-                    logger.error("❌ Backend initialization failed")
-                    yield gr.update(value="❌ **Backend initialization failed!**"), gr.update(visible=True), gr.update(visible=False), False
-
-            except Exception as e:
-                logger.error(f"❌ Backend initialization error: {e}")
-                yield gr.update(value=f"❌ **Error: {str(e)}**"), gr.update(visible=True), gr.update(visible=False), False
-
-        # Login handler (same as before)
-        def handle_login(username, password):
-            logger.info(f"Login attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Username is required"), ""
-            if not password or not password.strip():
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Password is required"), ""
-
-            try:
-                import asyncio
-                from backend import do_login
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(do_login(username.strip(), password))
-                loop.close()
-
-                if result.get("code") == "200":
-                    actual_username = result.get("username", username.strip())
-                    logger.info(f"Login successful for user: {actual_username}")
-                    return True, actual_username, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), f"**Logged in as:** {actual_username}"
-                else:
-                    error_msg = result.get("message", "Login failed")
-                    logger.warning(f"Login failed for user {username}: {error_msg}")
-                    return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"❌ **Login failed:** {error_msg}"), ""
-            except Exception as e:
-                logger.error(f"Login error for user {username}: {e}")
-                return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"❌ **System error:** {str(e)}"), ""
-
-        # Register handler (same as before)
-        def handle_register(username, email, password, confirm):
-            logger.info(f"Registration attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Username is required"), ""
-            if not email or not email.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Email is required"), ""
-            if not password or not password.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Password is required"), ""
-            if not confirm or not confirm.strip():
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Please confirm your password"), ""
-            if password != confirm:
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value="❌ **Error:** Passwords do not match"), ""
-
-            try:
-                import asyncio
-                from backend import do_register
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(do_register(username.strip(), password, email.strip()))
-                loop.close()
-
-                if result.get("code") == "200":
-                    logger.info(f"Registration successful for user: {username}")
-                    return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value="✅ **Registration successful!** Please log in with your new account."), ""
-                else:
-                    error_msg = result.get("message", "Registration failed")
-                    logger.warning(f"Registration failed for user {username}: {error_msg}")
-                    return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value=f"❌ **Registration failed:** {error_msg}"), ""
-            except Exception as e:
-                logger.error(f"Registration error for user {username}: {e}")
-                return False, "", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, value=f"❌ **System error:** {str(e)}"), ""
-
-        # Password toggle handlers
-        def toggle_login_password(is_visible):
-            """Toggle login password visibility."""
-            if is_visible:
-                return gr.update(type="password"), "👁️", False
-            else:
-                return gr.update(type="text"), "🙈", True
-
-        def toggle_register_password(is_visible):
-            """Toggle register password visibility."""
-            if is_visible:
-                return gr.update(type="password"), "👁️", False
-            else:
-                return gr.update(type="text"), "🙈", True
-
-        def toggle_register_confirm(is_visible):
-            """Toggle register confirm password visibility."""
-            if is_visible:
-                return gr.update(type="password"), "👁️", False
-            else:
-                return gr.update(type="text"), "🙈", True
-
-        # Navigation handlers
-        def switch_to_register():
-            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
-
-        def switch_to_login():
-            return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
-
-        def do_logout():
-            logger.info("User logged out")
-            return False, "", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), ""
-
-        # Wire up password toggle events
-        show_password_btn.click(
-            fn=toggle_login_password,
-            inputs=[login_password_visible],
-            outputs=[password_input, show_password_btn, login_password_visible]
-        )
-
-        show_reg_password_btn.click(
-            fn=toggle_register_password,
-            inputs=[register_password_visible],
-            outputs=[register_password, show_reg_password_btn, register_password_visible]
-        )
-
-        show_reg_confirm_btn.click(
-            fn=toggle_register_confirm,
-            inputs=[register_confirm_visible],
-            outputs=[register_confirm, show_reg_confirm_btn, register_confirm_visible]
-        )
-
-        # Wire up events (only when backend is ready)
-        login_btn.click(
-            fn=handle_login,
-            inputs=[username_input, password_input],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        register_btn.click(
-            fn=switch_to_register,
-            outputs=[login_container, register_container, main_container, error_message]
-        )
-
-        register_submit_btn.click(
-            fn=handle_register,
-            inputs=[register_username, register_email, register_password, register_confirm],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        back_to_login_btn.click(
-            fn=switch_to_login,
-            outputs=[login_container, register_container, main_container, error_message]
-        )
-
-        logout_btn.click(
-            fn=do_logout,
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        # Add Enter key support
-        password_input.submit(
-            fn=handle_login,
-            inputs=[username_input, password_input],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        register_confirm.submit(
-            fn=handle_register,
-            inputs=[register_username, register_email, register_password, register_confirm],
-            outputs=[logged_in_state, username_state, login_container, register_container, main_container, error_message, user_info]
-        )
-
-        # Auto-start initialization when app loads
+        # Start backend and wait for completion when app loads
         app.load(
-            fn=initialize_backend_async,
-            outputs=[status_text, loading_screen, main_interface, backend_ready]
+            fn=start_backend_and_wait_for_completion,
+            outputs=[loading_section, login_section, loading_status]
+        )
+
+        # Manual proceed button (for users who don't want to wait)
+        def proceed_anyway():
+            """Allow users to proceed to login even if backend isn't ready."""
+            return (
+                gr.update(visible=False),  # Hide loading screen
+                gr.update(visible=True),   # Show login interface
+                "⚠️ **Limited mode:** You chose to proceed before backend initialization completed. Some features may not be available."
+            )
+
+        start_backend_btn.click(
+            fn=proceed_anyway,
+            outputs=[loading_section, login_section, loading_status]
         )
 
     return app
 
+
 if __name__ == "__main__":
-    print("🚀 Starting NYP FYP Chatbot with Non-Blocking Loading")
+    print("🚀 Starting NYP FYP Chatbot - Modular Interface Design")
     print("=" * 60)
-    print("🎨 Creating application with loading screen...")
-    print("⏳ Backend will initialize after UI loads...")
+    print("🎨 Creating application with tabbed interfaces...")
+    print("⚡ Features:")
+    print("  - Modular interface design")
+    print("  - Optional backend initialization")
+    print("  - Tabbed interface layout")
+    print("  - Enhanced user experience")
+    print("=" * 60)
 
     try:
-        # Create app with non-blocking loading
-        app = create_app_with_loading()
+        # Apply performance optimizations
+        perf_monitor.start_timer("app_creation")
+        mark_startup_milestone("starting_app_creation")
+
+        # Create the main application
+        app = create_main_app()
+        perf_monitor.end_timer("app_creation")
+        mark_startup_milestone("app_creation_complete")
+
         print("✅ Application interface created successfully")
         print("🌐 Launching application...")
         print("=" * 60)
-        print("🔄 Loading Features:")
-        print("  - Non-blocking loading screen")
-        print("  - Backend initializes after UI renders")
-        print("  - Real-time status updates")
-        print("  - Smooth user experience")
+        print("🔄 Available Features:")
+        print("  - 💬 Chat Interface")
+        print("  - 📄 File Classification & Upload")
+        print("  - 🎤 Audio Input & Transcription")
         print("=" * 60)
-        print("🔐 Enhanced Features Available:")
+        print("🔐 Authentication Features:")
         print("  - Username or email login")
-        print("  - Authorized email domains only")
+        print("  - Authorized email domains")
         print("  - Enhanced password requirements")
-        print("  - Email validation against allowed list")
         print("  - Password visibility toggles")
         print("=" * 60)
         print("📧 Authorized Email Domains:")
@@ -742,10 +447,35 @@ if __name__ == "__main__":
         print("  - Selected test emails for development")
         print("=" * 60)
 
-        app.launch(debug=True, share=False)
+        # Get optimized launch configuration
+        launch_config = get_optimized_launch_config()
+
+        # Complete startup tracking BEFORE launching (to exclude runtime)
+        perf_monitor.end_timer("app_startup")
+        mark_startup_milestone("app_ready_to_launch")
+        total_startup_time = complete_app_startup_tracking()
+
+        # Additional summary for console
+        print("=" * 60)
+        print(f"🎉 APP STARTUP COMPLETED IN {total_startup_time:.2f}s")
+        print("🚀 Launching application...")
+        print("=" * 60)
+
+        # Launch with performance optimizations (this includes runtime, not startup)
+        perf_monitor.start_timer("app_runtime")
+        mark_startup_milestone("app_launched")
+
+        app.launch(**launch_config)
+
+        # This will only be reached when the app shuts down
+        perf_monitor.end_timer("app_runtime")
+        runtime = perf_monitor.get_metrics().get("app_runtime", 0)
+        logger.info(f"🏁 App runtime: {runtime:.2f}s")
 
     except Exception as e:
         logger.error(f"❌ Failed to create or launch application: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+

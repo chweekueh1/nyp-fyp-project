@@ -297,14 +297,14 @@ nyp-fyp-project/
 ├── backend.py             # Backend API and business logic
 ├── utils.py               # Utility functions
 ├── gradio_modules/        # UI components
-│   ├── main_app.py        # Main application interface
-│   ├── login_and_register.py
-│   ├── chat_interface.py
-│   ├── search_interface.py
-│   ├── chat_history.py
-│   ├── file_upload.py
-│   ├── audio_input.py
-│   └── chatbot.py
+│   ├── login_and_register.py  # Authentication interface
+│   ├── chatbot.py             # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py         # Audio input interface
+│   ├── chat_interface.py      # Legacy (tests only)
+│   ├── search_interface.py    # Legacy (tests only)
+│   ├── chat_history.py        # Legacy (tests only)
+│   └── file_upload.py         # Legacy (tests only)
 ├── llm/                   # Language model services
 ├── styles/                # CSS and theming
 ├── scripts/               # JavaScript and client-side code

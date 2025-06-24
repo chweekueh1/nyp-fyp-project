@@ -8,7 +8,7 @@ The debug tests confirm that the chatbot UI is properly integrated into the main
 
 ### Step 1: Launch the Main App
 ```bash
-python gradio_modules/main_app.py
+python app.py
 ```
 
 ### Step 2: Open in Browser

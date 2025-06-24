@@ -39,8 +39,8 @@ load_dotenv()
 BASE_CHATBOT_DIR = str(get_chatbot_dir())
 
 DATABASE_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("DATABASE_PATH", "data\\vector_store\\chroma_db")))
-KEYWORDS_DATABANK_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("KEYWORDS_DATABANK_PATH", "data\\keywords\\keywords_databank"))) # Updated default path
-LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("LANGCHAIN_CHECKPOINT_PATH", "data\\langchain_checkpoints\\checkpoint.sqlite"))) # Updated default path
+KEYWORDS_DATABANK_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("KEYWORDS_DATABANK_PATH", "data\\keyword\\keywords_databank"))) # Fixed to match .env file (singular "keyword")
+LANGCHAIN_CHECKPOINT_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("LANGCHAIN_CHECKPOINT_PATH", "data\\memory_persistence\\checkpoint.sqlite3"))) # Fixed to match .env file
 print(LANGCHAIN_CHECKPOINT_PATH)
 
 # Ensure necessary directories exist for persistent storage *before* use

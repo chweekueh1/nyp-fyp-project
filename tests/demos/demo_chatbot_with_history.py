@@ -43,9 +43,9 @@ def create_demo_app():
         # User login simulation
         with gr.Row():
             username_input = gr.Textbox(
-                label="Username (for demo)", 
-                placeholder="Enter username (e.g., 'demo_user')",
-                value="demo_user"
+                label="Username (for demo)",
+                placeholder="Enter username (e.g., 'test')",
+                value="test"
             )
             login_btn = gr.Button("Login", variant="primary")
         

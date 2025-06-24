@@ -9,18 +9,13 @@ import zipfile
 import tempfile
 from openai import OpenAI
 import mimetypes
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_chroma import Chroma
 from datetime import datetime, timezone
 import asyncio
 from collections import deque, defaultdict
 from typing import List, Tuple, Dict, Any, Union
 
 from utils import get_chatbot_dir, setup_logging
-from llm.chatModel import get_convo_hist_answer, is_llm_ready, initialize_llm_and_db
-from llm.dataProcessing import dataProcessing, ExtractText, initialiseDatabase
-from llm.classificationModel import classify_text
-from openai import OpenAI
+from performance_utils import perf_monitor, lazy_loader, task_manager, connection_pool
 from hashing import hash_password, verify_password
 
 # Set up logging
@@ -84,14 +79,64 @@ async def check_rate_limit(user_id: str) -> bool:
     """Check if a user has exceeded their rate limit."""
     return await rate_limiter.check_and_update(user_id)
 
-# Chroma DB initialization
-classification_db = Chroma(
-    collection_name='classification',
-    embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
-    persist_directory=DATABASE_PATH
-)
+# Lazy imports for performance
+def get_chroma_db():
+    """Lazy load ChromaDB."""
+    return lazy_loader.load_module("chroma", lambda: _init_chroma_db())
+
+def _init_chroma_db():
+    """Initialize ChromaDB with lazy imports."""
+    from langchain_chroma import Chroma
+    from langchain_openai.embeddings import OpenAIEmbeddings
+
+    return Chroma(
+        collection_name='classification',
+        embedding_function=OpenAIEmbeddings(model=EMBEDDING_MODEL),
+        persist_directory=DATABASE_PATH
+    )
+
+# Lazy loading functions for performance
+def get_llm_functions():
+    """Lazy load LLM functions."""
+    return lazy_loader.load_module("llm_functions", lambda: _init_llm_functions())
+
+def _init_llm_functions():
+    """Initialize LLM functions with lazy imports."""
+    from llm.chatModel import get_convo_hist_answer, is_llm_ready, initialize_llm_and_db
+    return {
+        'get_convo_hist_answer': get_convo_hist_answer,
+        'is_llm_ready': is_llm_ready,
+        'initialize_llm_and_db': initialize_llm_and_db
+    }
+
+def get_data_processing():
+    """Lazy load data processing functions."""
+    return lazy_loader.load_module("data_processing", lambda: _init_data_processing())
+
+def _init_data_processing():
+    """Initialize data processing with lazy imports."""
+    from llm.dataProcessing import dataProcessing, ExtractText, initialiseDatabase
+    return {
+        'dataProcessing': dataProcessing,
+        'ExtractText': ExtractText,
+        'initialiseDatabase': initialiseDatabase
+    }
+
+def get_classification():
+    """Lazy load classification functions."""
+    return lazy_loader.load_module("classification", lambda: _init_classification())
+
+def _init_classification():
+    """Initialize classification with lazy imports."""
+    from llm.classificationModel import classify_text
+    return {'classify_text': classify_text}
+
+# Initialize with lazy loading
+classification_db = None  # Will be initialized when needed
 
 async def _ensure_db_and_folders_async():
+    perf_monitor.start_timer("db_check")
+
     db_exists = await asyncio.to_thread(os.path.exists, DATABASE_PATH)
     initialise_db_needed = False
 
@@ -100,22 +145,34 @@ async def _ensure_db_and_folders_async():
         initialise_db_needed = True
     else:
         try:
-            chroma_content = await asyncio.to_thread(classification_db.get)
-            
-            if not chroma_content or len(chroma_content.get('documents', [])) == 0:
-                print("ChromaDB is empty or has no documents.")
-                initialise_db_needed = True
+            # Get ChromaDB lazily
+            chroma_db = get_chroma_db()
+            if chroma_db:
+                chroma_content = await asyncio.to_thread(chroma_db.get)
+
+                if not chroma_content or len(chroma_content.get('documents', [])) == 0:
+                    print("ChromaDB is empty or has no documents.")
+                    initialise_db_needed = True
+                else:
+                    print("ChromaDB already contains documents.")
             else:
-                print("ChromaDB already contains documents.")
+                print("ChromaDB not available, assuming initialization is needed.")
+                initialise_db_needed = True
         except Exception as e:
             print(f"Error accessing ChromaDB: {e}. Assuming initialization is needed.")
             initialise_db_needed = True
 
-
     if initialise_db_needed:
         print("Initializing database...")
-        await asyncio.to_thread(initialiseDatabase)
-        print("Database initialization complete.")
+        # Get data processing functions lazily
+        data_funcs = get_data_processing()
+        if data_funcs and 'initialiseDatabase' in data_funcs:
+            await asyncio.to_thread(data_funcs['initialiseDatabase'])
+            print("Database initialization complete.")
+        else:
+            print("Warning: Database initialization functions not available.")
+
+    perf_monitor.end_timer("db_check")
     
     if not await asyncio.to_thread(os.path.exists, CHAT_SESSIONS_PATH):
         await asyncio.to_thread(os.makedirs, CHAT_SESSIONS_PATH, exist_ok=True)
@@ -226,10 +283,12 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
         return {'error': f"Rate limit exceeded. Please wait {rate_limiter.time_window} seconds.", 'code': '429'}
     sanitized_question = sanitize_input(question)
     try:
-        if not is_llm_ready():
+        # Get LLM functions lazily
+        llm_funcs = get_llm_functions()
+        if not llm_funcs or not llm_funcs['is_llm_ready']():
             logging.error("LLM/DB not ready in ask_question. Backend may not be fully initialized.")
             return {'error': 'AI assistant is not fully initialized. Please try again later.', 'code': '500'}
-        response = get_convo_hist_answer(sanitized_question, chat_id)
+        response = llm_funcs['get_convo_hist_answer'](sanitized_question, chat_id)
         # Save user message
         await save_message_async(username, chat_id, {"role": "user", "content": sanitized_question})
         # Save bot response
@@ -265,8 +324,12 @@ def get_chatbot_response(ui_state: dict) -> dict:
         return {'history': history, 'response': '[Error] Username required for message persistence', 'debug': 'No username provided.'}
 
     try:
-        # Use your LLM chat model
-        result = get_convo_hist_answer(message, chat_id)
+        # Use your LLM chat model with lazy loading
+        llm_funcs = get_llm_functions()
+        if not llm_funcs:
+            return {'history': history, 'response': 'AI assistant not available.', 'debug': 'LLM functions not loaded.'}
+
+        result = llm_funcs['get_convo_hist_answer'](message, chat_id)
         response = result['answer']
 
         # Update in-memory history
@@ -308,7 +371,9 @@ def audio_to_text(ui_state: dict) -> dict:
     if not audio_file:
         return {'history': history, 'response': '[No audio file provided]', 'debug': 'No audio.'}
     try:
-        if not is_llm_ready():
+        # Get LLM functions lazily
+        llm_funcs = get_llm_functions()
+        if not llm_funcs or not llm_funcs['is_llm_ready']():
             logging.error("LLM/DB not ready in audio_to_text. Backend may not be fully initialized.")
             return {'history': history, 'response': '[Error] AI assistant is not fully initialized. Please try again later.', 'debug': 'LLM/DB not ready.'}
         with open(audio_file, "rb") as f:
@@ -317,7 +382,7 @@ def audio_to_text(ui_state: dict) -> dict:
                 file=f
             ).text
         # Now get chatbot response
-        result = get_convo_hist_answer(transcript, chat_id)
+        result = llm_funcs['get_convo_hist_answer'](transcript, chat_id)
         response = result['answer']
         history = history + [[f"[Audio: {audio_file}]", response]]
         response_dict = {'history': history, 'response': response, 'debug': f'Audio transcribed and response generated.'}
@@ -339,16 +404,25 @@ def handle_uploaded_file(ui_state: dict) -> dict:
     if not file_obj:
         return {'history': history, 'response': '[No file uploaded]', 'debug': 'No file.'}
     try:
-        if not is_llm_ready():
+        # Get LLM and data processing functions lazily
+        llm_funcs = get_llm_functions()
+        data_funcs = get_data_processing()
+
+        if not llm_funcs or not llm_funcs['is_llm_ready']():
             logging.error("LLM/DB not ready in handle_uploaded_file. Backend may not be fully initialized.")
             return {'history': history, 'response': '[Error] AI assistant is not fully initialized. Please try again later.', 'debug': 'LLM/DB not ready.'}
+
+        if not data_funcs or 'dataProcessing' not in data_funcs:
+            logging.error("Data processing functions not available.")
+            return {'history': history, 'response': '[Error] File processing not available.', 'debug': 'Data processing not ready.'}
+
         import tempfile, shutil
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             with open(file_obj, "rb") as f:
                 shutil.copyfileobj(f, tmp)
             tmp_path = tmp.name
         # Process file
-        dataProcessing(tmp_path)
+        data_funcs['dataProcessing'](tmp_path)
         response = f"File '{getattr(file_obj, 'name', '[unknown]')}' uploaded and processed."
         # Only add to history if chat_id is provided (i.e., called from chat)
         if chat_id:
@@ -893,21 +967,51 @@ async def init_backend_async_internal():
             logger.info("✅ Backend already initialized, skipping...")
             return
 
+        perf_monitor.start_timer("backend_init")
         logger.info("🚀 Starting optimized backend initialization...")
 
         # Create directories first (fast operation)
+        perf_monitor.start_timer("directory_creation")
         await asyncio.to_thread(os.makedirs, CHAT_SESSIONS_PATH, exist_ok=True)
         await asyncio.to_thread(os.makedirs, os.path.dirname(USER_DB_PATH), exist_ok=True)
+        perf_monitor.end_timer("directory_creation")
         logger.info("📁 Directories created")
 
-        # Initialize LLM and database in parallel where possible
+        # Initialize components in parallel for better performance
         try:
-            # Run LLM initialization in a separate thread to avoid blocking
-            await asyncio.to_thread(initialize_llm_and_db)
-            logger.info("🤖 LLM and database initialized")
+            # Create tasks for parallel initialization
+            tasks = []
 
-            # Ensure database and folders are set up (only if not already done)
-            await _ensure_db_and_folders_async()
+            # Task 1: LLM initialization
+            perf_monitor.start_timer("llm_init_task")
+            llm_funcs = get_llm_functions()
+            if llm_funcs and 'initialize_llm_and_db' in llm_funcs:
+                llm_task = asyncio.create_task(
+                    asyncio.to_thread(llm_funcs['initialize_llm_and_db'])
+                )
+                tasks.append(("llm_init", llm_task))
+            else:
+                logger.warning("⚠️ LLM functions not available for initialization")
+            perf_monitor.end_timer("llm_init_task")
+
+            # Task 2: Database and folders setup
+            perf_monitor.start_timer("db_setup_task")
+            db_task = asyncio.create_task(_ensure_db_and_folders_async())
+            tasks.append(("db_setup", db_task))
+            perf_monitor.end_timer("db_setup_task")
+
+            # Wait for all tasks to complete
+            perf_monitor.start_timer("parallel_execution")
+            for task_name, task in tasks:
+                try:
+                    await task
+                    logger.info(f"✅ {task_name} completed")
+                except Exception as task_e:
+                    logger.error(f"❌ {task_name} failed: {task_e}")
+                    # Continue with other tasks even if one fails
+            perf_monitor.end_timer("parallel_execution")
+
+            logger.info("🤖 LLM and database initialization completed")
             logger.info("🗄️ Database setup completed")
 
             # Mark as initialized
@@ -917,6 +1021,7 @@ async def init_backend_async_internal():
             logger.error(f"❌ Error during backend initialization: {e}")
             raise
 
+        perf_monitor.end_timer("backend_init")
         logger.info("✅ Backend initialization completed successfully")
 
 def transcribe_audio(audio_file_path: str) -> str:
@@ -969,7 +1074,13 @@ async def upload_file(file_content: bytes, filename: str, username: str) -> dict
 async def data_classification(content: str) -> dict:
     """Classify data content."""
     try:
-        response = await asyncio.to_thread(classify_text, content)
+        # Get classification functions lazily
+        class_funcs = get_classification()
+        if not class_funcs or 'classify_text' not in class_funcs:
+            logger.error("Classification functions not available")
+            return {'error': "Classification service not available", 'code': '500'}
+
+        response = await asyncio.to_thread(class_funcs['classify_text'], content)
         return {'answer': response['answer'], 'code': '200'}
     except Exception as e:
         logger.error(f"Error in data classification: {e}")

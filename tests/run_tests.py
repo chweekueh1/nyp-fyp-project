@@ -99,13 +99,15 @@ class TestEnvironment(unittest.TestCase):
             "llm.chatModel",
             "llm.classificationModel",
             "llm.dataProcessing",
-            "gradio_modules.main_app",
             "gradio_modules.login_and_register",
+            "gradio_modules.chatbot",
+            "gradio_modules.file_classification",
+            "gradio_modules.audio_input",
+            # Legacy modules (used in tests only)
             "gradio_modules.chat_interface",
             "gradio_modules.search_interface",
             "gradio_modules.chat_history",
-            "gradio_modules.file_upload",
-            "gradio_modules.audio_input"
+            "gradio_modules.file_upload"
         ]
         
         for module_name in required_modules:
