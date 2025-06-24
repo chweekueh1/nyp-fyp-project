@@ -14,31 +14,14 @@ from backend import do_login, do_register
 def test_login_interface():
     """Test the complete login interface with all features."""
     with gr.Blocks(title="Login Interface Test") as app:
-        # Initialize states
-        logged_in_state = gr.State(False)
-        username_state = gr.State("test")
-
         # Header
         gr.Markdown("# Login Interface Test")
-
-        # Create containers for login interface
-        with gr.Column(visible=True) as login_container:
-            error_message = gr.Markdown(visible=False)
-
-        with gr.Column(visible=False) as main_container:
-            user_info = gr.Markdown(visible=False)
-            logout_button = gr.Button("Logout", visible=False)
 
         # Import and create login interface
         from gradio_modules.login_and_register import login_interface
 
-        login_interface(
-            logged_in_state=logged_in_state,
-            username_state=username_state,
-            main_container=main_container,
-            login_container=login_container,
-            error_message=error_message
-        )
+        # Create login interface with default parameters
+        login_interface(setup_events=True)
         
         # Status display
         gr.Markdown("## Test Instructions")

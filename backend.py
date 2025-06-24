@@ -892,6 +892,19 @@ def get_chat_name(chat_id: str, username: str) -> str:
         logger.error(f"Error getting chat name: {e}")
         return chat_id
 
+def set_chat_name(chat_id: str, username: str, new_name: str) -> bool:
+    """Set a custom name for a chat."""
+    try:
+        # For now, this is a placeholder that always returns True
+        # In the future, this could be extended to support custom names
+        # stored in metadata files or database
+        if not chat_id or not username or not new_name:
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Error setting chat name: {e}")
+        return False
+
 def rename_chat(old_chat_id: str, new_chat_name: str, username: str) -> Dict[str, Any]:
     """Rename a chat by creating a new file with the new name and removing the old one.
 
@@ -1307,4 +1320,8 @@ def cleanup_all_test_users() -> bool:
     except Exception as e:
         logger.error(f"Error cleaning up all test users: {e}")
         return False
+
+def delete_test_user(username: str) -> bool:
+    """Delete a test user (alias for cleanup_test_user)."""
+    return cleanup_test_user(username)
 

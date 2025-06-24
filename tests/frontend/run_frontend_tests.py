@@ -19,7 +19,7 @@ def run_login_tests():
     """Run login interface tests."""
     print("🔐 Running Login Interface Tests...")
     try:
-        from .test_login_ui import test_login_interface, test_simple_login
+        from tests.frontend.test_login_ui import test_login_interface, test_simple_login
         
         print("Testing simple login interface...")
         app = test_simple_login()
@@ -44,7 +44,7 @@ def run_chat_tests():
     """Run chat interface tests."""
     print("💬 Running Chat Interface Tests...")
     try:
-        from .test_chat_ui import test_chat_interface, test_chatbot_interface
+        from tests.frontend.test_chat_ui import test_chat_interface, test_chatbot_interface
         
         print("Testing chat interface...")
         app = test_chat_interface()
@@ -69,7 +69,7 @@ def run_search_tests():
     """Run search interface tests."""
     print("🔍 Running Search Interface Tests...")
     try:
-        from .test_search_ui import test_search_interface, test_chat_history_interface
+        from tests.frontend.test_search_ui import test_search_interface, test_chat_history_interface
         
         print("Testing search interface...")
         app = test_search_interface()
@@ -94,7 +94,7 @@ def run_file_audio_tests():
     """Run file upload and audio input tests."""
     print("📁🎤 Running File Upload and Audio Input Tests...")
     try:
-        from .test_file_audio_ui import test_file_upload_interface, test_audio_input_interface
+        from tests.frontend.test_file_audio_ui import test_file_upload_interface, test_audio_input_interface
         
         print("Testing file upload interface...")
         app = test_file_upload_interface()
@@ -119,7 +119,7 @@ def run_ui_state_interaction_tests():
     """Run enhanced UI state interaction tests."""
     print("🔄 Running UI State Interaction Tests...")
     try:
-        from .test_ui_state_interactions import run_ui_state_tests
+        from tests.frontend.test_ui_state_interactions import run_ui_state_tests
 
         success = run_ui_state_tests()
         return success
@@ -137,7 +137,7 @@ def run_theme_styles_tests():
     """Run theme and styles tests."""
     print("🎨 Running Theme and Styles Tests...")
     try:
-        from .test_theme_styles import run_theme_styles_tests
+        from tests.frontend.test_theme_styles import run_theme_styles_tests
 
         success = run_theme_styles_tests()
         return success
@@ -248,38 +248,38 @@ def launch_test_app(test_name):
     print(f"🚀 Launching {test_name} test app...")
     
     if test_name == "login":
-        from .test_login_ui import test_login_interface
+        from tests.frontend.test_login_ui import test_login_interface
         app = test_login_interface()
     elif test_name == "simple-login":
-        from .test_login_ui import test_simple_login
+        from tests.frontend.test_login_ui import test_simple_login
         app = test_simple_login()
     elif test_name == "chat":
-        from .test_chat_ui import test_chat_interface
+        from tests.frontend.test_chat_ui import test_chat_interface
         app = test_chat_interface()
     elif test_name == "chatbot":
-        from .test_chat_ui import test_chatbot_interface
+        from tests.frontend.test_chat_ui import test_chatbot_interface
         app = test_chatbot_interface()
     elif test_name == "search":
-        from .test_search_ui import test_search_interface
+        from tests.frontend.test_search_ui import test_search_interface
         app = test_search_interface()
     elif test_name == "chat-history":
-        from .test_search_ui import test_chat_history_interface
+        from tests.frontend.test_search_ui import test_chat_history_interface
         app = test_chat_history_interface()
     elif test_name == "file-upload":
-        from .test_file_audio_ui import test_file_upload_interface
+        from tests.frontend.test_file_audio_ui import test_file_upload_interface
         app = test_file_upload_interface()
     elif test_name == "audio":
-        from .test_file_audio_ui import test_audio_input_interface
+        from tests.frontend.test_file_audio_ui import test_audio_input_interface
         app = test_audio_input_interface()
     elif test_name == "all":
-        from .test_all_interfaces import test_all_interfaces
+        from tests.frontend.test_all_interfaces import test_all_interfaces
         app = test_all_interfaces()
     elif test_name == "ui-state":
-        from .test_ui_state_interactions import run_ui_state_tests
+        from tests.frontend.test_ui_state_interactions import run_ui_state_tests
         run_ui_state_tests()
         return True
     elif test_name == "theme-styles":
-        from .test_theme_styles import run_theme_styles_tests
+        from tests.frontend.test_theme_styles import run_theme_styles_tests
         run_theme_styles_tests()
         return True
     else:

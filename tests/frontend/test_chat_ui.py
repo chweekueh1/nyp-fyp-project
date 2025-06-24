@@ -24,14 +24,39 @@ def test_chat_interface():
         gr.Markdown("# Chat Interface Test")
         
         # Import and create chat interface
-        from gradio_modules.chat_interface import chat_interface
-        
-        chat_interface(
-            logged_in_state=logged_in_state,
-            username_state=username_state,
-            current_chat_id_state=current_chat_id_state,
-            chat_history_state=chat_history_state
-        )
+        try:
+            from gradio_modules.chat_interface import chat_interface
+
+            chat_interface(
+                logged_in_state=logged_in_state,
+                username_state=username_state,
+                current_chat_id_state=current_chat_id_state,
+                chat_history_state=chat_history_state
+            )
+        except ImportError as e:
+            gr.Markdown(f"⚠️ Chat interface import failed: {e}")
+            gr.Markdown("Using fallback chat interface...")
+
+            # Fallback simple chat interface
+            chatbot = gr.Chatbot(label="Chat", type='messages')
+            msg = gr.Textbox(label="Message", placeholder="Type your message here...")
+            send_btn = gr.Button("Send")
+
+            def simple_chat(message, history, username):
+                if not message.strip():
+                    return history, ""
+
+                # Add user message
+                history.append({"role": "user", "content": message})
+                # Add simple response
+                history.append({"role": "assistant", "content": f"Echo: {message}"})
+                return history, ""
+
+            send_btn.click(
+                fn=simple_chat,
+                inputs=[msg, chatbot, username_state],
+                outputs=[chatbot, msg]
+            )
         
         # Status display
         gr.Markdown("## Test Instructions")

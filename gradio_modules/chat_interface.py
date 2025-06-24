@@ -63,7 +63,7 @@ def chat_interface(
     with gr.Row():
         chat_selector = gr.Dropdown(choices=[], label="Select Chat")
         new_chat_btn = gr.Button("New Chat")
-    chatbot = gr.Chatbot(label="Chatbot")
+    chatbot = gr.Chatbot(label="Chatbot", type='messages')
     msg = gr.Textbox(label="Message", placeholder="Type your message here...")
     send_btn = gr.Button("Send")
     with gr.Row(visible=False, elem_id="search-row"):
@@ -76,9 +76,20 @@ def chat_interface(
         for cid in chat_ids:
             try:
                 hist = get_chat_history(cid, username)
-                all_histories[cid] = [list(pair) for pair in hist] if hist else []
+                # Convert tuples to messages format
+                if hist:
+                    messages = []
+                    for pair in hist:
+                        messages.append({"role": "user", "content": pair[0]})
+                        messages.append({"role": "assistant", "content": pair[1]})
+                    all_histories[cid] = messages
+                else:
+                    all_histories[cid] = []
             except Exception as e:
-                all_histories[cid] = [["[Error loading chat]", str(e)]]
+                all_histories[cid] = [
+                    {"role": "user", "content": "[Error loading chat]"},
+                    {"role": "assistant", "content": str(e)}
+                ]
         return all_histories
 
     def on_start(username):
@@ -112,7 +123,10 @@ def chat_interface(
 
     def send_message_to_chat(message, chat_id, all_histories, username):
         if not message.strip():
-            return "", all_histories, chat_id, [["", "Please enter a message."]]
+            return "", all_histories, chat_id, [
+                {"role": "user", "content": ""},
+                {"role": "assistant", "content": "Please enter a message."}
+            ]
         if not chat_id:
             chat_id = create_and_persist_new_chat(username)
             all_histories[chat_id] = []
@@ -122,9 +136,15 @@ def chat_interface(
             answer = result.get("response", "")
             if isinstance(answer, dict) and "answer" in answer:
                 answer = answer["answer"]
-            all_histories[chat_id].append([message, answer])
+            all_histories[chat_id].extend([
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": answer}
+            ])
         else:
-            all_histories[chat_id].append([message, f"Error: {result.get('error', 'Unknown error')}"])
+            all_histories[chat_id].extend([
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": f"Error: {result.get('error', 'Unknown error')}"}
+            ])
         return "", all_histories, chat_id, all_histories[chat_id]
 
     send_btn.click(
@@ -137,7 +157,8 @@ def chat_interface(
         from difflib import get_close_matches
         results = []
         for cid, history in all_histories.items():
-            all_text = " ".join([msg[0] + " " + msg[1] for msg in history])
+            # Extract content from messages format
+            all_text = " ".join([msg.get("content", "") for msg in history if isinstance(msg, dict)])
             if query.lower() in all_text.lower() or get_close_matches(query, [all_text], n=1, cutoff=0.6):
                 results.append(f"Chat {cid}: {all_text[:100]}...")
         return "\n\n".join(results) if results else "No matching chats found."
