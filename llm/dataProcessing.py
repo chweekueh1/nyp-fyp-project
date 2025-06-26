@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
 from langchain_community.document_transformers.openai_functions import create_metadata_tagger
 from langchain.schema import Document

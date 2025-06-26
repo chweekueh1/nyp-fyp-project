@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 File Upload and Classification Interface
 

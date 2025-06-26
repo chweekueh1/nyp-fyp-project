@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Tuple, Any, List, Dict
 import gradio as gr
 # Backend import moved to function level to avoid early ChromaDB initialization

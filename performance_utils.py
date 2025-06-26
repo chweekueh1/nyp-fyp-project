@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Performance optimization utilities for the NYP FYP Chatbot.
 """

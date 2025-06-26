@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Dict, Any, List
 import gradio as gr
 import logging

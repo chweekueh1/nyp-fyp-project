@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import gradio as gr
 from gradio.themes import Base
 

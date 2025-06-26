@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Dict, Any, List, Tuple, Union
 import gradio as gr
 from backend import (
