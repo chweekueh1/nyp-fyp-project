@@ -1,1 +1,2 @@
 - [ ] Integrate scripts.js to trigger search in each relevant tab
+- [ ] Update README on Dockerfile usage

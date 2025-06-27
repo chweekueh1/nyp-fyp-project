@@ -36,6 +36,7 @@
 .gradio-container {
     background-color: var(--base-01) !important;
     color: var(--text-primary) !important;
+    width: 60vw !important;
 }
 
 .gradio-interface {

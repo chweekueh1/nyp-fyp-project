@@ -27,14 +27,23 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", r'data\chats'))
-DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", r"data\vector_store\chroma_db"))
+default_chat_path = os.path.join("data", "chats")
+CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", default_chat_path))
+
+default_db_path = os.path.join("data", "vector_store", "chroma_db")
+DATABASE_PATH = os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", default_db_path))
+
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-CHAT_SESSIONS_PATH = os.path.join(get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', r'data\chat_sessions'))
-USER_DB_PATH = os.path.join(get_chatbot_dir(), os.getenv('USER_DB_PATH', r'data\user_info\users.json'))
+
+default_session_path = os.path.join("data", "chat_sessions")
+CHAT_SESSIONS_PATH = os.path.join(get_chatbot_dir(), os.getenv('CHAT_SESSIONS_PATH', default_session_path))
+
+default_user_path = os.path.join("data", "user_info", "users.json")
+USER_DB_PATH = os.path.join(get_chatbot_dir(), os.getenv('USER_DB_PATH', default_user_path))
 
 # Test database path (separate from production)
-TEST_USER_DB_PATH = os.path.join(get_chatbot_dir(), r'data\user_info\test_users.json')
+default_test_path = os.path.join("data", "user_info", "test_users.json")
+TEST_USER_DB_PATH = os.path.join(get_chatbot_dir(), default_test_path)
 
 # Allowed email domains/addresses for registration
 ALLOWED_EMAILS = [
