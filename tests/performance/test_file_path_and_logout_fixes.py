@@ -8,10 +8,13 @@ import sys
 import os
 import tempfile
 from pathlib import Path
+from llm.chatModel import initialize_llm_and_db
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
+
+initialize_llm_and_db()
 
 def test_file_classification_paths():
     """Test that file classification uses correct upload paths."""

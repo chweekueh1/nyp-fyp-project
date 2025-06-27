@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 # Import backend functions
 try:
     from backend import search_chat_history, get_chat_history
-    from utils import get_chatbot_dir
 except ImportError as e:
     logger.error(f"Failed to import backend functions: {e}")
     raise
@@ -110,7 +109,7 @@ def fuzzy_find_chats(user: str, query: str) -> str:
     """Fuzzy search through all chats for a user."""
     if not user or not query:
         return "Please login and enter a search query."
-    chat_dir = os.path.join(get_chatbot_dir(), "data", "chat_sessions", user)
+    chat_dir = os.path.join(os.getcwd(), "data", "chat_sessions", user)
     if not os.path.exists(chat_dir):
         return "No chats found."
     results = []

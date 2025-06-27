@@ -10,6 +10,8 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
 ---
 
+> **Recommended:** Use Docker for the easiest and most reliable setup. See the Docker Usage section below. The `setup.py` script is only needed for advanced local development outside Docker.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -71,264 +73,174 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
 ---
 
-## 🏃‍♂️ Running the Application
+## 🐳 Installing Docker
 
-### Start the Application
+Docker is required to build and run the application in a containerized environment. Follow the instructions for your platform:
 
-**⚠️ Important**: Make sure your virtual environment is activated before running the application. The `setup.py` script will create a virtual environment inside the `.venv` folder.
+### Linux
+- **Recommended:** Use your distribution's package manager or the official Docker installation script.
+- Official instructions: https://docs.docker.com/engine/install/
+- Example for Ubuntu:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y ca-certificates curl gnupg
+  sudo install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  sudo systemctl enable --now docker
+  sudo usermod -aG docker $USER
+  # Log out and back in for group changes to take effect
+  ```
 
-```bash
-# Activate virtual environment (if not already activated)
-# Windows (Command Prompt)
-.venv\Scripts\activate
+### macOS
+- Download and install Docker Desktop: https://www.docker.com/products/docker-desktop/
+- After installation, start Docker Desktop from Applications.
 
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
+### Windows
+- Download and install Docker Desktop: https://www.docker.com/products/docker-desktop/
+- Requires Windows 10/11 Pro or WSL2 for Home edition.
+- After installation, start Docker Desktop from the Start menu.
 
-# macOS/Linux
-source .venv/bin/activate
-
-# Start the application
-python app.py
-```
-
-The application will be available at `http://localhost:7860` (or the URL shown in the terminal).
-
-**Note**: This will take a while to start up (10 to 30 seconds), as it has to compile the `langchain` dependencies unless there is already a cached instance.
-
-### Development Mode
-
-```bash
-# Make sure virtual environment is activated
-python app.py --debug
-```
-
----
-
-## 🔧 Environment Variables
-
-The application uses environment variables for configuration. Copy the contents of `.env.dev` to create your own `.env` file:
-
-```bash
-cp .env.dev .env
-```
-
-### Required Environment Variables
-
-Edit your `.env` file and add the following variables. **Note the use of forward slashes (`/`) for paths, which work universally on both Windows and Linux/macOS.**
-
-```bash
-# Copy over and create your own .env file
-
-DEPENDENCIES_PATH = dependencies/poppler-25.03.0;dependencies/tesseract-ocr-5.5.0.20241111;dependencies/pandoc-3.6.4
-CHAT_DATA_PATH = data/modelling/data/
-CLASSIFICATION_DATA_PATH = data/modelling/CNC chatbot/data classification/
-DATABASE_PATH=data/vector_store/chroma_db/
-LANGCHAIN_CHECKPOINT_PATH = data/memory_persistence/checkpoint.sqlite3
-KEYWORDS_DATABANK_PATH = data/keyword/keywords_databank
-CHAT_SESSIONS_PATH = data/chat_sessions/
-EMBEDDING_MODEL = text-embedding-3-small
-OPENAI_API_KEY = add_your_own_api_key
-```
-
-### Getting Your OpenAI API Key
-
-1.  Go to [OpenAI Platform](https://platform.openai.com/)
-2.  Sign in or create an account
-3.  Navigate to "API Keys" in your dashboard
-4.  Click "Create new secret key"
-5.  Copy the key and add it to your `.env` file
-
-**⚠️ Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
+> For more details, see the [official Docker documentation](https://docs.docker.com/get-docker/).
 
 ---
 
-## 🧪 Testing
+## 🐳 Docker Shortcuts via setup.py
 
-The project includes a comprehensive, fully-updated test suite with automated runners, interactive demos, and complete coverage of all application components.
+You can use the `setup.py` script to run common Docker commands with simple flags, instead of typing out long Docker commands:
 
-### 🚀 Quick Test Commands
+- **Build the Docker image:**
+  ```bash
+  python setup.py --docker-build
+  sudo python3 setup.py --docker-build
+  ```
+- **Run the Docker container:**
+  ```bash
+  python setup.py --docker-run
+  sudo python3 setup.py --docker-run
+  ```
+- **Run the test suite in Docker:**
+  ```bash
+  python setup.py --docker-test
+  sudo python3 setup.py --docker-test
+  ```
+- **Open a shell in the Docker container:**
+  ```bash
+  python setup.py --docker-shell
+  sudo python3 setup.py --docker-shell
+  ```
 
-**⚠️ Important**: Make sure your virtual environment is activated before running tests.
+These commands will:
+- Use your `.env` file for environment variables
+- Mount your local `~/.nypai-chatbot` directory for persistent data
+- Expose the application on port 7860
+
+> You can still use the raw Docker commands if you prefer, but the above shortcuts are recommended for convenience.
+
+---
+
+## 🐳 Docker Usage (Recommended)
+
+The application is designed to run seamlessly in Docker with all dependencies (Python 3.12, Tesseract, Pandoc, Poppler, etc.) pre-installed. A Python virtual environment (.venv) is created and used automatically.
+
+### 1. Prepare your environment variables
+
+Copy the following template to a file named `.env` in the project root:
+
+```
+# .env (example)
+OPENAI_API_KEY=your_openai_api_key
+# Add other required variables as needed
+```
+
+Refer to the "Required Environment Variables" section above for all necessary variables.
+
+### 2. Build the Docker image
 
 ```bash
-# Activate virtual environment (if not already activated)
-# Windows (Command Prompt)
-.venv\Scripts\activate
+docker build -t nyp-fyp-chatbot .
+```
 
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
+### 3. Run the Docker container
 
-# macOS/Linux
-source .venv/bin/activate
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
+```
 
-# Run comprehensive test suite (recommended)
-python tests/comprehensive_test_suite.py
+The application will be available at http://localhost:7860.
 
-# Run all test runners (updated and fixed)
+> **Note:** The `dependencies.zip` file is required for the application to run. Ensure it is present in the project root before building the Docker image. The Dockerfile will automatically extract it during the build process.
+
+---
+
+## 🧪 Running Tests
+
+You can run all or individual test files in Docker using the setup.py CLI flags:
+
+**Run all tests in Docker:**
+```bash
+python3 setup.py --docker-test
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 python tests/run_all_tests.py
-python tests/run_tests.py
 ```
 
-### 🎭 Interactive Demos
-
-Experience the chatbot features with interactive demonstrations:
+Or:
 
 ```bash
-# Complete working chatbot demo (all features)
-python tests/demos/demo_final_working_chatbot.py
-
-# Enhanced features showcase
-python tests/demos/demo_enhanced_chatbot.py
-
-# Chat history management demo
-python tests/demos/demo_chatbot_with_history.py
-
-# File classification interface demo
-python tests/demos/demo_file_classification.py
-
-# Enhanced classification system demo
-python tests/demos/demo_enhanced_classification.py
-
-# Audio input interface demo
-python tests/demos/demo_audio_interface.py
+python -m unittest discover tests
 ```
-
-**📋 Demo Features:**
-
-  - **Chatbot Demos**: Complete chat interface with history, search, and smart naming
-  - **File Classification**: Upload and classify documents with security analysis
-  - **Enhanced Classification**: Advanced file processing with pandoc and OCR
-  - **Audio Interface**: Voice input, transcription, and audio file processing
-
-### 📁 Organized Test Structure
-
-  - **`tests/backend/`** - Backend component tests (API, database, core logic) ✅ **UPDATED**
-  - **`tests/frontend/`** - UI component tests (login, chat, search interfaces) ✅ **UPDATED**
-  - **`tests/integration/`** - Feature integration and end-to-end tests ✅ **UPDATED**
-  - **`tests/llm/`** - Language model and AI functionality tests ✅ **UPDATED**
-  - **`tests/demos/`** - Interactive demonstrations and showcases
-  - **`tests/utils/`** - Testing utilities and diagnostic tools
-
-### 🎯 Test Categories
-
-  - **Unit Tests**: Individual component testing in isolation ✅ **All Fixed**
-  - **Integration Tests**: Component interaction and workflow testing ✅ **All Fixed**
-  - **Frontend Tests**: UI components, user interactions, state management ✅ **All Fixed**
-  - **LLM Tests**: Language model functionality and API integration ✅ **All Fixed**
-  - **Demo Tests**: Interactive feature demonstrations and user experience validation
-
-### 🔧 Recent Test Suite Updates
-
-**✅ All Test Runners Fixed and Updated:**
-
-  - Fixed missing backend functions (`set_chat_name`, `delete_test_user`)
-  - Updated frontend tests to use correct function signatures
-  - Rewrote LLM tests to work with actual functions instead of non-existent service classes
-  - Made integration tests more tolerant of initialization issues
-  - **Fixed Gradio Chatbot deprecation warning** - Updated to use `type='messages'` format
-  - Updated all test runners to handle errors gracefully
-  - Improved error reporting and test result summaries
-
-For detailed testing information, see [tests/README.md](https://www.google.com/search?q=tests/README.md).
 
 ---
 
-## 📋 Test Execution Options
+## 🧪 Running Tests
 
-### Comprehensive Test Suite (Recommended)
-
-The main test runner provides organized execution of all test categories:
+### In Docker (Recommended)
 
 ```bash
-# Run complete test suite with detailed reporting
-python tests/comprehensive_test_suite.py
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
 ```
 
-**Features:**
-
-  - Organized test execution by category (unit, integration, frontend)
-  - Detailed timing and success rate reporting
-  - Automatic discovery of available demos
-  - Comprehensive summary with actionable results
-
-### Individual Test Categories
-
-Run specific test categories when working on particular components:
+Or, for full unittest discovery:
 
 ```bash
-# Backend tests (API, database, core logic)
-python tests/backend/test_backend.py
-python tests/backend/test_backend_fixes_and_rename.py
-
-# Frontend tests (UI components, interactions)
-python tests/frontend/test_ui_fixes.py
-python tests/frontend/test_login_ui.py
-python tests/frontend/run_frontend_tests.py
-
-# Integration tests (end-to-end workflows)
-python tests/integration/test_enhanced_chatbot_features.py
-python tests/integration/test_improved_app.py
-
-# LLM tests (AI functionality)
-python tests/llm/test_llm.py
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
 ```
 
-### Legacy Test Runners
-
-For compatibility, the original test runners are still available:
+### Locally
 
 ```bash
-# Legacy comprehensive runner
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 python tests/run_all_tests.py
-
-# Environment validation
-python tests/run_tests.py
-
-# Frontend-specific runner
-python tests/frontend/run_frontend_tests.py test
 ```
 
-### Test Coverage
+Or:
 
-The test suite covers:
-
-  - **Frontend (UI Components)**: Login, registration, chat interface, search interface, file upload, audio input, chatbot, and chat history ✅ **All Fixed**
-  - **Backend (API & Logic)**: Authentication, chat management, data processing, rate limiting, error handling, and utility functions ✅ **All Fixed**
-  - **LLM Services**: Chat model, classification, data processing, model caching, and backward compatibility ✅ **All Fixed**
-  - **Integration**: End-to-end testing with real API calls and file operations ✅ **All Fixed**
-  - **Environment**: Environment variables, file existence, and module imports ✅ **All Fixed**
-
-### Test Results
-
-Each test suite provides:
-
-  - ✅ PASSED/❌ FAILED status for each test
-  - Detailed error messages for failed tests
-  - Summary statistics (passed/failed counts)
-  - Total execution time
-  - **Improved error handling and graceful failure recovery**
-  - Comprehensive final summary
-
-### When to Use Which Test
-
-  - **`run_all_tests.py`**: Use for complete testing before deployment or major changes
-  - **Frontend tests**: Use when making UI changes or adding new components
-  - **Backend tests**: Use when modifying API endpoints or business logic
-  - **LLM tests**: Use when updating LLM services or models
-  - **Integration tests**: Use for integration testing with live backend
-  - **Environment tests**: Use for quick environment validation
-
-### Test Credentials
-
-For frontend testing, use these mock credentials:
-
-  - **Username:** `test`
-  - **Password:** `test`
-
-### Test Logs
-
-Test logs are stored in the `app.log` file with timestamps and detailed information about test execution.
+```bash
+python -m unittest discover tests
+```
 
 ---
 
@@ -411,3 +323,6671 @@ nyp-fyp-project/
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 📁 Project Structure
+
+```
+nyp-fyp-project/
+├── app.py           # Main application entry point
+├── backend.py       # Backend API and business logic
+├── utils.py         # Utility functions
+├── gradio_modules/  # UI components
+│   ├── login_and_register.py # Authentication interface
+│   ├── chatbot.py            # Enhanced chatbot interface
+│   ├── file_classification.py # File upload & classification
+│   ├── audio_input.py        # Audio input interface
+│   ├── chat_interface.py     # Legacy (tests only)
+│   ├── search_interface.py   # Legacy (tests only)
+│   ├── chat_history.py       # Legacy (tests only)
+│   └── file_upload.py        # Legacy (tests only)
+├── llm/             # Language model services
+├── styles/          # CSS and theming
+├── scripts/         # JavaScript and client-side code
+├── tests/           # Test suite
+```
+
+---
+
+## 📊 Features
+
+  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+  - **User Authentication**: Login and registration system
+  - **Chat Interface**: Real-time chat with AI assistant
+  - **Search Functionality**: Search through chat history
+  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+  - **Audio Input**: Voice-to-text functionality
+  - **Chat History**: Persistent chat sessions
+  - **Global Search**: Command-based navigation and search
+  - **OCR Integration**: Text extraction from images using Tesseract
+  - **Document Processing**: Support for various document formats via Pandoc
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1.  **Import Errors**
+
+      - Ensure you're in the correct directory.
+      - Activate the virtual environment.
+      - Check that all dependencies are installed.
+
+2.  **API Key Issues**
+
+      - Verify your OpenAI API key is correct.
+      - Check that the `.env` file exists and is properly formatted.
+      - Ensure the API key has sufficient credits.
+
+3.  **Port Conflicts**
+
+      - The default port is 7860.
+      - If occupied, Gradio will automatically use the next available port.
+
+4.  **Environment Variables**
+
+      - Check the `.env` file if using one.
+      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+
+5.  **Compiler Tools**
+
+      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+
+6.  **Dependencies**
+
+      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+
+---
+
+## 🖥️ Local Development (Advanced)
+
+If you want to run the application locally (outside Docker):
+
+1. **Create a virtual environment and install dependencies:**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+2. **Run the application:**
+
+```bash
+python3 app.py
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python tests/run_all_tests.py
+```
+
+Or:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## 🧪 Running Tests
+
+### In Docker (Recommended)
+
+```bash
+docker build -t nyp-fyp-chatbot .
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python tests/run_all_tests.py
+```
+
+Or, for full unittest discovery:
+
+```bash
+docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
+```
+
+### Locally
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate

@@ -1,0 +1,23 @@
+# Ignore Python cache and venv
+__pycache__/
+.venv/
+
+# Ignore git and local dev files
+.git/
+.gitignore
+
+# Ignore test files (allow tests/ for Docker builds)
+# /tests/
+# tests/
+
+# Ignore local environment files (optional, unless you want to copy .env)
+.env
+.env.*
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore large local files not needed in image
+*.log
+*.tmp 

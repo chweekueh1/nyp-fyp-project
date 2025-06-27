@@ -7,10 +7,14 @@ import sys
 import os
 import tempfile
 from pathlib import Path
+import shutil
+from llm.chatModel import initialize_llm_and_db
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
+
+initialize_llm_and_db()
 
 def test_enhanced_content_extraction():
     """Test the enhanced content extraction module."""
@@ -189,19 +193,19 @@ def test_dependency_availability():
     print("🔍 Testing Dependency Availability...")
     
     try:
-        from gradio_modules.enhanced_content_extraction import check_dependencies
+        # Use shutil.which to check for 'pandoc' and 'tesseract' in PATH
+        pandoc_available = shutil.which('pandoc') is not None
+        tesseract_available = shutil.which('tesseract') is not None
         
-        deps = check_dependencies()
+        print(f"  📦 Pandoc available: {pandoc_available}")
+        print(f"  📦 Tesseract available: {tesseract_available}")
         
-        print(f"  📦 Pandoc available: {deps['pandoc']}")
-        print(f"  📦 Tesseract available: {deps['tesseract']}")
-        
-        if deps['pandoc']:
+        if pandoc_available:
             print("  ✅ Pandoc is available for document conversion")
         else:
             print("  ⚠️ Pandoc not available - document conversion limited")
         
-        if deps['tesseract']:
+        if tesseract_available:
             print("  ✅ Tesseract is available for OCR")
         else:
             print("  ⚠️ Tesseract not available - OCR not supported")

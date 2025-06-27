@@ -1,0 +1,9 @@
+{
+  "users": {
+    "testuser_integration": {
+      "hashedPassword": "$2b$12$04txJgTfR.dlmgwmWdQude1FZA6dDF8e7pqGplP3blayYeUfmRj7C",
+      "created_at": "2025-06-27 07:32:39.494233+00:00",
+      "email": "admin@nyp.edu.sg"
+    }
+  }
+}

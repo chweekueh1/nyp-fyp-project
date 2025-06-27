@@ -9,6 +9,9 @@ import shutil
 import logging
 import tempfile
 import atexit # For reliable cleanup of temporary directory
+import platform
+import argparse
+import time
 
 # Assuming utils.py exists and contains rel2abspath, ensure_chatbot_dir_exists, get_chatbot_dir, setup_logging
 from utils import rel2abspath, ensure_chatbot_dir_exists, get_chatbot_dir, setup_logging
@@ -17,99 +20,12 @@ from utils import rel2abspath, ensure_chatbot_dir_exists, get_chatbot_dir, setup
 # This will set up console output and file logging to ~/.nypai-chatbot/logs/app.log
 logger = setup_logging() # Get the configured logger instance
 
-# Global variable to hold the path to add, populated after temporary venv logic
-PATH_TO_ADD = ""
-
-def _get_dependencies_path_from_env():
-    """
-    Creates a temporary virtual environment, installs python-dotenv,
-    loads the .env file within that temporary venv, captures the
-    DEPENDENCIES_PATH value, and then cleans up the temporary venv.
-
-    Returns:
-        str: The value of DEPENDENCIES_PATH from the .env file, or an empty string.
-    """
-    temp_venv_dir = None
-    try:
-        # Create a temporary directory for the venv
-        temp_venv_dir = tempfile.mkdtemp(prefix="temp_dotenv_venv_")
-        # Ensure cleanup on exit, even if errors occur
-        atexit.register(shutil.rmtree, temp_venv_dir, ignore_errors=True)
-
-        logger.info(f"Creating temporary virtual environment at {temp_venv_dir} to load .env variables.")
-
-        # Determine python executable path for the temporary venv
-        temp_python_executable = os.path.join(temp_venv_dir, "bin", "python3")
-        if sys.platform == "win32":
-            temp_python_executable = os.path.join(temp_venv_dir, "Scripts", "python.exe")
-
-        # Create the temporary virtual environment
-        subprocess.run(
-            [sys.executable, "-m", "venv", temp_venv_dir],
-            check=True,
-            stdout=subprocess.PIPE, # Capture stdout for venv creation
-            stderr=subprocess.PIPE, # Capture stderr for venv creation
-        )
-        logger.debug("Temporary virtual environment created.")
-
-        # Determine pip executable path for the temporary venv
-        temp_pip_path = os.path.join(temp_venv_dir, "bin", "pip")
-        if sys.platform == "win32":
-            temp_pip_path = os.path.join(temp_venv_dir, "Scripts", "pip.exe")
-
-        logger.info("Installing python-dotenv into temporary venv...")
-        subprocess.run(
-            [temp_pip_path, "install", "python-dotenv"],
-            check=True,
-            stdout=subprocess.PIPE, # Capture stdout for pip install
-            stderr=subprocess.PIPE, # Capture stderr for pip install
-        )
-        logger.debug("python-dotenv installed in temporary venv.")
-
-        # Script to be run in the temporary venv to load .env and print the variable
-        # os.getcwd() is used to ensure .env is found relative to where setup.py is run
-        get_env_script = f"""
-import os
-from dotenv import load_dotenv
-import sys
-
-# Load .env relative to the current working directory of the setup script
-dotenv_path = os.path.join(os.getcwd(), '.env')
-if not os.path.exists(dotenv_path):
-    print("", end='') # Print empty string if .env not found
-else:
-    load_dotenv(dotenv_path=dotenv_path)
-    print(os.getenv('DEPENDENCIES_PATH', ''))
-"""
-        logger.info("Loading DEPENDENCIES_PATH from .env via temporary venv...")
-        result = subprocess.run(
-            [temp_python_executable, "-c", get_env_script],
-            capture_output=True,
-            text=True, # Decode stdout/stderr as text
-            check=True
-        )
-        loaded_path = result.stdout.strip()
-        logger.info(f"Retrieved DEPENDENCIES_PATH: '{loaded_path}'")
-        return loaded_path
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error during temporary venv setup or env loading. Stderr: {e.stderr}", exc_info=True)
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"An unexpected error occurred during temporary venv process: {e}", exc_info=True)
-        sys.exit(1)
-    finally:
-        # Cleanup temporary virtual environment directory if it was created and still exists
-        if temp_venv_dir and os.path.exists(temp_venv_dir):
-            logger.info(f"Cleaning up temporary virtual environment at {temp_venv_dir}...")
-            shutil.rmtree(temp_venv_dir, ignore_errors=True) # Use ignore_errors for atexit safety
-            logger.info("Temporary virtual environment cleaned up.")
-
+print('setup.py argv:', sys.argv)
 
 def _add_shebang_to_python_files(directory: str):
     """
     Adds a shebang line '#!/usr/bin/env python3' to Python files
-    in the given directory and its subdirectories, if one is not already present.
+    in the given directory and sits subdirectories, if one is not already present.
     Skips files in the .venv directory.
     """
     logger.info(f"Checking Python files in '{directory}' for shebang lines...")
@@ -172,37 +88,133 @@ def extract_dependencies():
         sys.exit(1)
 
 
-def apply_path():
-    """Adds specified dependency paths to the system's PATH environment variable for the current process."""
-    global PATH_TO_ADD # Ensure we are modifying the global variable
+def running_in_docker():
+    """Detect if running inside a Docker container."""
+    return os.path.exists('/.dockerenv') or os.environ.get('IN_DOCKER') == '1'
 
-    if not PATH_TO_ADD:
-        logger.info("DEPENDENCIES_PATH not set in .env. Skipping PATH modification.")
-        return
 
-    full_paths_to_add = []
-    # Split by semicolon, assuming the .env file uses ';' as a separator for multiple paths
-    # This is important if the .env file originated from a Windows environment.
-    paths = PATH_TO_ADD.split(";")
-    for path_component in paths:
-        if path_component:  # Ensure path is not empty after splitting
-            # Use rel2abspath to get the absolute path, which also normalizes separators for the current OS
-            dependency_abs_path = rel2abspath(path_component.strip())
-            full_paths_to_add.append(dependency_abs_path)
-            logger.debug(f"Resolved path to add: {dependency_abs_path}")
-
-    # Only modify PATH if there are actual paths to add
-    if full_paths_to_add:
-        # Use os.pathsep for cross-platform path separator (':' on Unix, ';' on Windows)
-        # os.environ.get('PATH', '') handles cases where PATH might not be set
-        os.environ["PATH"] = os.environ.get('PATH', '') + os.pathsep + os.pathsep.join(full_paths_to_add)
-        logger.info(f"Added custom dependencies to PATH for current process: {os.pathsep.join(full_paths_to_add)}")
+def ensure_docker_running():
+    # Check if Docker is available
+    if shutil.which('docker') is None:
+        print("❌ Docker is not installed or not in PATH. Please install Docker first.")
+        sys.exit(1)
+    # Try 'docker info' to see if daemon is running
+    try:
+        subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return  # Docker is running
+    except subprocess.CalledProcessError:
+        pass
+    # If not running, try to start it (Linux only)
+    if platform.system() == "Linux":
+        print("⚠️  Docker daemon is not running. Attempting to start it with 'sudo systemctl start docker'...")
+        try:
+            subprocess.run(["sudo", "systemctl", "start", "docker"], check=True)
+            # Wait a moment for Docker to start
+            for _ in range(5):
+                try:
+                    subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    print("✅ Docker daemon started successfully.")
+                    return
+                except subprocess.CalledProcessError:
+                    time.sleep(1)
+            print("❌ Docker daemon could not be started automatically. Please start it manually with:")
+            print("  sudo systemctl start docker")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Failed to start Docker daemon: {e}\nPlease start Docker manually with:\n  sudo systemctl start docker")
+            sys.exit(1)
+    elif platform.system() == "Darwin":
+        print("❌ Docker daemon is not running. Please start Docker Desktop from your Applications folder.")
+        sys.exit(1)
+    elif platform.system() == "Windows":
+        print("❌ Docker daemon is not running. Please start Docker Desktop from your Start menu.")
+        sys.exit(1)
     else:
-        logger.info("No valid paths found in DEPENDENCIES_PATH to add to system PATH.")
+        print("❌ Docker daemon is not running. Please consult your OS documentation to start Docker.")
+        sys.exit(1)
 
+
+def docker_build():
+    ensure_docker_running()
+    # Remove any existing nyp-fyp-chatbot image before building
+    print("🔄 Checking for existing Docker image 'nyp-fyp-chatbot'...")
+    try:
+        result = subprocess.run(["docker", "images", "-q", "nyp-fyp-chatbot"], capture_output=True, text=True, check=True)
+        image_id = result.stdout.strip()
+        if image_id:
+            print(f"🗑️  Removing existing Docker image 'nyp-fyp-chatbot' (ID: {image_id})...")
+            subprocess.run(["docker", "rmi", "-f", "nyp-fyp-chatbot"], check=True)
+            print("✅ Removed old Docker image.")
+        else:
+            print("No existing 'nyp-fyp-chatbot' image found.")
+    except Exception as e:
+        print(f"⚠️  Could not check or remove existing image: {e}")
+    print("🐳 Building Docker image 'nyp-fyp-chatbot' with BuildKit...")
+    env = os.environ.copy()
+    env["DOCKER_BUILDKIT"] = "1"
+    subprocess.run(["docker", "build", "-t", "nyp-fyp-chatbot", "."], check=True, env=env)
+
+def ensure_docker_image():
+    ensure_docker_running()
+    # Check if the Docker image exists
+    try:
+        result = subprocess.run([
+            "docker", "images", "-q", "nyp-fyp-chatbot"
+        ], capture_output=True, text=True, check=True)
+        if not result.stdout.strip():
+            print("⚠️  Docker image 'nyp-fyp-chatbot' not found. Building it now...")
+            docker_build()
+    except Exception as e:
+        print(f"❌ Failed to check Docker images: {e}")
+        sys.exit(1)
+
+def docker_run():
+    ensure_docker_image()
+    print("🐳 Running Docker container for 'nyp-fyp-chatbot'...")
+    cmd = [
+        "docker", "run", "--env-file", ".env",
+        "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
+        "-p", "7860:7860", "nyp-fyp-chatbot"
+    ]
+    subprocess.run(cmd, check=True)
+
+def docker_test():
+    ensure_docker_image()
+    print("🐳 Running tests in Docker container...")
+    cmd = [
+        "docker", "run", "--env-file", ".env",
+        "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
+        "-it", "nyp-fyp-chatbot", "--run-tests"
+    ]
+    subprocess.run(cmd, check=True)
+
+def docker_shell():
+    ensure_docker_image()
+    print("🐳 Opening a shell in the Docker container...")
+    cmd = [
+        "docker", "run", "--env-file", ".env",
+        "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
+        "-it", "nyp-fyp-chatbot", "/bin/bash"
+    ]
+    subprocess.run(cmd, check=True)
+
+def docker_export():
+    ensure_docker_image()
+    output_file = "nyp-fyp-chatbot.tar"
+    print(f"📦 Exporting Docker image 'nyp-fyp-chatbot' to {output_file} ...")
+    try:
+        subprocess.run(["docker", "save", "-o", output_file, "nyp-fyp-chatbot"], check=True)
+        print(f"✅ Docker image exported successfully to {output_file}")
+    except Exception as e:
+        print(f"❌ Failed to export Docker image: {e}")
+        sys.exit(1)
 
 def main():
     """Main function to set up the environment and install dependencies."""
+    if running_in_docker():
+        logger.info("Detected Docker environment. Skipping setup.py environment/venv/dependency logic.")
+        logger.info("All dependencies should be installed via Dockerfile. No further setup required.")
+        return
     logger.info("Starting environment setup script...")
 
     # Step 0: Ensure the base chatbot directory exists and logging is set up
@@ -212,20 +224,13 @@ def main():
     # Step 1: Add shebang to all Python files in the current project directory (and subdirectories)
     _add_shebang_to_python_files(os.getcwd())
 
-    # Step 2: Get PATH_TO_ADD using a temporary virtual environment for python-dotenv
-    global PATH_TO_ADD # Declare intent to modify the global variable
-    PATH_TO_ADD = _get_dependencies_path_from_env()
-
-    # Step 3: Extract external dependencies
+    # Step 2: Extract external dependencies
     extract_dependencies()
 
-    # Step 4: Apply custom paths to the current process's PATH environment variable
-    apply_path()
-
-    # Step 5: Define the path for the main virtual environment
+    # Step 3: Define the path for the main virtual environment
     venv_path = rel2abspath(".venv")
 
-    # Step 6: Remove existing main virtual environment if it exists
+    # Step 4: Remove existing main virtual environment if it exists
     if os.path.exists(venv_path):
         logger.info(f"Removing existing main virtual environment at: {venv_path}")
         try:
@@ -237,7 +242,7 @@ def main():
             )
             sys.exit(1)
 
-    # Step 7: Create a new main Python virtual environment
+    # Step 5: Create a new main Python virtual environment
     logger.info(f"Creating new main virtual environment at: {venv_path}")
     try:
         # sys.executable ensures the venv is created with the same Python interpreter running this script
@@ -252,13 +257,13 @@ def main():
         logger.error(f"Failed to create main virtual environment: {e}", exc_info=True)
         sys.exit(1)
 
-    # Step 8: Determine pip executable path within the new main venv
+    # Step 6: Determine pip executable path within the new main venv
     if sys.platform == "win32":
         pip_path = os.path.join(venv_path, "Scripts", "pip.exe")
     else:  # Linux, macOS, and other Unix-like systems
         pip_path = os.path.join(venv_path, "bin", "pip")
 
-    # Step 9: Install Python dependencies from requirements.txt into the main venv
+    # Step 7: Install Python dependencies from requirements.txt into the main venv
     requirements_file = rel2abspath("requirements.txt")
     if os.path.exists(requirements_file):
         logger.info(f"Installing Python dependencies from '{requirements_file}' into main venv...")
@@ -294,5 +299,54 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Setup and Docker helper for NYP-FYP Chatbot.")
+    parser.add_argument("--docker-build", action="store_true", help="Build the Docker image.")
+    parser.add_argument("--docker-run", action="store_true", help="Run the Docker container.")
+    parser.add_argument("--docker-test", action="store_true", help="Run the test suite in Docker.")
+    parser.add_argument("--docker-shell", action="store_true", help="Open a shell in the Docker container.")
+    parser.add_argument("--docker-export", action="store_true", help="Export the Docker image to a tar file.")
+    parser.add_argument("--run-tests", action="store_true", help="Run the test suite inside the container.")
+    parser.add_argument("--docker-test-file", type=str, help="Run a specific test file in Docker (provide the path to the test file)")
+    parser.add_argument("--run-test-file", type=str, help="Run a specific test file inside the container (internal use)")
+    args = parser.parse_args()
+
+    # Handle --run-tests and --run-test-file first to avoid interference
+    if args.run_tests:
+        print("🧪 Running test suite inside the container...")
+        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
+        subprocess.run([venv_python, "tests/run_all_tests.py"], check=True)
+        sys.exit(0)
+    if args.run_test_file:
+        print(f"🧪 Running test file {args.run_test_file} inside the container...")
+        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
+        subprocess.run([venv_python, args.run_test_file], check=True)
+        sys.exit(0)
+    if args.docker_build:
+        docker_build()
+    elif args.docker_run:
+        docker_run()
+    elif args.docker_test:
+        docker_test()
+    elif args.docker_shell:
+        docker_shell()
+    elif args.docker_export:
+        docker_export()
+    elif args.docker_test_file:
+        ensure_docker_image()
+        print(f"🐳 Running test file {args.docker_test_file} in Docker container...")
+        cmd = [
+            "docker", "run", "--env-file", ".env",
+            "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
+            "-it", "nyp-fyp-chatbot", "--run-test-file", args.docker_test_file
+        ]
+        subprocess.run(cmd, check=True)
+    elif running_in_docker():
+        print("🐳 Detected Docker environment. Activating .venv and launching app.py...")
+        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
+        if not os.path.exists(venv_python):
+            print("❌ .venv not found! Please check Docker build.")
+            sys.exit(1)
+        os.execv(venv_python, [venv_python, 'app.py'])
+    else:
+        main()
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Tuple, Dict, Any, List
 from datetime import datetime
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
-from utils import get_chatbot_dir
+# from utils import get_chatbot_dir
 # from llm.dataProcessing import ExtractText  # Moved to function level
 # from llm.classificationModel import classify_text  # Moved to function level
 
@@ -26,15 +26,15 @@ ALLOWED_EXTENSIONS = [
 
 def get_uploads_dir(username: str) -> str:
     """Get the uploads directory for a specific user."""
-    # Check if we're in test mode
     import os
+    from ustils import get_chatbot_dir
     is_test_env = os.getenv('TESTING', '').lower() == 'true'
 
     if is_test_env:
         # Use test upload directory
         uploads_dir = os.path.join(get_chatbot_dir(), 'test_uploads', 'txt_files', username)
     else:
-        # Use production upload directory - align with backend structure
+        # Use production upload directory under ~/.nypai-chatbot/uploads/{username}
         uploads_dir = os.path.join(get_chatbot_dir(), 'uploads', username)
 
     os.makedirs(uploads_dir, exist_ok=True)

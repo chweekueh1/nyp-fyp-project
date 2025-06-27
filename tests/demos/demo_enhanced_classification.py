@@ -8,6 +8,7 @@ import sys
 import os
 import tempfile
 from pathlib import Path
+import shutil
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -20,15 +21,9 @@ def demo_enhanced_classification():
     
     # Check dependencies
     try:
-        from gradio_modules.enhanced_content_extraction import check_dependencies
-        deps = check_dependencies()
-        print(f"\n📦 System Dependencies:")
-        print(f"  Pandoc: {'✅ Available' if deps['pandoc'] else '❌ Not Available'}")
-        print(f"  Tesseract: {'✅ Available' if deps['tesseract'] else '❌ Not Available'}")
-        
-        if not deps['pandoc']:
+        if not shutil.which('pandoc'):
             print("  💡 Install pandoc for document conversion: https://pandoc.org/installing.html")
-        if not deps['tesseract']:
+        if not shutil.which('tesseract'):
             print("  💡 Install tesseract for OCR: https://github.com/tesseract-ocr/tesseract")
     except Exception as e:
         print(f"❌ Error checking dependencies: {e}")

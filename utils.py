@@ -27,35 +27,16 @@ def create_folders(path: str):
         raise
 
 def ensure_chatbot_dir_exists():
-    # Creates a `.nypai-chatbot` folder for the user if it doesn't exist.
-    user_folder = get_chatbot_dir()
-    os.makedirs(user_folder, exist_ok=True)
+    # No-op for Docker: all data is stored in the working directory
+    pass
 
 def get_chatbot_dir():
-    """
-    Returns the absolute path to the .nypai-chatbot directory in the user's home folder.
-    This method is robust and works across Windows, Linux, and macOS.
-    """
-    if os.name == 'nt':  # Windows
-        user_home = os.environ.get('USERPROFILE', os.path.expanduser('~'))
-    else:  # Linux/macOS
-        user_home = os.environ.get('HOME', os.path.expanduser('~'))
-
-    chatbot_dir = os.path.join(user_home, '.nypai-chatbot')
-    return chatbot_dir
+    """Return the current working directory for Docker-native operation."""
+    return os.getcwd()
 
 def setup_logging():
-    """Set up centralized logging configuration.
-
-    This function configures logging to:
-    1. Write to app.log in ~/.nypai-chatbot/logs/
-    2. Rotate logs when they reach 5MB
-    3. Keep 3 backup files
-    4. Log all levels (DEBUG and above)
-    5. Format logs with timestamp, level, module, and message
-    """
-    # Get the logs directory
-    logs_dir = Path(get_chatbot_dir()) / 'logs'
+    """Set up centralized logging configuration in ./logs for Docker-native operation."""
+    logs_dir = Path(os.getcwd()) / 'logs'
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     # Configure the root logger

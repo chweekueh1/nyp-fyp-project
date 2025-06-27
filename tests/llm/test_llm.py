@@ -20,6 +20,8 @@ from llm.chatModel import get_convo_hist_answer, is_llm_ready, initialize_llm_an
 from llm.classificationModel import classify_text
 from llm.dataProcessing import dataProcessing, ExtractText
 
+initialize_llm_and_db()
+
 def test_chat_model_service():
     """Test chat model functionality."""
     print("🔍 Testing chat model functions...")

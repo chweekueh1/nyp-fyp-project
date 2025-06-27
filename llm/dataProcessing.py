@@ -28,7 +28,7 @@ load_dotenv()
 # Test-aware path configuration
 def get_data_paths():
     """Get data paths with test environment awareness."""
-    base_dir = get_chatbot_dir()
+    base_dir = os.getcwd()
 
     # Check if we're in a test environment (only explicit TESTING env var)
     is_test_env = os.getenv('TESTING', '').lower() == 'true'

@@ -37,7 +37,7 @@ load_dotenv()
 
 # --- Environment Setup and Path Resolution ---
 # Ensure get_chatbot_dir() returns a string for os.path.join compatibility
-BASE_CHATBOT_DIR = str(get_chatbot_dir())
+BASE_CHATBOT_DIR = str(os.getcwd())
 
 default_db_path = os.path.join("data", "vector_store", "chroma_db")
 DATABASE_PATH = rel2abspath(os.path.join(BASE_CHATBOT_DIR, os.getenv("DATABASE_PATH", default_db_path)))

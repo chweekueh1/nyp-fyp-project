@@ -15,6 +15,7 @@ from performance_utils import (
     start_app_startup_tracking, mark_startup_milestone, complete_app_startup_tracking
 )
 from flexcyon_theme import FlexcyonTheme
+import os
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent
@@ -425,6 +426,10 @@ if __name__ == "__main__":
     print("=" * 60)
 
     try:
+        # Detect Docker and print a message
+        if os.path.exists('/.dockerenv') or os.environ.get('IN_DOCKER') == '1':
+            print("🐳 Running inside a Docker container. All dependencies should be pre-installed.")
+
         # Apply performance optimizations
         perf_monitor.start_timer("app_creation")
         mark_startup_milestone("starting_app_creation")

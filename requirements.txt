@@ -33,7 +33,6 @@ Deprecated==1.2.18
 dill==0.4.0
 distlib==0.3.9
 distro==1.9.0
-dotenv==0.9.9
 durationpy==0.10
 effdet==0.4.1
 emoji==2.14.1

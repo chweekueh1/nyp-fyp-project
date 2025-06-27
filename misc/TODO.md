@@ -1,2 +1,2 @@
 - [ ] Integrate scripts.js to trigger search in each relevant tab
-- [ ] Update README on Dockerfile usage
+- [ ] Push Docker image at the end of FYP

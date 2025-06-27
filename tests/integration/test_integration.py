@@ -18,6 +18,7 @@ from backend import ask_question, transcribe_audio_async, upload_file, data_clas
 import asyncio
 import wave
 import numpy as np
+from llm.chatModel import initialize_llm_and_db
 
 """
 Integration tests for backend functions (no Flask routes - this backend uses Gradio).
@@ -97,12 +98,14 @@ def run_all_tests():
         print(f"Login result: {login_result}")
 
         # Check if registration was successful first
-        if register_result.get('code') == '200':
-            assert login_result.get('code') == '200', f"Login should succeed after successful registration. Got: {login_result}"
+        if register_result.get('code') == '409':
+            # User already exists, login should succeed
+            login_result = asyncio.run(do_login(test_username, complex_password))
+            assert login_result.get('code') == '200', f"Login should succeed for existing user. Got: {login_result}"
         else:
-            print(f"⚠️ Registration failed: {register_result.get('message', 'Unknown error')}")
-            # If registration failed, login should also fail
-            assert login_result.get('code') != '200', f"Login should fail if registration failed. Got: {login_result}"
+            # Registration succeeded, login should also succeed
+            login_result = asyncio.run(do_login(test_username, complex_password))
+            assert login_result.get('code') == '200', f"Login should succeed after registration. Got: {login_result}"
 
         print("✅ Login/register functions passed")
 
@@ -397,6 +400,7 @@ def run_integration_tests():
         return True
 
 if __name__ == "__main__":
+    initialize_llm_and_db()
     result = run_integration_tests()
     if isinstance(result, tuple):
         success, error_messages = result

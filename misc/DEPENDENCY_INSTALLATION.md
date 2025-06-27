@@ -8,7 +8,7 @@ The enhanced file classification system supports:
 - **Pandoc**: Document conversion (.docx, .doc, .odt, .rtf, .html, .epub, .md)
 - **Tesseract OCR**: Image text extraction (.png, .jpg, .jpeg, .tiff, .bmp, .gif)
 
-Dependencies should be installed to: `~/.nypai-chatbot/data/dependencies/`
+Dependencies should be installed to: `/app/dependencies/`
 
 ## Directory Structure
 
@@ -33,25 +33,25 @@ Dependencies should be installed to: `~/.nypai-chatbot/data/dependencies/`
 
 #### Pandoc Installation
 1. Download pandoc from: https://pandoc.org/installing.html
-2. Extract to: `~/.nypai-chatbot/data/dependencies/pandoc/`
+2. Extract to: `/app/dependencies/pandoc/`
 3. Ensure `pandoc.exe` is directly in the pandoc folder
 
 #### Tesseract Installation
 1. Download tesseract from: https://github.com/tesseract-ocr/tesseract
-2. Extract to: `~/.nypai-chatbot/data/dependencies/tesseract/`
+2. Extract to: `/app/dependencies/tesseract/`
 3. Ensure `tesseract.exe` is directly in the tesseract folder
 
 ### Linux/macOS
 
 #### Pandoc Installation
 1. Download pandoc from: https://pandoc.org/installing.html
-2. Extract to: `~/.nypai-chatbot/data/dependencies/pandoc/`
-3. Ensure binary is at: `~/.nypai-chatbot/data/dependencies/pandoc/bin/pandoc`
+2. Extract to: `/app/dependencies/pandoc/`
+3. Ensure binary is at: `/app/dependencies/pandoc/bin/pandoc`
 
 #### Tesseract Installation
 1. Download tesseract from: https://github.com/tesseract-ocr/tesseract
-2. Extract to: `~/.nypai-chatbot/data/dependencies/tesseract/`
-3. Ensure binary is at: `~/.nypai-chatbot/data/dependencies/tesseract/bin/tesseract`
+2. Extract to: `/app/dependencies/tesseract/`
+3. Ensure binary is at: `/app/dependencies/tesseract/bin/tesseract`
 
 ## Alternative: System Installation
 
@@ -154,3 +154,15 @@ To update dependencies:
 3. Run verification test to confirm
 
 The application automatically detects updated dependencies on restart.
+
+# Clarify that ~/.nypai-chatbot is used for persistent data and dependencies, even in Docker, for compatibility.
+
+## Running Individual Test Files in Docker
+
+You can now run any test file directly in the Docker container using the setup script:
+
+```bash
+python3 setup.py --docker-test-file tests/integration/test_integration.py
+```
+
+Replace the path with any test file you want to run. This uses the virtual environment and all dependencies inside the container.
