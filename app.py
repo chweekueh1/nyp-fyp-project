@@ -10,9 +10,12 @@ from pathlib import Path
 import gradio as gr
 from utils import setup_logging
 from performance_utils import (
-    perf_monitor, optimize_gradio_performance, get_optimized_launch_config,
-    log_startup_performance, apply_all_optimizations, memory_optimizer,
-    start_app_startup_tracking, mark_startup_milestone, complete_app_startup_tracking
+    perf_monitor,
+    get_optimized_launch_config,
+    apply_all_optimizations,
+    start_app_startup_tracking,
+    mark_startup_milestone,
+    complete_app_startup_tracking,
 )
 from flexcyon_theme import FlexcyonTheme
 import os
@@ -35,6 +38,7 @@ mark_startup_milestone("optimizations_applied")
 # Start performance monitoring
 perf_monitor.start_timer("app_startup")
 
+
 def initialize_backend_in_background():
     """Initialize the backend in a separate thread (truly non-blocking)."""
     import threading
@@ -48,7 +52,7 @@ def initialize_backend_in_background():
         """Background thread function for backend initialization."""
         try:
             # Write initializing status
-            with open(status_file, 'w') as f:
+            with open(status_file, "w") as f:
                 f.write("initializing")
 
             logger.info("🚀 Starting background backend initialization...")
@@ -64,13 +68,13 @@ def initialize_backend_in_background():
 
             try:
                 # Import backend module (this will trigger ChromaDB init)
-                backend_module = importlib.import_module('backend')
+                backend_module = importlib.import_module("backend")
 
                 # Call the initialization function
                 loop.run_until_complete(backend_module.init_backend())
                 logger.info("✅ Backend initialization completed successfully")
                 # Write success status
-                with open(status_file, 'w') as f:
+                with open(status_file, "w") as f:
                     f.write("ready")
             finally:
                 loop.close()
@@ -78,13 +82,14 @@ def initialize_backend_in_background():
         except Exception as e:
             logger.warning(f"⚠️ Backend initialization failed: {e}")
             # Write failure status
-            with open(status_file, 'w') as f:
+            with open(status_file, "w") as f:
                 f.write("failed")
 
     # Start background thread
     thread = threading.Thread(target=background_init, daemon=True)
     thread.start()
     logger.info("🔄 Backend initialization started in background thread")
+
 
 def get_backend_status():
     """Get the current backend status from file."""
@@ -94,12 +99,13 @@ def get_backend_status():
     status_file = os.path.join(tempfile.gettempdir(), "nyp_chatbot_backend_status.txt")
     try:
         if os.path.exists(status_file):
-            with open(status_file, 'r') as f:
+            with open(status_file, "r") as f:
                 return f.read().strip()
         else:
             return "initializing"
     except Exception:
         return "initializing"
+
 
 def load_css_file(filename):
     """Load CSS from external file for better performance."""
@@ -109,6 +115,7 @@ def load_css_file(filename):
     except FileNotFoundError:
         logger.warning(f"CSS file {filename} not found, using minimal styles")
         return ".gradio-container { max-width: 1200px !important; margin: 0 auto !important; }"
+
 
 def create_main_app():
     """Create the main application with performance optimizations."""
@@ -124,15 +131,14 @@ def create_main_app():
 
     mark_startup_milestone("creating_gradio_blocks")
     with gr.Blocks(
-        title="NYP FYP Chatbot",
-        theme=custom_theme,
-        css=combined_css
+        title="NYP FYP Chatbot", theme=custom_theme, css=combined_css
     ) as app:
-
         # State variables
         logged_in_state = gr.State(False)
         username_state = gr.State("")
-        backend_status_state = gr.State("initializing")  # "initializing", "ready", "failed"
+        backend_status_state = gr.State(
+            "initializing"
+        )  # "initializing", "ready", "failed"
 
         # Loading screen (visible initially)
         with gr.Column(visible=True) as loading_section:
@@ -146,7 +152,9 @@ def create_main_app():
             </div>
             """)
 
-            loading_status = gr.Markdown("🎨 **Loading user interface...** Please wait...")
+            loading_status = gr.Markdown(
+                "🎨 **Loading user interface...** Please wait..."
+            )
 
             gr.Markdown("""
             **Initializing:**
@@ -160,7 +168,9 @@ def create_main_app():
             """)
 
             # Button to manually proceed if backend takes too long
-            start_backend_btn = gr.Button("⚡ Proceed Anyway (Limited Mode)", variant="secondary", visible=True)
+            start_backend_btn = gr.Button(
+                "⚡ Proceed Anyway (Limited Mode)", variant="secondary", visible=True
+            )
 
         # Login interface container (hidden initially)
         mark_startup_milestone("creating_login_interface")
@@ -168,18 +178,37 @@ def create_main_app():
             # Import and create login interface
             try:
                 from gradio_modules.login_and_register import login_interface
+
                 login_components = login_interface(setup_events=True)
 
                 # Unpack new dynamic login components
-                (logged_in_state, username_state, is_register_mode, main_container, error_message,
-                 username_input, email_input, password_input, confirm_password_input,
-                 primary_btn, secondary_btn, show_password_btn, show_confirm_btn,
-                 password_visible, confirm_password_visible,
-                 header_subtitle, header_instruction, email_info, password_requirements) = login_components
+                (
+                    logged_in_state,
+                    username_state,
+                    is_register_mode,
+                    main_container,
+                    error_message,
+                    username_input,
+                    email_input,
+                    password_input,
+                    confirm_password_input,
+                    primary_btn,
+                    secondary_btn,
+                    show_password_btn,
+                    show_confirm_btn,
+                    password_visible,
+                    confirm_password_visible,
+                    header_subtitle,
+                    header_instruction,
+                    email_info,
+                    password_requirements,
+                ) = login_components
 
             except ImportError as e:
                 gr.Markdown(f"⚠️ **Login interface not available:** {e}")
-                gr.Markdown("Please check the gradio_modules.login_and_register module.")
+                gr.Markdown(
+                    "Please check the gradio_modules.login_and_register module."
+                )
 
         # Main application container (hidden initially)
         mark_startup_milestone("creating_main_interface")
@@ -193,7 +222,7 @@ def create_main_app():
 
             # Tabbed interface for different functionalities
             mark_startup_milestone("creating_tabbed_interface")
-            with gr.Tabs() as tabs:
+            with gr.Tabs():
                 # Chat Tab
                 with gr.TabItem("💬 Chat", id="chat_tab"):
                     try:
@@ -204,28 +233,41 @@ def create_main_app():
                         selected_chat_id = gr.State("")
 
                         # Create the chatbot interface
-                        chatbot_components = chatbot_ui(username_state, chat_history_state, selected_chat_id, setup_events=True)
+                        chatbot_ui(
+                            username_state,
+                            chat_history_state,
+                            selected_chat_id,
+                            setup_events=True,
+                        )
 
                     except ImportError as e:
                         gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
                         gr.Markdown("Using basic fallback interface.")
 
                         # Fallback basic interface
-                        basic_chat_input = gr.Textbox(label="Message", placeholder="Type your message here...")
-                        basic_send_btn = gr.Button("Send", variant="primary")
-                        basic_output = gr.Textbox(label="Response", interactive=False)
+                        gr.Textbox(
+                            label="Message", placeholder="Type your message here..."
+                        )
+                        gr.Button("Send", variant="primary")
+                        gr.Textbox(label="Response", interactive=False)
 
                 # File Classification Tab
                 with gr.TabItem("📄 File Classification", id="classification_tab"):
                     try:
-                        from gradio_modules.file_classification import file_classification_interface
+                        from gradio_modules.file_classification import (
+                            file_classification_interface,
+                        )
 
                         # Create the file classification interface
-                        file_class_components = file_classification_interface(username_state)
+                        file_classification_interface(username_state)
 
                     except ImportError as e:
-                        gr.Markdown(f"⚠️ **File classification interface not available:** {e}")
-                        gr.Markdown("Please check the gradio_modules.file_classification module.")
+                        gr.Markdown(
+                            f"⚠️ **File classification interface not available:** {e}"
+                        )
+                        gr.Markdown(
+                            "Please check the gradio_modules.file_classification module."
+                        )
 
                 # Audio Input Tab
                 with gr.TabItem("🎤 Audio Input", id="audio_tab"):
@@ -233,24 +275,29 @@ def create_main_app():
                         from gradio_modules.audio_input import audio_interface
 
                         # Create the audio interface
-                        audio_components = audio_interface(username_state, setup_events=True)
+                        audio_interface(username_state, setup_events=True)
 
                     except ImportError as e:
                         gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
-                        gr.Markdown("Please check the gradio_modules.audio_input module.")
+                        gr.Markdown(
+                            "Please check the gradio_modules.audio_input module."
+                        )
 
                         # Fallback basic interface
-                        basic_audio_input = gr.Audio(label="Record Audio", type="filepath")
-                        basic_audio_btn = gr.Button("Process Audio", variant="primary")
-                        basic_audio_output = gr.Textbox(label="Transcription", interactive=False)
+                        gr.Audio(label="Record Audio", type="filepath")
+                        gr.Button("Process Audio", variant="primary")
+                        gr.Textbox(label="Transcription", interactive=False)
 
-# File Upload Tab removed - functionality integrated into File Classification tab
+        # File Upload Tab removed - functionality integrated into File Classification tab
 
         # Backend status indicator
         with gr.Row():
-            backend_status = gr.Markdown("🔄 **Backend Status:** Checking...", visible=False)
-            refresh_status_btn = gr.Button("🔄 Refresh Status", size="sm", visible=False)
-
+            backend_status = gr.Markdown(
+                "🔄 **Backend Status:** Checking...", visible=False
+            )
+            refresh_status_btn = gr.Button(
+                "🔄 Refresh Status", size="sm", visible=False
+            )
 
         # Event handlers for login/logout
         def handle_login_success(logged_in, username, backend_status_state):
@@ -261,24 +308,26 @@ def create_main_app():
                 if current_status == "ready":
                     status_msg = "✅ **Backend ready!** All features available."
                 elif current_status == "failed":
-                    status_msg = "⚠️ **Limited mode:** Some features may not be available."
+                    status_msg = (
+                        "⚠️ **Limited mode:** Some features may not be available."
+                    )
                 else:
                     status_msg = "🔄 **Backend initializing...** Please wait for full functionality."
 
                 return (
                     gr.update(visible=False),  # Hide login section
-                    gr.update(visible=True),   # Show main section
+                    gr.update(visible=True),  # Show main section
                     f"**Logged in as:** {username}",  # Update user info
                     gr.update(visible=True, value=status_msg),  # Show backend status
-                    gr.update(visible=True)  # Show refresh button
+                    gr.update(visible=True),  # Show refresh button
                 )
             else:
                 return (
-                    gr.update(visible=True),   # Show login section
+                    gr.update(visible=True),  # Show login section
                     gr.update(visible=False),  # Hide main section
                     "",  # Clear user info
                     gr.update(visible=False),  # Hide backend status
-                    gr.update(visible=False)   # Hide refresh button
+                    gr.update(visible=False),  # Hide refresh button
                 )
 
         def handle_logout():
@@ -286,9 +335,9 @@ def create_main_app():
             logger.info("User logged out")
             return (
                 False,  # Reset logged_in_state to False
-                "",     # Reset username_state to empty
+                "",  # Reset username_state to empty
                 False,  # Reset is_register_mode to False (login mode)
-                gr.update(visible=True),   # Show login section
+                gr.update(visible=True),  # Show login section
                 gr.update(visible=False),  # Hide main section
                 "",  # Clear user info
                 gr.update(visible=False),  # Hide backend status
@@ -299,32 +348,58 @@ def create_main_app():
                 "",  # Clear confirm password input
                 gr.update(visible=False),  # Hide error message
                 gr.update(value="## 🔐 Login"),  # Reset header to login mode
-                gr.update(value="Please log in to access the chatbot."),  # Reset instruction
+                gr.update(
+                    value="Please log in to access the chatbot."
+                ),  # Reset instruction
                 gr.update(visible=False),  # Hide email info
                 gr.update(visible=False),  # Hide password requirements
                 gr.update(visible=False),  # Hide confirm password input
                 gr.update(visible=False),  # Hide confirm password button
                 gr.update(value="Login", variant="primary"),  # Reset primary button
-                gr.update(value="Register", variant="secondary")  # Reset secondary button
+                gr.update(
+                    value="Register", variant="secondary"
+                ),  # Reset secondary button
             )
 
         # Wire up logout event with proper state reset for dynamic login interface
         logout_btn.click(
             fn=handle_logout,
             outputs=[
-                logged_in_state, username_state, is_register_mode,  # Reset login states
-                login_section, main_section, user_info, backend_status, refresh_status_btn,  # UI updates
-                username_input, email_input, password_input, confirm_password_input, error_message,  # Clear form inputs
-                header_subtitle, header_instruction, email_info, password_requirements,  # Reset form content
-                confirm_password_input, show_confirm_btn, primary_btn, secondary_btn  # Reset form controls
-            ]
+                logged_in_state,
+                username_state,
+                is_register_mode,  # Reset login states
+                login_section,
+                main_section,
+                user_info,
+                backend_status,
+                refresh_status_btn,  # UI updates
+                username_input,
+                email_input,
+                password_input,
+                confirm_password_input,
+                error_message,  # Clear form inputs
+                header_subtitle,
+                header_instruction,
+                email_info,
+                password_requirements,  # Reset form content
+                confirm_password_input,
+                show_confirm_btn,
+                primary_btn,
+                secondary_btn,  # Reset form controls
+            ],
         )
 
         # Monitor login state changes
         logged_in_state.change(
             fn=handle_login_success,
             inputs=[logged_in_state, username_state, backend_status_state],
-            outputs=[login_section, main_section, user_info, backend_status, refresh_status_btn]
+            outputs=[
+                login_section,
+                main_section,
+                user_info,
+                backend_status,
+                refresh_status_btn,
+            ],
         )
 
         def check_backend_status():
@@ -335,19 +410,15 @@ def create_main_app():
             elif current_status == "ready":
                 return gr.update(value="✅ **Backend ready!** All features available.")
             else:
-                return gr.update(value="⚠️ **Limited mode:** Some features may not be available.")
+                return gr.update(
+                    value="⚠️ **Limited mode:** Some features may not be available."
+                )
 
         # Wire up refresh status button
-        refresh_status_btn.click(
-            fn=check_backend_status,
-            outputs=[backend_status]
-        )
+        refresh_status_btn.click(fn=check_backend_status, outputs=[backend_status])
 
         # Wire up refresh status button
-        refresh_status_btn.click(
-            fn=check_backend_status,
-            outputs=[backend_status]
-        )
+        refresh_status_btn.click(fn=check_backend_status, outputs=[backend_status])
 
         # UI Loading sequence - start backend, wait for completion, then show login
         def start_backend_and_wait_for_completion():
@@ -359,7 +430,7 @@ def create_main_app():
 
             # Step 2: Wait for backend initialization to complete
             max_wait_time = 120  # Maximum 2 minutes wait
-            poll_interval = 3    # Check every 3 seconds
+            poll_interval = 3  # Check every 3 seconds
             elapsed_time = 0
 
             while elapsed_time < max_wait_time:
@@ -369,15 +440,15 @@ def create_main_app():
                     # Backend is ready, show login interface
                     return (
                         gr.update(visible=False),  # Hide loading screen
-                        gr.update(visible=True),   # Show login interface
-                        "✅ **Backend ready!** You can now log in."  # Update status
+                        gr.update(visible=True),  # Show login interface
+                        "✅ **Backend ready!** You can now log in.",  # Update status
                     )
                 elif status == "failed":
                     # Backend failed, show login interface anyway (limited mode)
                     return (
                         gr.update(visible=False),  # Hide loading screen
-                        gr.update(visible=True),   # Show login interface
-                        "⚠️ **Limited mode:** Backend initialization failed. Some features may not be available."
+                        gr.update(visible=True),  # Show login interface
+                        "⚠️ **Limited mode:** Backend initialization failed. Some features may not be available.",
                     )
 
                 # Still initializing, wait and check again
@@ -387,14 +458,14 @@ def create_main_app():
             # Timeout reached, show login interface anyway
             return (
                 gr.update(visible=False),  # Hide loading screen
-                gr.update(visible=True),   # Show login interface
-                "⚠️ **Timeout:** Backend initialization took too long. You can log in but some features may not be available."
+                gr.update(visible=True),  # Show login interface
+                "⚠️ **Timeout:** Backend initialization took too long. You can log in but some features may not be available.",
             )
 
         # Start backend and wait for completion when app loads
         app.load(
             fn=start_backend_and_wait_for_completion,
-            outputs=[loading_section, login_section, loading_status]
+            outputs=[loading_section, login_section, loading_status],
         )
 
         # Manual proceed button (for users who don't want to wait)
@@ -402,13 +473,12 @@ def create_main_app():
             """Allow users to proceed to login even if backend isn't ready."""
             return (
                 gr.update(visible=False),  # Hide loading screen
-                gr.update(visible=True),   # Show login interface
-                "⚠️ **Limited mode:** You chose to proceed before backend initialization completed. Some features may not be available."
+                gr.update(visible=True),  # Show login interface
+                "⚠️ **Limited mode:** You chose to proceed before backend initialization completed. Some features may not be available.",
             )
 
         start_backend_btn.click(
-            fn=proceed_anyway,
-            outputs=[loading_section, login_section, loading_status]
+            fn=proceed_anyway, outputs=[loading_section, login_section, loading_status]
         )
 
     return app
@@ -427,8 +497,10 @@ if __name__ == "__main__":
 
     try:
         # Detect Docker and print a message
-        if os.path.exists('/.dockerenv') or os.environ.get('IN_DOCKER') == '1':
-            print("🐳 Running inside a Docker container. All dependencies should be pre-installed.")
+        if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
+            print(
+                "🐳 Running inside a Docker container. All dependencies should be pre-installed."
+            )
 
         # Apply performance optimizations
         perf_monitor.start_timer("app_creation")
@@ -487,7 +559,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Failed to create or launch application: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
-
-

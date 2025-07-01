@@ -2,7 +2,7 @@
 """
 Final working demo showcasing all fixed and enhanced chatbot features:
 ✅ No more "chatbot not fully set up" messages
-✅ No more 'expandtabs' errors  
+✅ No more 'expandtabs' errors
 ✅ Working search functionality
 ✅ Chat renaming functionality
 ✅ Smart auto-naming
@@ -11,18 +11,20 @@ Final working demo showcasing all fixed and enhanced chatbot features:
 
 import sys
 from pathlib import Path
+import gradio as gr
+from gradio_modules.chatbot import chatbot_ui
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import gradio as gr
-from gradio_modules.chatbot import chatbot_ui
 
 def create_final_demo():
     """Create a comprehensive demo of all working features."""
-    
-    with gr.Blocks(title="🚀 Complete Working Chatbot", css="""
+
+    with gr.Blocks(
+        title="🚀 Complete Working Chatbot",
+        css="""
         .feature-highlight {
             background: linear-gradient(90deg, #f0f9ff, #e0f2fe);
             border-left: 4px solid #0ea5e9;
@@ -43,11 +45,12 @@ def create_final_demo():
             padding: 1.5rem;
             margin: 1rem 0;
         }
-    """) as app:
-        
+    """,
+    ) as app:
         gr.Markdown("# 🎉 Complete Working Chatbot Demo")
-        
-        gr.Markdown("""
+
+        gr.Markdown(
+            """
         <div class="success-banner">
         <h3>🎯 All Issues Fixed!</h3>
         <ul>
@@ -57,9 +60,12 @@ def create_final_demo():
             <li><strong>✅ Backend loops</strong> - Added initialization locks and flags</li>
         </ul>
         </div>
-        """, elem_classes=["success-banner"])
-        
-        gr.Markdown("""
+        """,
+            elem_classes=["success-banner"],
+        )
+
+        gr.Markdown(
+            """
         <div class="feature-highlight">
         <h3>🚀 Complete Feature Set:</h3>
         <ul>
@@ -71,34 +77,45 @@ def create_final_demo():
             <li><strong>⚡ Fast Performance:</strong> Optimized backend with no infinite loops</li>
         </ul>
         </div>
-        """, elem_classes=["feature-highlight"])
-        
+        """,
+            elem_classes=["feature-highlight"],
+        )
+
         # Login simulation
         with gr.Row():
             username_input = gr.Textbox(
-                label="Username",
-                value="test",
-                placeholder="Enter username to start"
+                label="Username", value="test", placeholder="Enter username to start"
             )
             login_btn = gr.Button("🚀 Start Demo", variant="primary")
-        
+
         login_status = gr.Markdown("Enter a username and click 'Start Demo' to begin")
-        
+
         # Complete chatbot interface (initially hidden)
         with gr.Column(visible=False) as chatbot_container:
-            
             gr.Markdown("## 💬 Complete Chatbot Interface")
-            
+
             # States
             username_state = gr.State("")
             chat_history_state = gr.State([])
             chat_id_state = gr.State("")
-            
+
             # Complete chatbot UI with all features
-            chat_selector, new_chat_btn, chatbot, msg, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md = chatbot_ui(
+            (
+                chat_selector,
+                new_chat_btn,
+                chatbot,
+                msg,
+                send_btn,
+                search_input,
+                search_btn,
+                search_results,
+                rename_input,
+                rename_btn,
+                debug_md,
+            ) = chatbot_ui(
                 username_state, chat_history_state, chat_id_state, setup_events=True
             )
-            
+
             # Feature demonstrations
             with gr.Accordion("🎯 How to Test All Features", open=True):
                 gr.Markdown("""
@@ -122,9 +139,10 @@ def create_final_demo():
                 2. Switch between chats to see your conversation history
                 3. Create new chats by just typing without selecting one
                 """)
-            
+
             # Demo instructions
-            gr.Markdown("""
+            gr.Markdown(
+                """
             <div class="demo-section">
             <h3>🎮 Quick Demo Steps:</h3>
             <ol>
@@ -136,33 +154,36 @@ def create_final_demo():
             </ol>
             <p><strong>🎯 Expected Results:</strong> Everything should work smoothly with no errors!</p>
             </div>
-            """, elem_classes=["demo-section"])
-        
+            """,
+                elem_classes=["demo-section"],
+            )
+
         def handle_login(username):
             """Handle demo login."""
             if not username.strip():
                 return "❌ Please enter a username", gr.update(visible=False), ""
-            
+
             return (
                 f"✅ Demo started for: {username} - All features are working!",
                 gr.update(visible=True),
-                username.strip()
+                username.strip(),
             )
-        
+
         # Login event
         login_btn.click(
             fn=handle_login,
             inputs=[username_input],
-            outputs=[login_status, chatbot_container, username_state]
+            outputs=[login_status, chatbot_container, username_state],
         )
-        
+
         username_input.submit(
             fn=handle_login,
             inputs=[username_input],
-            outputs=[login_status, chatbot_container, username_state]
+            outputs=[login_status, chatbot_container, username_state],
         )
-    
+
     return app
+
 
 def main():
     """Run the complete working chatbot demo."""
@@ -186,22 +207,24 @@ def main():
     print()
     print("🌐 Opening demo in your browser...")
     print("=" * 50)
-    
+
     try:
         app = create_final_demo()
-        
+
         app.launch(
             debug=True,
             share=False,
             server_name="127.0.0.1",
-            server_port=7866  # Different port to avoid conflicts
+            server_port=7866,  # Different port to avoid conflicts
         )
-        
+
     except Exception as e:
         print(f"❌ Error launching demo: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

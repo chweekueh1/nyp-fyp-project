@@ -69,7 +69,7 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
     python setup.py
     ```
 
-    This will take a while (2 to 3 minutes) as it sets up all required dependencies, including creating a virtual environment, installing Python packages, and configuring Pandoc and Tesseract OCR.
+    The Docker image will take a while to build for the first time (2 to 3 minutes) as it sets up all required dependencies, including creating a virtual environment, installing Python packages, and configuring Pandoc and Tesseract OCR.
 
 ---
 
@@ -148,6 +148,58 @@ These commands will:
 
 ---
 
+## 📁 Data Storage
+
+The application stores user data in a dedicated directory to ensure data persistence and separation between production and test environments.
+
+### **Data Location**
+
+- **Local Development**: `~/.nypai-chatbot/`
+- **Docker**: `/root/.nypai-chatbot/` (mounted from host `~/.nypai-chatbot/`)
+
+### **Directory Structure**
+
+```
+~/.nypai-chatbot/
+├── data/
+│   ├── chat_sessions/     # User chat history
+│   ├── user_info/
+│   │   ├── users.json     # Production user accounts
+│   │   └── test_users.json # Test user accounts (separate)
+│   └── vector_store/
+│       └── chroma_db/     # Vector database for embeddings
+└── logs/                  # Application logs
+```
+
+### **Data Protection**
+
+- ✅ **User data is preserved** during builds and updates
+- ✅ **Test users are isolated** from production users
+- ✅ **Chat sessions persist** across application restarts
+- ✅ **Build system won't override** existing user data
+
+### **User Database Separation**
+
+- **Production Users**: Stored in `users.json`
+- **Test Users**: Stored in `test_users.json` (completely separate)
+
+This ensures that:
+- Test runs don't affect production user data
+- Production users are never accidentally deleted during testing
+- Test data can be easily cleaned up without affecting real users
+
+### **Viewing Data Storage Info**
+
+```bash
+# Show data storage configuration
+python demo_data_storage.py
+
+# Run data storage tests
+python tests/test_data_storage.py
+```
+
+---
+
 ## 🧪 Testing in Docker
 
 The test suite is fully integrated into the Docker container and includes:
@@ -207,6 +259,74 @@ The test suite will:
 - Validate login and authentication systems
 
 > **Note:** Tests run in a clean Docker environment with all dependencies pre-installed, ensuring consistent test results across different systems.
+
+---
+
+## 🔧 Code Quality with Pre-commit
+
+The project includes pre-commit hooks for automatic code quality checks and formatting using [ruff](https://github.com/astral-sh/ruff).
+
+### **Setup Pre-commit Hooks**
+
+```bash
+# Install pre-commit hooks with ruff
+python setup.py --pre-commit
+```
+
+This will:
+- Install pre-commit in your virtual environment
+- Create a `.pre-commit-config.yaml` file with ruff configuration
+- Install git hooks for automatic code quality checks
+- Run ruff on all files to fix formatting issues
+
+### **What Pre-commit Does**
+
+The pre-commit hooks automatically:
+- **Format code** using ruff-format
+- **Lint code** using ruff with auto-fix
+- **Check for common issues** like unused imports, undefined variables, etc.
+
+### **Usage**
+
+**Automatic (on git commit):**
+```bash
+git add .
+git commit -m "Your commit message"
+# Pre-commit hooks run automatically
+```
+
+**Manual runs:**
+```bash
+# Run on all files
+pre-commit run --all-files
+
+# Run on specific files
+pre-commit run --files file1.py file2.py
+
+# Run specific hooks
+pre-commit run ruff --all-files
+pre-commit run ruff-format --all-files
+```
+
+### **Configuration**
+
+The `.pre-commit-config.yaml` file includes:
+- **ruff**: Fast Python linter with auto-fix
+- **ruff-format**: Fast Python code formatter
+
+### **Testing Pre-commit Setup**
+
+```bash
+# Test that pre-commit is properly configured
+python tests/test_pre_commit_setup.py
+```
+
+### **Troubleshooting**
+
+If pre-commit hooks fail:
+1. **Auto-fix issues**: `pre-commit run --all-files`
+2. **Skip hooks temporarily**: `git commit --no-verify`
+3. **Update hooks**: `pre-commit autoupdate`
 
 ---
 

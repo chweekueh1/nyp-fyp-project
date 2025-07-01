@@ -17,9 +17,11 @@ from utils import get_chatbot_dir
 
 # Constants
 load_dotenv()
-DATABASE_PATH = os.path.abspath(os.path.join(get_chatbot_dir(), os.getenv('DATABASE_PATH', '')))
+DATABASE_PATH = os.path.abspath(
+    os.path.join(get_chatbot_dir(), os.getenv("DATABASE_PATH", ""))
+)
 openai.api_key = os.getenv("OPENAI_API_KEY")
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', '')
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")
 
 # Initialize components
 llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
@@ -44,9 +46,9 @@ multi_query_template = PromptTemplate(
     input_variables=["question"],
 )
 multiquery_retriever = MultiQueryRetriever.from_llm(
-    retriever=db.as_retriever(search_kwargs={'k': 3}),
+    retriever=db.as_retriever(search_kwargs={"k": 3}),
     llm=llm,
-    prompt=multi_query_template
+    prompt=multi_query_template,
 )
 
 # Adjusted system prompt to include the context variable
@@ -61,7 +63,7 @@ system_prompt = (
     "The explicit content of the file should take precedence over the surrounding context when classifying. "
     "Explain your reasoning based on the file contents. "
     "Keep the classification concise. "
-    "The output should be in a JSON format with \"classification\", \"sensitivity\", and \"reasoning\"."
+    'The output should be in a JSON format with "classification", "sensitivity", and "reasoning".'
     "\n\n"
     "{context}"
 )
@@ -78,20 +80,23 @@ classification_prompt = ChatPromptTemplate.from_messages(
 classification_chain = create_stuff_documents_chain(llm, classification_prompt)
 rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
 
+
 class State(TypedDict):
     input: str
     context: str
     answer: str
 
+
 def call_model(state: State):
     start = time.time()
     response = rag_chain.invoke(state)
     end = time.time()
-    print(f'Run time: {end-start} seconds')
+    print(f"Run time: {end - start} seconds")
     return {
         "context": response["context"],
         "answer": response["answer"],
     }
+
 
 workflow = StateGraph(state_schema=State)
 workflow.add_edge(START, "model")
@@ -100,6 +105,7 @@ memory = MemorySaver()
 classify = workflow.compile(checkpointer=memory)
 
 config = {"configurable": {"thread_id": "Classification"}}
+
 
 def classify_text(text, config=config):
     state = {"input": text, "context": "", "answer": ""}

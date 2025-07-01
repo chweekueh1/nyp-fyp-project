@@ -2,6 +2,7 @@
 import bcrypt
 import re
 
+
 def hash_password(password):
     """
     Hashes a plaintext password using bcrypt.
@@ -11,8 +12,9 @@ def hash_password(password):
     # The 'rounds' parameter controls the computational cost.
     # Higher rounds mean more security but also more CPU usage.
     # A value of 12 is a common starting point; adjust as needed.
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(rounds=12))
-    return hashed_password.decode('utf-8') # Store as a UTF-8 string
+    hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12))
+    return hashed_password.decode("utf-8")  # Store as a UTF-8 string
+
 
 def verify_password(password, hashed_password):
     """
@@ -20,9 +22,14 @@ def verify_password(password, hashed_password):
     """
     # bcrypt.checkpw automatically extracts the salt from the hashed password
     # and re-hashes the plaintext password with that salt for comparison.
-    hashed_password = hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
-    password = password.encode('utf-8') if isinstance(password, str) else password
+    hashed_password = (
+        hashed_password.encode("utf-8")
+        if isinstance(hashed_password, str)
+        else hashed_password
+    )
+    password = password.encode("utf-8") if isinstance(password, str) else password
     return bcrypt.checkpw(password, hashed_password)
+
 
 # Function to validate email format
 def validate_email(email):
@@ -31,11 +38,12 @@ def validate_email(email):
         return False, "Email is required."
 
     # Basic email regex pattern
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     if not re.match(email_pattern, email.strip()):
         return False, "Please enter a valid email address."
 
     return True, "Email is valid."
+
 
 # Function to validate email against allowed list
 def validate_email_allowed(email, allowed_emails=None):
@@ -55,17 +63,23 @@ def validate_email_allowed(email, allowed_emails=None):
         return True, "Email is valid."
 
     # Check if exact email is in allowed list
-    if email in [allowed.lower() for allowed in allowed_emails if '@' in allowed]:
+    if email in [allowed.lower() for allowed in allowed_emails if "@" in allowed]:
         return True, "Email is authorized."
 
     # Check if email domain is in allowed domains
-    email_domain = email.split('@')[1] if '@' in email else ''
-    allowed_domains = [allowed.lower() for allowed in allowed_emails if '@' not in allowed]
+    email_domain = email.split("@")[1] if "@" in email else ""
+    allowed_domains = [
+        allowed.lower() for allowed in allowed_emails if "@" not in allowed
+    ]
 
     if email_domain in allowed_domains:
         return True, "Email domain is authorized."
 
-    return False, f"Email not authorized. Please use an email from: {', '.join(allowed_emails[:3])}{'...' if len(allowed_emails) > 3 else ''}"
+    return (
+        False,
+        f"Email not authorized. Please use an email from: {', '.join(allowed_emails[:3])}{'...' if len(allowed_emails) > 3 else ''}",
+    )
+
 
 # Function to validate username
 def validate_username(username):
@@ -83,7 +97,7 @@ def validate_username(username):
         return False, "Username must be no more than 20 characters long."
 
     # Check for valid characters (alphanumeric and underscore only)
-    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+    if not re.match(r"^[a-zA-Z0-9_]+$", username):
         return False, "Username can only contain letters, numbers, and underscores."
 
     # Check that it doesn't start with a number
@@ -91,6 +105,7 @@ def validate_username(username):
         return False, "Username cannot start with a number."
 
     return True, "Username is valid."
+
 
 # Function to validate password complexity
 def is_password_complex(password):
@@ -105,15 +120,15 @@ def is_password_complex(password):
         errors.append("at least 8 characters long")
 
     # Check for uppercase letter
-    if not re.search(r'[A-Z]', password):
+    if not re.search(r"[A-Z]", password):
         errors.append("at least one uppercase letter")
 
     # Check for lowercase letter
-    if not re.search(r'[a-z]', password):
+    if not re.search(r"[a-z]", password):
         errors.append("at least one lowercase letter")
 
     # Check for at least one digit
-    if not re.search(r'\d', password):
+    if not re.search(r"\d", password):
         errors.append("at least one number")
 
     # Check for at least one symbol (non-alphanumeric character)
@@ -126,6 +141,7 @@ def is_password_complex(password):
 
     # If all checks pass
     return True, "Password meets all requirements."
+
 
 # --- Example Usage ---
 if __name__ == "__main__":
@@ -159,6 +175,9 @@ if __name__ == "__main__":
 
     # Demonstrate that different salts produce different hashes for the same password
     another_stored_hash = hash_password(plaintext_password)
-    print(f"\nAnother hash for the same password (different salt): {another_stored_hash}")
-    print(f"Are the two hashes identical? {stored_hash == another_stored_hash}") # Should be False
-
+    print(
+        f"\nAnother hash for the same password (different salt): {another_stored_hash}"
+    )
+    print(
+        f"Are the two hashes identical? {stored_hash == another_stored_hash}"
+    )  # Should be False

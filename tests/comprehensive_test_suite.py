@@ -4,14 +4,13 @@ Comprehensive Test Suite for NYP FYP Chatbot Project
 
 This test suite organizes and runs all tests and demos in a structured way:
 - Unit Tests: Individual component testing
-- Integration Tests: Component interaction testing  
+- Integration Tests: Component interaction testing
 - Feature Tests: Specific feature validation
 - Demo Tests: Interactive demonstrations
 - Performance Tests: Speed and reliability testing
 """
 
 import sys
-import os
 import time
 import subprocess
 from pathlib import Path
@@ -21,49 +20,61 @@ from typing import Dict, List, Tuple
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 class TestSuite:
     """Comprehensive test suite manager."""
-    
+
     def __init__(self):
         self.project_root = project_root
         self.tests_dir = self.project_root / "tests"
         self.results = {}
-        
-    def run_test_file(self, test_file: Path, timeout: int = 120) -> Tuple[bool, str, float]:
+
+    def run_test_file(
+        self, test_file: Path, timeout: int = 120
+    ) -> Tuple[bool, str, float]:
         """Run a single test file and return results."""
         start_time = time.time()
-        
+
         try:
             print(f"  🧪 Running {test_file.name}...")
-            
+
             result = subprocess.run(
                 [sys.executable, str(test_file)],
                 cwd=str(self.project_root),
                 capture_output=True,
                 text=True,
-                encoding='utf-8',
-                errors='replace',
-                timeout=timeout
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
             )
-            
+
             duration = time.time() - start_time
-            
+
             if result.returncode == 0:
                 return True, result.stdout, duration
             else:
                 return False, result.stderr or result.stdout, duration
-                
+
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
             return False, f"Test timed out after {timeout} seconds", duration
         except Exception as e:
             duration = time.time() - start_time
             return False, f"Error running test: {str(e)}", duration
-    
+
     def run_unit_tests(self) -> Dict[str, bool]:
         """Run all unit tests."""
         print("\n🔬 Running Unit Tests")
         print("-" * 40)
+
+        # Ensure default test user exists before running tests
+        try:
+            from tests.test_utils import ensure_default_test_user
+
+            ensure_default_test_user()
+            print("✅ Test environment ready")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not ensure test user exists: {e}")
 
         unit_tests = [
             self.tests_dir / "frontend" / "test_ui_fixes.py",
@@ -73,24 +84,24 @@ class TestSuite:
             # Skip LLM test that requires full initialization
             # self.tests_dir / "llm" / "test_llm.py",
         ]
-        
+
         results = {}
         for test_file in unit_tests:
             if test_file.exists():
                 success, output, duration = self.run_test_file(test_file)
                 results[test_file.name] = success
-                
+
                 status = "✅ PASS" if success else "❌ FAIL"
                 print(f"    {status} {test_file.name} ({duration:.1f}s)")
-                
+
                 if not success:
                     print(f"      Error: {output[:200]}...")
             else:
                 print(f"    ⚠️ SKIP {test_file.name} (not found)")
                 results[test_file.name] = None
-        
+
         return results
-    
+
     def run_integration_tests(self) -> Dict[str, bool]:
         """Run all integration tests."""
         print("\n🔗 Running Integration Tests")
@@ -106,24 +117,24 @@ class TestSuite:
             # self.tests_dir / "integration" / "test_main_app_launch.py",
             # self.tests_dir / "integration" / "test_integration.py",
         ]
-        
+
         results = {}
         for test_file in integration_tests:
             if test_file.exists():
                 success, output, duration = self.run_test_file(test_file)
                 results[test_file.name] = success
-                
+
                 status = "✅ PASS" if success else "❌ FAIL"
                 print(f"    {status} {test_file.name} ({duration:.1f}s)")
-                
+
                 if not success:
                     print(f"      Error: {output[:200]}...")
             else:
                 print(f"    ⚠️ SKIP {test_file.name} (not found)")
                 results[test_file.name] = None
-        
+
         return results
-    
+
     def run_frontend_tests(self) -> Dict[str, bool]:
         """Run all frontend tests."""
         print("\n🎨 Running Frontend Tests")
@@ -136,22 +147,22 @@ class TestSuite:
             # self.tests_dir / "frontend" / "test_chat_ui.py",
             self.tests_dir / "frontend" / "test_all_interfaces.py",
         ]
-        
+
         results = {}
         for test_file in frontend_tests:
             if test_file.exists():
                 success, output, duration = self.run_test_file(test_file)
                 results[test_file.name] = success
-                
+
                 status = "✅ PASS" if success else "❌ FAIL"
                 print(f"    {status} {test_file.name} ({duration:.1f}s)")
-                
+
                 if not success:
                     print(f"      Error: {output[:200]}...")
             else:
                 print(f"    ⚠️ SKIP {test_file.name} (not found)")
                 results[test_file.name] = None
-        
+
         return results
 
     def run_performance_tests(self) -> Dict[str, bool]:
@@ -183,7 +194,7 @@ class TestSuite:
                 results[test_file.name] = None
 
         return results
-    
+
     def list_available_demos(self) -> List[Path]:
         """List all available demo files."""
         demo_files = []
@@ -196,7 +207,9 @@ class TestSuite:
         # Check root directory for any remaining demos (should be empty after organization)
         root_demos = list(self.project_root.glob("demo_*.py"))
         if root_demos:
-            print(f"    ⚠️ Found {len(root_demos)} demo(s) in root - should be moved to tests/demos/")
+            print(
+                f"    ⚠️ Found {len(root_demos)} demo(s) in root - should be moved to tests/demos/"
+            )
             demo_files.extend(root_demos)
 
         return sorted(demo_files)
@@ -215,7 +228,9 @@ class TestSuite:
             return results
 
         # Check demo organization
-        demos_in_correct_location = sum(1 for demo in demos if "tests/demos" in str(demo).replace("\\", "/"))
+        demos_in_correct_location = sum(
+            1 for demo in demos if "tests/demos" in str(demo).replace("\\", "/")
+        )
         demos_in_root = len(demos) - demos_in_correct_location
 
         print(f"    📊 Found {len(demos)} demo files:")
@@ -234,7 +249,7 @@ class TestSuite:
         results["demo_availability"] = len(demos) > 0
 
         return results
-    
+
     def run_comprehensive_suite(self) -> Dict[str, Dict[str, bool]]:
         """Run the complete test suite."""
         print("🚀 NYP FYP Chatbot - Comprehensive Test Suite")
@@ -253,45 +268,50 @@ class TestSuite:
         all_results["demo_verification"] = self.run_demo_verification()
 
         return all_results
-    
+
     def print_summary(self, results: Dict[str, Dict[str, bool]]):
         """Print comprehensive test summary."""
         print("\n📊 Test Suite Summary")
         print("=" * 60)
-        
+
         total_passed = 0
         total_failed = 0
         total_skipped = 0
-        
+
         for category, category_results in results.items():
             print(f"\n{category.replace('_', ' ').title()}:")
-            
+
             passed = sum(1 for r in category_results.values() if r is True)
             failed = sum(1 for r in category_results.values() if r is False)
             skipped = sum(1 for r in category_results.values() if r is None)
-            
+
             total_passed += passed
             total_failed += failed
             total_skipped += skipped
-            
+
             print(f"  ✅ Passed: {passed}")
             print(f"  ❌ Failed: {failed}")
             print(f"  ⚠️ Skipped: {skipped}")
-        
-        print(f"\n🎯 Overall Results:")
+
+        print("\n🎯 Overall Results:")
         print(f"  ✅ Total Passed: {total_passed}")
         print(f"  ❌ Total Failed: {total_failed}")
         print(f"  ⚠️ Total Skipped: {total_skipped}")
-        
-        success_rate = (total_passed / (total_passed + total_failed)) * 100 if (total_passed + total_failed) > 0 else 0
+
+        success_rate = (
+            (total_passed / (total_passed + total_failed)) * 100
+            if (total_passed + total_failed) > 0
+            else 0
+        )
         print(f"  📈 Success Rate: {success_rate:.1f}%")
-        
+
         if total_failed == 0:
             print("\n🎉 All tests passed! The chatbot is ready for use.")
         else:
             print(f"\n⚠️ {total_failed} test(s) failed. Please review the issues above.")
-        
+
         return total_failed == 0
+
 
 def show_help():
     """Show help information."""
@@ -314,6 +334,7 @@ def show_help():
     print("  python tests/demos/demo_enhanced_classification.py")
     print("  python tests/demos/demo_file_classification.py")
 
+
 def main():
     """Run the comprehensive test suite."""
     # Simple argument handling without argparse to avoid conflicts
@@ -333,7 +354,7 @@ def main():
                 demo_path = str(demo).replace("\\", "/")  # Normalize path separators
                 location = "tests/demos" if "tests/demos" in demo_path else "root"
                 print(f"  📱 {demo.name} ({location})")
-            print(f"\nRun demos with: python tests/demos/demo_name.py")
+            print("\nRun demos with: python tests/demos/demo_name.py")
         else:
             print("  No demo files found")
         return
@@ -349,13 +370,14 @@ def main():
         print("=" * 40)
         results = {
             "unit_tests": suite.run_unit_tests(),
-            "performance_tests": suite.run_performance_tests()
+            "performance_tests": suite.run_performance_tests(),
         }
     else:
         results = suite.run_comprehensive_suite()
 
     success = suite.print_summary(results)
     sys.exit(0 if success else 1)
+
 
 if __name__ == "__main__":
     main()

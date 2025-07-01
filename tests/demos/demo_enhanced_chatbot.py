@@ -8,18 +8,20 @@ Demo script showcasing the enhanced chatbot features:
 
 import sys
 from pathlib import Path
+import gradio as gr
+from gradio_modules.chatbot import chatbot_ui
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import gradio as gr
-from gradio_modules.chatbot import chatbot_ui
 
 def create_enhanced_demo():
     """Create a demo showcasing enhanced chatbot features."""
-    
-    with gr.Blocks(title="Enhanced Chatbot Demo", css="""
+
+    with gr.Blocks(
+        title="Enhanced Chatbot Demo",
+        css="""
         .feature-highlight {
             background: linear-gradient(90deg, #f0f9ff, #e0f2fe);
             border-left: 4px solid #0ea5e9;
@@ -33,11 +35,12 @@ def create_enhanced_demo():
             padding: 1.5rem;
             margin: 1rem 0;
         }
-    """) as app:
-        
+    """,
+    ) as app:
         gr.Markdown("# 🚀 Enhanced Chatbot Demo")
-        
-        gr.Markdown("""
+
+        gr.Markdown(
+            """
         <div class="feature-highlight">
         <h3>✨ New Features Demonstrated:</h3>
         <ul>
@@ -48,34 +51,47 @@ def create_enhanced_demo():
             <li><strong>🚀 Optimized Backend:</strong> No more infinite loading loops - fast and reliable</li>
         </ul>
         </div>
-        """, elem_classes=["feature-highlight"])
-        
+        """,
+            elem_classes=["feature-highlight"],
+        )
+
         # Login simulation
         with gr.Row():
             username_input = gr.Textbox(
                 label="Username (Demo)",
                 value="test",
-                placeholder="Enter username for demo"
+                placeholder="Enter username for demo",
             )
             login_btn = gr.Button("Start Demo", variant="primary")
-        
+
         login_status = gr.Markdown("Enter a username and click 'Start Demo' to begin")
-        
+
         # Enhanced chatbot interface (initially hidden)
         with gr.Column(visible=False) as chatbot_container:
-            
             gr.Markdown("## 💬 Enhanced Chatbot Interface")
-            
+
             # States
             username_state = gr.State("")
             chat_history_state = gr.State([])
             chat_id_state = gr.State("")
-            
+
             # Enhanced chatbot UI with search and rename
-            chat_selector, new_chat_btn, chatbot, msg, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md = chatbot_ui(
+            (
+                chat_selector,
+                new_chat_btn,
+                chatbot,
+                msg,
+                send_btn,
+                search_input,
+                search_btn,
+                search_results,
+                rename_input,
+                rename_btn,
+                debug_md,
+            ) = chatbot_ui(
                 username_state, chat_history_state, chat_id_state, setup_events=True
             )
-            
+
             # Feature explanations
             with gr.Accordion("🎯 How to Test the Enhanced Features", open=False):
                 gr.Markdown("""
@@ -102,9 +118,10 @@ def create_enhanced_demo():
                 2. Watch the dropdown automatically update with new chat names
                 3. Switch between chats to see your conversation history
                 """)
-            
+
             # Demo instructions
-            gr.Markdown("""
+            gr.Markdown(
+                """
             <div class="demo-section">
             <h3>🎮 Demo Instructions:</h3>
             <ol>
@@ -115,33 +132,36 @@ def create_enhanced_demo():
                 <li><strong>Switch Chats:</strong> Use the dropdown to switch between your conversations</li>
             </ol>
             </div>
-            """, elem_classes=["demo-section"])
-        
+            """,
+                elem_classes=["demo-section"],
+            )
+
         def handle_login(username):
             """Handle demo login."""
             if not username.strip():
                 return "❌ Please enter a username", gr.update(visible=False), ""
-            
+
             return (
                 f"✅ Demo started for: {username}",
                 gr.update(visible=True),
-                username.strip()
+                username.strip(),
             )
-        
+
         # Login event
         login_btn.click(
             fn=handle_login,
             inputs=[username_input],
-            outputs=[login_status, chatbot_container, username_state]
+            outputs=[login_status, chatbot_container, username_state],
         )
-        
+
         username_input.submit(
             fn=handle_login,
             inputs=[username_input],
-            outputs=[login_status, chatbot_container, username_state]
+            outputs=[login_status, chatbot_container, username_state],
         )
-    
+
     return app
+
 
 def main():
     """Run the enhanced chatbot demo."""
@@ -162,22 +182,24 @@ def main():
     print()
     print("🌐 The demo will open in your browser...")
     print("=" * 50)
-    
+
     try:
         app = create_enhanced_demo()
-        
+
         app.launch(
             debug=True,
             share=False,
             server_name="127.0.0.1",
-            server_port=7865  # Different port to avoid conflicts
+            server_port=7865,  # Different port to avoid conflicts
         )
-        
+
     except Exception as e:
         print(f"❌ Error launching demo: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

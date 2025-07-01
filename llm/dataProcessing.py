@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
-from langchain_community.document_transformers.openai_functions import create_metadata_tagger
+from langchain_community.document_transformers.openai_functions import (
+    create_metadata_tagger,
+)
 from langchain.schema import Document
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -17,7 +19,7 @@ from keybert.llm import OpenAI
 from keybert import KeyLLM
 import warnings
 import shelve
-from utils import create_folders, get_chatbot_dir, rel2abspath
+from utils import create_folders, rel2abspath
 import logging
 
 warnings.filterwarnings("ignore")
@@ -25,20 +27,25 @@ warnings.filterwarnings("ignore")
 # load environment variables for secure configuration
 load_dotenv()
 
+
 # Test-aware path configuration
 def get_data_paths():
     """Get data paths with test environment awareness."""
     base_dir = os.getcwd()
 
     # Check if we're in a test environment (only explicit TESTING env var)
-    is_test_env = os.getenv('TESTING', '').lower() == 'true'
+    is_test_env = os.getenv("TESTING", "").lower() == "true"
 
     if is_test_env:
         # Use test-specific paths
-        chat_data_path = os.path.join(base_dir, 'test_uploads', 'txt_files')
-        classification_data_path = os.path.join(base_dir, 'test_uploads', 'classification_files')
-        keywords_databank_path = os.path.join(base_dir, 'test_data', 'keywords_databank')
-        database_path = os.path.join(base_dir, 'test_data', 'vector_store', 'chroma_db')
+        chat_data_path = os.path.join(base_dir, "test_uploads", "txt_files")
+        classification_data_path = os.path.join(
+            base_dir, "test_uploads", "classification_files"
+        )
+        keywords_databank_path = os.path.join(
+            base_dir, "test_data", "keywords_databank"
+        )
+        database_path = os.path.join(base_dir, "test_data", "vector_store", "chroma_db")
 
         # Ensure test directories exist
         os.makedirs(chat_data_path, exist_ok=True)
@@ -49,52 +56,99 @@ def get_data_paths():
         logging.info(f"🧪 Using test data paths: {chat_data_path}")
     else:
         # Use production paths from environment
-        chat_data_path = os.path.join(base_dir, os.getenv("CHAT_DATA_PATH", 'data/modelling/data'))
-        classification_data_path = rel2abspath(os.path.join(base_dir, os.getenv("CLASSIFICATION_DATA_PATH", 'data/modelling/CNC chatbot/data classification')))
-        keywords_databank_path = rel2abspath(os.path.join(base_dir, os.getenv("KEYWORDS_DATABANK_PATH", 'data/keyword/keywords_databank')))
-        database_path = rel2abspath(os.path.join(base_dir, os.getenv('DATABASE_PATH', 'data/vector_store/chroma_db')))
+        chat_data_path = os.path.join(
+            base_dir, os.getenv("CHAT_DATA_PATH", "data/modelling/data")
+        )
+        classification_data_path = rel2abspath(
+            os.path.join(
+                base_dir,
+                os.getenv(
+                    "CLASSIFICATION_DATA_PATH",
+                    "data/modelling/CNC chatbot/data classification",
+                ),
+            )
+        )
+        keywords_databank_path = rel2abspath(
+            os.path.join(
+                base_dir,
+                os.getenv("KEYWORDS_DATABANK_PATH", "data/keyword/keywords_databank"),
+            )
+        )
+        database_path = rel2abspath(
+            os.path.join(
+                base_dir, os.getenv("DATABASE_PATH", "data/vector_store/chroma_db")
+            )
+        )
 
         logging.info(f"🏭 Using production data paths: {chat_data_path}")
 
-    return chat_data_path, classification_data_path, keywords_databank_path, database_path
+    return (
+        chat_data_path,
+        classification_data_path,
+        keywords_databank_path,
+        database_path,
+    )
+
 
 # Dynamic path getters (not cached at import time)
 def get_chat_data_path():
     """Get current chat data path."""
     return get_data_paths()[0]
 
+
 def get_classification_data_path():
     """Get current classification data path."""
     return get_data_paths()[1]
+
 
 def get_keywords_databank_path():
     """Get current keywords databank path."""
     return get_data_paths()[2]
 
+
 def get_database_path():
     """Get current database path."""
     return get_data_paths()[3]
 
+
 # Legacy global variables for backward compatibility (use dynamic getters instead)
 def _update_global_paths():
     """Update global path variables (for backward compatibility)."""
-    global CHAT_DATA_PATH, CLASSIFICATION_DATA_PATH, KEYWORDS_DATABANK_PATH, DATABASE_PATH
-    CHAT_DATA_PATH, CLASSIFICATION_DATA_PATH, KEYWORDS_DATABANK_PATH, DATABASE_PATH = get_data_paths()
+    global \
+        CHAT_DATA_PATH, \
+        CLASSIFICATION_DATA_PATH, \
+        KEYWORDS_DATABANK_PATH, \
+        DATABASE_PATH
+    CHAT_DATA_PATH, CLASSIFICATION_DATA_PATH, KEYWORDS_DATABANK_PATH, DATABASE_PATH = (
+        get_data_paths()
+    )
+
 
 # Initialize paths
 _update_global_paths()
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')  # Default to a known model
+EMBEDDING_MODEL = os.getenv(
+    "EMBEDDING_MODEL", "text-embedding-3-small"
+)  # Default to a known model
+
 
 # Expose current paths for external access
 def get_current_paths():
     """Get current paths (updates globals and returns them)."""
     _update_global_paths()
-    return CHAT_DATA_PATH, CLASSIFICATION_DATA_PATH, KEYWORDS_DATABANK_PATH, DATABASE_PATH
+    return (
+        CHAT_DATA_PATH,
+        CLASSIFICATION_DATA_PATH,
+        KEYWORDS_DATABANK_PATH,
+        DATABASE_PATH,
+    )
+
 
 # Validate OpenAI API key
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    logging.critical("OPENAI_API_KEY environment variable not set. LLM features will not work.")
+    logging.critical(
+        "OPENAI_API_KEY environment variable not set. LLM features will not work."
+    )
     raise ValueError("OPENAI_API_KEY environment variable not set")
 
 openai.api_key = OPENAI_API_KEY
@@ -105,23 +159,24 @@ create_folders(os.path.dirname(get_keywords_databank_path()))
 # Initialize databases with proper error handling
 try:
     embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-    
+
     classification_db = Chroma(
-        collection_name='classification',
+        collection_name="classification",
         embedding_function=embedding,
-        persist_directory=DATABASE_PATH
+        persist_directory=DATABASE_PATH,
     )
-    
+
     chat_db = Chroma(
-        collection_name='chat',
+        collection_name="chat",
         embedding_function=embedding,
-        persist_directory=DATABASE_PATH
+        persist_directory=DATABASE_PATH,
     )
-    
+
     logging.info("Successfully initialized Chroma databases")
 except Exception as e:
     logging.critical(f"Failed to initialize Chroma databases: {e}")
     raise
+
 
 def dataProcessing(file, collection=chat_db):
     """Ultra-optimized data processing with performance improvements."""
@@ -144,9 +199,9 @@ def dataProcessing(file, collection=chat_db):
     # Process keywords
     for doc in document:
         if "keywords" in doc.metadata:
-            keywords_bank.extend(doc.metadata['keywords'])
-            for i in range(len(doc.metadata['keywords'])):
-                doc.metadata[f'keyword{i}'] = doc.metadata['keywords'][i]
+            keywords_bank.extend(doc.metadata["keywords"])
+            for i in range(len(doc.metadata["keywords"])):
+                doc.metadata[f"keyword{i}"] = doc.metadata["keywords"][i]
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
 
     # Step 3: Fast chunking (no API calls)
@@ -182,8 +237,8 @@ def dataProcessing(file, collection=chat_db):
         existing_keywords = []
         if os.path.exists(KEYWORDS_DATABANK_PATH):
             try:
-                with shelve.open(KEYWORDS_DATABANK_PATH, 'r') as existing_db:
-                    existing_keywords = existing_db.get('keywords', [])
+                with shelve.open(KEYWORDS_DATABANK_PATH, "r") as existing_db:
+                    existing_keywords = existing_db.get("keywords", [])
             except Exception as read_e:
                 logging.warning(f"Could not read existing keywords databank: {read_e}")
 
@@ -194,8 +249,8 @@ def dataProcessing(file, collection=chat_db):
         temp_db_path = f"{KEYWORDS_DATABANK_PATH}.tmp"
         temp_db = None
         try:
-            temp_db = shelve.open(temp_db_path, 'c')
-            temp_db['keywords'] = all_keywords
+            temp_db = shelve.open(temp_db_path, "c")
+            temp_db["keywords"] = all_keywords
             temp_db.sync()  # Force write to disk
         finally:
             if temp_db:
@@ -203,11 +258,12 @@ def dataProcessing(file, collection=chat_db):
 
         # Atomic rename operation (only after file is completely closed)
         import time
+
         time.sleep(0.1)  # Small delay to ensure file handles are released
 
         # On Windows, shelve creates .dat and .dir files, not a single file
         # Find which files actually exist and rename them
-        temp_extensions = ['.dat', '.dir', '.db', '']  # Check in order of likelihood
+        temp_extensions = [".dat", ".dir", ".db", ""]  # Check in order of likelihood
 
         for ext in temp_extensions:
             temp_file = temp_db_path + ext
@@ -221,15 +277,19 @@ def dataProcessing(file, collection=chat_db):
                         os.rename(temp_file, main_file)
                     logging.debug(f"Successfully renamed {temp_file} to {main_file}")
                 except Exception as rename_e:
-                    logging.warning(f"Failed to rename {temp_file} to {main_file}: {rename_e}")
+                    logging.warning(
+                        f"Failed to rename {temp_file} to {main_file}: {rename_e}"
+                    )
                     raise
 
-        logging.info(f"Successfully updated keywords databank with {len(keywords_bank)} new keywords")
+        logging.info(
+            f"Successfully updated keywords databank with {len(keywords_bank)} new keywords"
+        )
     except Exception as e:
         logging.error(f"Error updating keywords databank: {e}")
         # Clean up temporary files if they exist
         temp_base = f"{KEYWORDS_DATABANK_PATH}.tmp"
-        temp_extensions = ['.dat', '.dir', '.db', '']
+        temp_extensions = [".dat", ".dir", ".db", ""]
 
         for ext in temp_extensions:
             temp_file = temp_base + ext
@@ -239,6 +299,7 @@ def dataProcessing(file, collection=chat_db):
                     logging.debug(f"Cleaned up temporary file: {temp_file}")
                 except Exception as cleanup_e:
                     logging.warning(f"Failed to clean up {temp_file}: {cleanup_e}")
+
 
 # Ultra-fast text extraction with fallback options
 def ExtractText(path: str):
@@ -250,7 +311,9 @@ def ExtractText(path: str):
     # Try fast extraction methods first
     try:
         # Method 1: Direct file reading for text files (fastest)
-        if path.lower().endswith(('.txt', '.md', '.py', '.js', '.html', '.css', '.json')):
+        if path.lower().endswith(
+            (".txt", ".md", ".py", ".js", ".html", ".css", ".json")
+        ):
             result = FastTextExtraction(path)
             perf_monitor.end_timer("text_extraction_method")
             return result
@@ -267,6 +330,7 @@ def ExtractText(path: str):
         perf_monitor.end_timer("text_extraction_method")
         return result
 
+
 def FastTextExtraction(file_path: str):
     """Lightning-fast text extraction for plain text files."""
     from langchain.schema import Document
@@ -276,12 +340,12 @@ def FastTextExtraction(file_path: str):
         import chardet
 
         # Detect encoding from first 10KB
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             raw_data = f.read(10000)
-            encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
+            encoding = chardet.detect(raw_data)["encoding"] or "utf-8"
 
         # Read full file with detected encoding
-        with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+        with open(file_path, "r", encoding=encoding, errors="ignore") as f:
             content = f.read()
 
         # Create document
@@ -291,8 +355,8 @@ def FastTextExtraction(file_path: str):
                 "source": file_path,
                 "extraction_method": "fast_text",
                 "encoding": encoding,
-                "file_size": len(content)
-            }
+                "file_size": len(content),
+            },
         )
 
         logging.debug(f"⚡ Fast text extraction: {len(content)} chars from {file_path}")
@@ -302,6 +366,7 @@ def FastTextExtraction(file_path: str):
         logging.warning(f"Fast text extraction failed for {file_path}: {e}")
         raise
 
+
 def OptimizedUnstructuredExtraction(file_path: str):
     """Optimized UnstructuredFileLoader with performance tweaks."""
     try:
@@ -309,7 +374,7 @@ def OptimizedUnstructuredExtraction(file_path: str):
         loader = UnstructuredFileLoader(
             file_path,
             mode="single",  # Single document mode for speed
-            encoding='utf-8'
+            encoding="utf-8",
         )
 
         documents = loader.load()
@@ -319,17 +384,20 @@ def OptimizedUnstructuredExtraction(file_path: str):
             doc.metadata["extraction_method"] = "optimized_unstructured"
             doc.metadata["file_size"] = len(doc.page_content)
 
-        logging.debug(f"⚡ Optimized extraction: {len(documents)} docs from {file_path}")
+        logging.debug(
+            f"⚡ Optimized extraction: {len(documents)} docs from {file_path}"
+        )
         return documents
 
     except Exception as e:
         logging.warning(f"Optimized extraction failed for {file_path}: {e}")
         raise
 
+
 def StandardUnstructuredExtraction(file_path: str):
     """Standard UnstructuredFileLoader (fallback method)."""
     try:
-        loader = UnstructuredFileLoader(file_path, encoding='utf-8')
+        loader = UnstructuredFileLoader(file_path, encoding="utf-8")
         documents = loader.load()
 
         # Add extraction method to metadata
@@ -344,41 +412,56 @@ def StandardUnstructuredExtraction(file_path: str):
         logging.error(f"All extraction methods failed for {file_path}: {e}")
         # Create empty document as last resort
         from langchain.schema import Document
-        return [Document(
-            page_content=f"[Extraction failed: {str(e)}]",
-            metadata={"source": file_path, "extraction_method": "failed", "error": str(e)}
-        )]
+
+        return [
+            Document(
+                page_content=f"[Extraction failed: {str(e)}]",
+                metadata={
+                    "source": file_path,
+                    "extraction_method": "failed",
+                    "error": str(e),
+                },
+            )
+        ]
+
 
 # function to create metadata keyword tags for document and chunk using OpenAI
 def OpenAIMetadataTagger(document: list[Document]):
-    
-    schema = { 
+    schema = {
         "properties": {
             "keywords": {
                 "type": "array",
-                "items": {
-                    "type": "string"
-                },
+                "items": {"type": "string"},
                 "description": "The top 5–10 keywords that best represent the document's main topics or concepts.",
                 "uniqueItems": True,
-                "minItems": 10
+                "minItems": 10,
             },
         },
-        "required": ["keywords"]
+        "required": ["keywords"],
     }
 
-    llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")  # Changed to gpt-4o-mini for consistency
+    llm = ChatOpenAI(
+        temperature=0.8, model="gpt-4o-mini"
+    )  # Changed to gpt-4o-mini for consistency
 
     document_transformer = create_metadata_tagger(metadata_schema=schema, llm=llm)
     enhanced_documents = document_transformer.transform_documents(document)
     return enhanced_documents
 
+
 # function to create metadata keyword tags for document and chunk using keyBERT library
 def KeyBERTMetadataTagger(document):
-
     kw_model = KeyBERT()
-    keywords = kw_model.extract_keywords(document, keyphrase_ngram_range=(1, 2), use_maxsum=True, nr_candidates=20, top_n=5, stop_words='english')
+    keywords = kw_model.extract_keywords(
+        document,
+        keyphrase_ngram_range=(1, 2),
+        use_maxsum=True,
+        nr_candidates=20,
+        top_n=5,
+        stop_words="english",
+    )
     return keywords
+
 
 # Lightning-fast keyword extractor using simple text analysis (no ML models)
 def FastKeyBERTMetadataTagger(documents: list[Document]):
@@ -390,18 +473,106 @@ def FastKeyBERTMetadataTagger(documents: list[Document]):
         """Extract keywords using simple text analysis - extremely fast."""
         # Common stop words to filter out
         stop_words = {
-            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-            'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
-            'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
-            'his', 'its', 'our', 'their', 'from', 'up', 'about', 'into', 'through', 'during', 'before',
-            'after', 'above', 'below', 'between', 'among', 'all', 'any', 'both', 'each', 'few', 'more',
-            'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than',
-            'too', 'very', 'just', 'now', 'here', 'there', 'when', 'where', 'why', 'how'
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "this",
+            "that",
+            "these",
+            "those",
+            "i",
+            "you",
+            "he",
+            "she",
+            "it",
+            "we",
+            "they",
+            "me",
+            "him",
+            "her",
+            "us",
+            "them",
+            "my",
+            "your",
+            "his",
+            "its",
+            "our",
+            "their",
+            "from",
+            "up",
+            "about",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "among",
+            "all",
+            "any",
+            "both",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "just",
+            "now",
+            "here",
+            "there",
+            "when",
+            "where",
+            "why",
+            "how",
         }
 
         # Extract words (alphanumeric, 3+ characters)
-        words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+        words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
 
         # Filter out stop words and get word frequencies
         filtered_words = [word for word in words if word not in stop_words]
@@ -426,17 +597,24 @@ def FastKeyBERTMetadataTagger(documents: list[Document]):
 
             enhanced_documents.append(doc)
 
-        total_keywords = sum(len(doc.metadata.get("keywords", [])) for doc in enhanced_documents)
-        logging.info(f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (simple analysis)")
+        total_keywords = sum(
+            len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
+        )
+        logging.info(
+            f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (simple analysis)"
+        )
 
         return enhanced_documents
 
     except Exception as e:
-        logging.warning(f"Simple keyword extraction failed: {e}, falling back to no keywords")
+        logging.warning(
+            f"Simple keyword extraction failed: {e}, falling back to no keywords"
+        )
         # Fallback: return documents without keywords
         for doc in documents:
             doc.metadata["keywords"] = []
         return documents
+
 
 # Optional: Keep KeyBERT version for high-quality extraction when performance is not critical
 def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
@@ -466,7 +644,7 @@ def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
                 use_maxsum=True,
                 nr_candidates=8,
                 top_n=3,
-                stop_words='english'
+                stop_words="english",
             )
 
             # Convert to list of keyword strings
@@ -480,22 +658,30 @@ def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
             doc.metadata["keywords"] = keyword_list
             enhanced_documents.append(doc)
 
-        total_keywords = sum(len(doc.metadata.get("keywords", [])) for doc in enhanced_documents)
-        logging.info(f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (KeyBERT)")
+        total_keywords = sum(
+            len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
+        )
+        logging.info(
+            f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (KeyBERT)"
+        )
 
         return enhanced_documents
 
     except Exception as e:
-        logging.warning(f"KeyBERT tagging failed: {e}, falling back to simple extraction")
+        logging.warning(
+            f"KeyBERT tagging failed: {e}, falling back to simple extraction"
+        )
         return FastKeyBERTMetadataTagger(documents)
+
 
 # function to create metadata keyword tags for document and chunk using keyBERT library extended with openAI through langchain
 # This function outputs the same results as OpenAIMetadataTagger except it seems to have an issue of counting punctuation as a keyword
 # This is likely due to the how the KeyLLM is implemented in the keyBERT library
 # This function is kept here as an archive and for future reference but will not be used in the final implementation
 client = openai.OpenAI(api_key=openai.api_key)
-def KeyBERTOpenAIMetadataTagger(document):
 
+
+def KeyBERTOpenAIMetadataTagger(document):
     # Create your LLM
     llm = OpenAI(client)
     kw_model = KeyLLM(llm)
@@ -504,19 +690,16 @@ def KeyBERTOpenAIMetadataTagger(document):
     kw_model = KeyLLM(llm)
 
     # Extract keywords
-    keywords = kw_model.extract_keywords(document,check_vocab=True)
+    keywords = kw_model.extract_keywords(document, check_vocab=True)
 
     return keywords
+
 
 # function to split documents into set smaller chunks for better retrieval processing
 # includes overlap to maintain context between chunks
 def recursiveChunker(documents: list[Document]):
-
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=400,
-        length_function=len,
-        add_start_index=True
+        chunk_size=1000, chunk_overlap=400, length_function=len, add_start_index=True
     )
 
     chunks = text_splitter.split_documents(documents)
@@ -524,14 +707,15 @@ def recursiveChunker(documents: list[Document]):
     print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
     # print sample chunks for verification
-    print('Example Chunks:')
+    print("Example Chunks:")
     print(chunks[0])
-    print('='*100)
+    print("=" * 100)
     print(chunks[1])
-    print('='*100)
+    print("=" * 100)
     print(chunks[2])
 
     return chunks
+
 
 # Optimized recursive chunker with performance improvements
 def optimizedRecursiveChunker(documents: list[Document]):
@@ -541,7 +725,7 @@ def optimizedRecursiveChunker(documents: list[Document]):
         chunk_size=800,  # Smaller chunks for faster processing
         chunk_overlap=200,  # Reduced overlap for speed
         length_function=len,
-        add_start_index=True
+        add_start_index=True,
     )
 
     chunks = text_splitter.split_documents(documents)
@@ -554,9 +738,9 @@ def optimizedRecursiveChunker(documents: list[Document]):
 
     return chunks
 
+
 # function to split documents into semantic smaller chunks for better retrieval processing
 def semanticChunker(documents: list[Document]):
-
     text_splitter = SemanticChunker(OpenAIEmbeddings())
 
     chunks = text_splitter.split_documents(documents)
@@ -564,25 +748,26 @@ def semanticChunker(documents: list[Document]):
     print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
     # print sample chunks for verification
-    #print('Example Chunks:')
-    #print(chunks[0])
-    #print('='*100)
-    #print(chunks[1])
-    #print('='*100)
-    #print(chunks[2])
+    # print('Example Chunks:')
+    # print(chunks[0])
+    # print('='*100)
+    # print(chunks[1])
+    # print('='*100)
+    # print(chunks[2])
 
     return chunks
+
 
 # Ultra-efficient memory-conscious batching
 def batching(chunks, batch_size):
     """Memory-efficient batching with generator pattern."""
     for i in range(0, len(chunks), batch_size):
-        yield chunks[i:i + batch_size]
+        yield chunks[i : i + batch_size]
+
 
 # Advanced batching with memory optimization
 def optimized_batching(chunks, batch_size=25, max_memory_mb=100):
     """Advanced batching with memory monitoring and optimization."""
-    import sys
     from performance_utils import perf_monitor
 
     perf_monitor.start_timer("advanced_batching")
@@ -593,7 +778,9 @@ def optimized_batching(chunks, batch_size=25, max_memory_mb=100):
 
     for chunk in chunks:
         # Estimate memory usage of chunk
-        chunk_size = sys.getsizeof(chunk.page_content) + sys.getsizeof(str(chunk.metadata))
+        chunk_size = sys.getsizeof(chunk.page_content) + sys.getsizeof(
+            str(chunk.metadata)
+        )
 
         # Check if adding this chunk would exceed memory limit
         if current_size + chunk_size > max_size and current_batch:
@@ -619,18 +806,18 @@ def optimized_batching(chunks, batch_size=25, max_memory_mb=100):
     perf_monitor.end_timer("advanced_batching")
     logging.debug(f"⚡ Advanced batching complete with memory limit {max_memory_mb}MB")
 
-#Adding documents to the appropriate collection
-def databaseInsertion(batches, collection: Chroma):
 
+# Adding documents to the appropriate collection
+def databaseInsertion(batches, collection: Chroma):
     for chunk in batches:
         collection.add_documents(documents=chunk)
+
 
 # Optimized parallel database insertion
 def parallelDatabaseInsertion(batches, collection: Chroma):
     """Optimized database insertion with error handling and performance monitoring."""
     import concurrent.futures
     import threading
-    from performance_utils import perf_monitor
 
     # Thread-safe insertion with connection pooling
     insertion_lock = threading.Lock()
@@ -654,7 +841,9 @@ def parallelDatabaseInsertion(batches, collection: Chroma):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all batch insertion tasks
         batch_data = [(i, batch) for i, batch in enumerate(batches)]
-        future_to_batch = {executor.submit(insert_batch, data): data for data in batch_data}
+        future_to_batch = {
+            executor.submit(insert_batch, data): data for data in batch_data
+        }
 
         # Process completed tasks
         for future in concurrent.futures.as_completed(future_to_batch):
@@ -666,7 +855,10 @@ def parallelDatabaseInsertion(batches, collection: Chroma):
             logging.debug(result)
 
     total_docs = sum(len(batch) for batch in batches)
-    logging.info(f"⚡ Database insertion complete: {successful_insertions} successful, {failed_insertions} failed, {total_docs} total docs")
+    logging.info(
+        f"⚡ Database insertion complete: {successful_insertions} successful, {failed_insertions} failed, {total_docs} total docs"
+    )
+
 
 # Optimized keywords databank update
 def updateKeywordsDatabank(keywords_bank):
@@ -686,8 +878,8 @@ def updateKeywordsDatabank(keywords_bank):
         existing_keywords = []
         if os.path.exists(keywords_path):
             try:
-                with shelve.open(keywords_path, 'r') as existing_db:
-                    existing_keywords = existing_db.get('keywords', [])
+                with shelve.open(keywords_path, "r") as existing_db:
+                    existing_keywords = existing_db.get("keywords", [])
             except Exception as read_e:
                 logging.warning(f"Could not read existing keywords databank: {read_e}")
 
@@ -698,8 +890,8 @@ def updateKeywordsDatabank(keywords_bank):
         temp_db_path = f"{keywords_path}.tmp"
         temp_db = None
         try:
-            temp_db = shelve.open(temp_db_path, 'c')
-            temp_db['keywords'] = all_keywords
+            temp_db = shelve.open(temp_db_path, "c")
+            temp_db["keywords"] = all_keywords
             temp_db.sync()  # Force write to disk
         finally:
             if temp_db:
@@ -707,11 +899,12 @@ def updateKeywordsDatabank(keywords_bank):
 
         # Atomic rename operation (only after file is completely closed)
         import time
+
         time.sleep(0.1)  # Small delay to ensure file handles are released
 
         # On Windows, shelve creates .dat and .dir files, not a single file
         # Find which files actually exist and rename them
-        temp_extensions = ['.dat', '.dir', '.db', '']  # Check in order of likelihood
+        temp_extensions = [".dat", ".dir", ".db", ""]  # Check in order of likelihood
 
         for ext in temp_extensions:
             temp_file = temp_db_path + ext
@@ -725,15 +918,19 @@ def updateKeywordsDatabank(keywords_bank):
                         os.rename(temp_file, main_file)
                     logging.debug(f"Successfully renamed {temp_file} to {main_file}")
                 except Exception as rename_e:
-                    logging.warning(f"Failed to rename {temp_file} to {main_file}: {rename_e}")
+                    logging.warning(
+                        f"Failed to rename {temp_file} to {main_file}: {rename_e}"
+                    )
                     raise
 
-        logging.info(f"Successfully updated keywords databank with {len(keywords_bank)} new keywords")
+        logging.info(
+            f"Successfully updated keywords databank with {len(keywords_bank)} new keywords"
+        )
     except Exception as e:
         logging.error(f"Error updating keywords databank: {e}")
         # Clean up temporary files if they exist
         temp_base = f"{keywords_path}.tmp"
-        temp_extensions = ['.dat', '.dir', '.db', '']
+        temp_extensions = [".dat", ".dir", ".db", ""]
 
         for ext in temp_extensions:
             temp_file = temp_base + ext
@@ -744,6 +941,7 @@ def updateKeywordsDatabank(keywords_bank):
                 except Exception as cleanup_e:
                     logging.warning(f"Failed to clean up {temp_file}: {cleanup_e}")
 
+
 def initialiseDatabase():
     """Optimized database initialization with parallel processing."""
     import concurrent.futures
@@ -752,8 +950,10 @@ def initialiseDatabase():
     perf_monitor.start_timer("database_initialization")
 
     # Get all files to process (using dynamic paths)
-    chat_files = glob(get_chat_data_path() + '/**/*.*', recursive=True)
-    classification_files = glob(get_classification_data_path() + '/**/*.*', recursive=True)
+    chat_files = glob(get_chat_data_path() + "/**/*.*", recursive=True)
+    classification_files = glob(
+        get_classification_data_path() + "/**/*.*", recursive=True
+    )
 
     total_files = len(chat_files) + len(classification_files)
     logging.info(f"🗄️ Initializing database with {total_files} files...")
@@ -786,7 +986,10 @@ def initialiseDatabase():
     failed_files = 0
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {executor.submit(process_file_with_collection, pair): pair for pair in file_collection_pairs}
+        future_to_file = {
+            executor.submit(process_file_with_collection, pair): pair
+            for pair in file_collection_pairs
+        }
 
         for future in concurrent.futures.as_completed(future_to_file):
             result = future.result()
@@ -798,7 +1001,10 @@ def initialiseDatabase():
 
     perf_monitor.end_timer("database_initialization")
     total_time = perf_monitor.get_metrics().get("database_initialization", 0)
-    logging.info(f"🗄️ Database initialization complete in {total_time:.2f}s: {successful_files} successful, {failed_files} failed")
+    logging.info(
+        f"🗄️ Database initialization complete in {total_time:.2f}s: {successful_files} successful, {failed_files} failed"
+    )
+
 
 if __name__ == "__main__":
     pass

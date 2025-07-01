@@ -15,116 +15,127 @@ parent_dir = Path(__file__).parent.parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+
 def run_login_tests():
     """Run login interface tests."""
     print("🔐 Running Login Interface Tests...")
     try:
         # Import the actual test functions that run tests
         from tests.frontend.test_login_ui import test_login_interface, test_simple_login
-        
+
         # Create test apps for validation
         print("Testing simple login interface creation...")
-        app = test_simple_login()
+        test_simple_login()
         print("✅ Simple login test app created successfully")
-        
+
         print("Testing full login interface creation...")
-        app = test_login_interface()
+        test_login_interface()
         print("✅ Full login test app created successfully")
-        
+
         # Run actual login functionality tests
         print("Testing login functionality...")
-        import asyncio
-        from backend import do_login, do_register
-        
+        from backend import do_login
+
         async def test_login_functionality():
             # Test valid login
             result = await do_login("test_user", "TestPass123!")
-            if result.get('code') == '200':
+            if result.get("code") == "200":
                 print("✅ Login with test_user credentials works")
             else:
                 print(f"⚠️ Login with test_user credentials returned: {result}")
-            
+
             # Test invalid login
             result = await do_login("invalid", "invalid")
-            if result.get('code') != '200':
+            if result.get("code") != "200":
                 print("✅ Invalid login properly rejected")
             else:
                 print(f"⚠️ Invalid login unexpectedly succeeded: {result}")
-        
+
         # Run the async test
+        import asyncio
+
         asyncio.run(test_login_functionality())
-        
+
         return True
     except ImportError as e:
         print(f"❌ Login tests failed: Import error - {e}")
-        print(f"   This usually means the login UI modules are not available")
+        print("   This usually means the login UI modules are not available")
         return False
     except Exception as e:
         print(f"❌ Login tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_chat_tests():
     """Run chat interface tests."""
     print("💬 Running Chat Interface Tests...")
     try:
-        from tests.frontend.test_chat_ui import test_chat_interface, test_chatbot_interface
-        
+        from tests.frontend.test_chat_ui import (
+            test_chat_interface,
+            test_chatbot_interface,
+        )
+
         # Create test apps for validation
         print("Testing chat interface creation...")
-        app = test_chat_interface()
+        test_chat_interface()
         print("✅ Chat interface test app created successfully")
-        
+
         print("Testing chatbot interface creation...")
-        app = test_chatbot_interface()
+        test_chatbot_interface()
         print("✅ Chatbot interface test app created successfully")
-        
+
         # Test chat functionality
         print("Testing chat functionality...")
         from backend import ask_question
-        
+
         async def test_chat_functionality():
             # Test asking a question
             result = await ask_question("Hello", "test_user", "")
-            if result.get('code') == '200':
+            if result.get("code") == "200":
                 print("✅ Chat question functionality works")
             else:
                 print(f"⚠️ Chat question returned: {result}")
-        
+
         import asyncio
+
         asyncio.run(test_chat_functionality())
-        
+
         return True
     except ImportError as e:
         print(f"❌ Chat tests failed: Import error - {e}")
-        print(f"   This usually means the chat UI modules are not available")
+        print("   This usually means the chat UI modules are not available")
         return False
     except Exception as e:
         print(f"❌ Chat tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_search_tests():
     """Run search interface tests."""
     print("🔍 Running Search Interface Tests...")
     try:
-        from tests.frontend.test_search_ui import test_search_interface, test_chat_history_interface
-        
+        from tests.frontend.test_search_ui import (
+            test_search_interface,
+            test_chat_history_interface,
+        )
+
         # Create test apps for validation
         print("Testing search interface creation...")
-        app = test_search_interface()
+        test_search_interface()
         print("✅ Search interface test app created successfully")
-        
+
         print("Testing chat history interface creation...")
-        app = test_chat_history_interface()
+        test_chat_history_interface()
         print("✅ Chat history interface test app created successfully")
-        
+
         # Test search functionality
         print("Testing search functionality...")
         from backend import search_chat_history
-        
+
         def test_search_functionality():
             # Test search functionality
             result = search_chat_history("test_user", "hello")
@@ -132,57 +143,63 @@ def run_search_tests():
                 print("✅ Search functionality works")
             else:
                 print(f"⚠️ Search returned: {result}")
-        
+
         test_search_functionality()
-        
+
         return True
     except ImportError as e:
         print(f"❌ Search tests failed: Import error - {e}")
-        print(f"   This usually means the search UI modules are not available")
+        print("   This usually means the search UI modules are not available")
         return False
     except Exception as e:
         print(f"❌ Search tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_file_audio_tests():
     """Run file upload and audio input tests."""
     print("📁🎤 Running File Upload and Audio Input Tests...")
     try:
-        from tests.frontend.test_file_audio_ui import test_file_upload_interface, test_audio_input_interface
-        
+        from tests.frontend.test_file_audio_ui import (
+            test_file_upload_interface,
+            test_audio_input_interface,
+        )
+
         # Create test apps for validation
         print("Testing file upload interface creation...")
-        app = test_file_upload_interface()
+        test_file_upload_interface()
         print("✅ File upload interface test app created successfully")
-        
+
         print("Testing audio input interface creation...")
-        app = test_audio_input_interface()
+        test_audio_input_interface()
         print("✅ Audio input interface test app created successfully")
-        
+
         # Test file upload functionality
         print("Testing file upload functionality...")
         from backend import upload_file
-        
+
         async def test_file_upload_functionality():
             # Test file upload (with mock file)
             import tempfile
             import os
-            
+
             # Create a temporary test file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", delete=False
+            ) as f:
                 f.write("This is a test file for upload testing.")
                 temp_file_path = f.name
-            
+
             try:
                 # Read file content as bytes
-                with open(temp_file_path, 'rb') as f:
+                with open(temp_file_path, "rb") as f:
                     file_content = f.read()
-                
+
                 # Test upload functionality
                 result = await upload_file(file_content, "test.txt", "test_user")
-                if result.get('code') == '200':
+                if result.get("code") == "200":
                     print("✅ File upload functionality works")
                 else:
                     print(f"⚠️ File upload returned: {result}")
@@ -190,20 +207,22 @@ def run_file_audio_tests():
                 # Clean up temp file
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
-        
+
         import asyncio
+
         asyncio.run(test_file_upload_functionality())
-        
+
         return True
     except ImportError as e:
         print(f"❌ File/Audio tests failed: Import error - {e}")
-        print(f"   This usually means the file/audio UI modules are not available")
+        print("   This usually means the file/audio UI modules are not available")
         return False
     except Exception as e:
         print(f"❌ File/Audio tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_ui_state_interaction_tests():
     """Run enhanced UI state interaction tests."""
@@ -215,13 +234,16 @@ def run_ui_state_interaction_tests():
         return success
     except ImportError as e:
         print(f"❌ UI State tests failed: Import error - {e}")
-        print(f"   This usually means the UI state interaction modules are not available")
+        print(
+            "   This usually means the UI state interaction modules are not available"
+        )
         return False
     except Exception as e:
         print(f"❌ UI State tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_theme_styles_tests():
     """Run theme and styles tests."""
@@ -233,13 +255,14 @@ def run_theme_styles_tests():
         return success
     except ImportError as e:
         print(f"❌ Theme/Styles tests failed: Import error - {e}")
-        print(f"   This usually means the theme/styles modules are not available")
+        print("   This usually means the theme/styles modules are not available")
         return False
     except Exception as e:
         print(f"❌ Theme/Styles tests failed: {e}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False
+
 
 def run_all_tests():
     """Run all frontend tests."""
@@ -249,21 +272,22 @@ def run_all_tests():
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from test_utils import cleanup_test_users, create_test_user
+
         print("🧹 Cleaning up any existing test users...")
         cleanup_test_users()
-        
+
         # Create a test user for all tests
         print("👤 Creating test user for test suite...")
         test_username = "test_user"
         test_password = "TestPass123!"
         test_email = "test@example.com"
-        
+
         if create_test_user(test_username, test_password, test_email):
             print(f"✅ Test user '{test_username}' created successfully")
         else:
             print(f"❌ Failed to create test user '{test_username}'")
             return False
-            
+
     except Exception as e:
         print(f"⚠️ Warning: Could not set up test users: {e}")
         return False
@@ -276,16 +300,16 @@ def run_all_tests():
         ("UI State Interaction Tests", run_ui_state_interaction_tests),
         ("Theme/Styles Tests", run_theme_styles_tests),
     ]
-    
+
     results = []
     failed_tests = []
     error_messages = []
-    
+
     for test_name, test_func in tests:
         try:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Running {test_name}")
-            print('='*50)
+            print("=" * 50)
             result = test_func()
             results.append((test_name, result))
             if result:
@@ -303,23 +327,23 @@ def run_all_tests():
         except Exception as e:
             error_msg = f"Unexpected exception: {e}"
             print(f"❌ {test_name} failed with {error_msg}")
-            print(f"   Full traceback:")
+            print("   Full traceback:")
             traceback.print_exc()
             results.append((test_name, False))
             failed_tests.append(test_name)
             error_messages.append(f"{test_name}: {error_msg}")
-    
+
     # Summary
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("TEST SUMMARY")
-    print('='*50)
+    print("=" * 50)
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for test_name, result in results:
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"{test_name}: {status}")
-    
+
     print(f"\nOverall: {passed}/{total} test suites passed")
 
     if failed_tests:
@@ -327,16 +351,17 @@ def run_all_tests():
 
         # Display error messages
         if error_messages:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print("ERROR MESSAGES")
-            print('='*50)
+            print("=" * 50)
             for error_msg in error_messages:
                 print(f"❌ {error_msg}")
 
     # Clean up test users after all tests
     try:
         from test_utils import cleanup_test_users
-        print(f"\n🧹 Cleaning up test users after test run...")
+
+        print("\n🧹 Cleaning up test users after test run...")
         cleanup_test_users()
     except Exception as e:
         print(f"⚠️ Warning: Could not clean up test users after tests: {e}")
@@ -347,53 +372,67 @@ def run_all_tests():
     else:
         return True
 
+
 def launch_test_app(test_name):
     """Launch a specific test app."""
     print(f"🚀 Launching {test_name} test app...")
-    
+
     if test_name == "login":
         from tests.frontend.test_login_ui import test_login_interface
+
         app = test_login_interface()
     elif test_name == "simple-login":
         from tests.frontend.test_login_ui import test_simple_login
+
         app = test_simple_login()
     elif test_name == "chat":
         from tests.frontend.test_chat_ui import test_chat_interface
+
         app = test_chat_interface()
     elif test_name == "chatbot":
         from tests.frontend.test_chat_ui import test_chatbot_interface
+
         app = test_chatbot_interface()
     elif test_name == "search":
         from tests.frontend.test_search_ui import test_search_interface
+
         app = test_search_interface()
     elif test_name == "chat-history":
         from tests.frontend.test_search_ui import test_chat_history_interface
+
         app = test_chat_history_interface()
     elif test_name == "file-upload":
         from tests.frontend.test_file_audio_ui import test_file_upload_interface
+
         app = test_file_upload_interface()
     elif test_name == "audio":
         from tests.frontend.test_file_audio_ui import test_audio_input_interface
+
         app = test_audio_input_interface()
     elif test_name == "all":
         from tests.frontend.test_all_interfaces import test_all_interfaces
+
         app = test_all_interfaces()
     elif test_name == "ui-state":
         from tests.frontend.test_ui_state_interactions import run_ui_state_tests
+
         run_ui_state_tests()
         return True
     elif test_name == "theme-styles":
         from tests.frontend.test_theme_styles import run_theme_styles_tests
+
         run_theme_styles_tests()
         return True
     else:
         print(f"❌ Unknown test: {test_name}")
-        print("Available tests: login, simple-login, chat, chatbot, search, chat-history, file-upload, audio, ui-state, theme-styles, all")
+        print(
+            "Available tests: login, simple-login, chat, chatbot, search, chat-history, file-upload, audio, ui-state, theme-styles, all"
+        )
         return False
-    
+
     print(f"✅ {test_name} test app created successfully")
     print("Launching Gradio app...")
-    
+
     # Use the same launch configuration as the main app for Docker compatibility
     launch_config = {
         "debug": True,
@@ -402,12 +441,15 @@ def launch_test_app(test_name):
         "quiet": False,
         "show_error": True,
         "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
-        "server_port": 7860,        # Use the same port as main app
+        "server_port": 7860,  # Use the same port as main app
     }
-    
-    print(f"🌐 Launching on {launch_config['server_name']}:{launch_config['server_port']}")
+
+    print(
+        f"🌐 Launching on {launch_config['server_name']}:{launch_config['server_port']}"
+    )
     app.launch(**launch_config)
     return True
+
 
 def main():
     """Main function to handle command line arguments."""
@@ -415,16 +457,28 @@ def main():
     parser.add_argument(
         "action",
         choices=["test", "launch"],
-        help="Action to perform: 'test' to run tests, 'launch' to launch a test app"
+        help="Action to perform: 'test' to run tests, 'launch' to launch a test app",
     )
     parser.add_argument(
         "--test",
-        choices=["login", "simple-login", "chat", "chatbot", "search", "chat-history", "file-upload", "audio", "ui-state", "theme-styles", "all"],
-        help="Specific test to run or launch"
+        choices=[
+            "login",
+            "simple-login",
+            "chat",
+            "chatbot",
+            "search",
+            "chat-history",
+            "file-upload",
+            "audio",
+            "ui-state",
+            "theme-styles",
+            "all",
+        ],
+        help="Specific test to run or launch",
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.action == "test":
         if args.test:
             # Run specific test
@@ -446,16 +500,17 @@ def main():
         else:
             # Run all tests
             success = run_all_tests()
-        
+
         return 0 if success else 1
-    
+
     elif args.action == "launch":
         if not args.test:
             print("❌ Please specify a test to launch with --test")
             return 1
-        
+
         success = launch_test_app(args.test)
         return 0 if success else 1
 
+
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

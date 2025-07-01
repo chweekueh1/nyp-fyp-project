@@ -15,105 +15,133 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+
 def run_backend_tests():
     """Run backend tests."""
     print("🔧 Running Backend Tests...")
     try:
         from tests.backend.test_backend import run_backend_tests
+
         success = run_backend_tests()
         return success
     except ImportError as e:
         error_msg = f"Import error - {e}"
         print(f"❌ Backend tests failed: {error_msg}")
-        print(f"   This usually means the backend module or its dependencies are not available")
+        print(
+            "   This usually means the backend module or its dependencies are not available"
+        )
         return False, error_msg
     except Exception as e:
         error_msg = f"{e}"
         print(f"❌ Backend tests failed: {error_msg}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False, error_msg
+
 
 def run_frontend_tests():
     """Run frontend tests."""
     print("🎨 Running Frontend Tests...")
     try:
         from tests.frontend.run_frontend_tests import run_all_tests
+
         success = run_all_tests()
         return success
     except ImportError as e:
         error_msg = f"Import error - {e}"
         print(f"❌ Frontend tests failed: {error_msg}")
-        print(f"   This usually means the frontend modules or their dependencies are not available")
+        print(
+            "   This usually means the frontend modules or their dependencies are not available"
+        )
         return False, error_msg
     except Exception as e:
         error_msg = f"{e}"
         print(f"❌ Frontend tests failed: {error_msg}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False, error_msg
+
 
 def run_integration_tests():
     """Run integration tests."""
     print("🔗 Running Integration Tests...")
     try:
         from tests.integration.test_integration import run_integration_tests
+
         success = run_integration_tests()
         return success
     except ImportError as e:
         error_msg = f"Import error - {e}"
         print(f"❌ Integration tests failed: {error_msg}")
-        print(f"   This usually means the integration modules or their dependencies are not available")
+        print(
+            "   This usually means the integration modules or their dependencies are not available"
+        )
         return False, error_msg
     except Exception as e:
         error_msg = f"{e}"
         print(f"❌ Integration tests failed: {error_msg}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False, error_msg
+
 
 def run_llm_tests():
     """Run LLM tests."""
     print("🤖 Running LLM Tests...")
     try:
         from tests.llm.test_llm import run_llm_tests
+
         success = run_llm_tests()
         return success
     except ImportError as e:
         error_msg = f"Import error - {e}"
         print(f"❌ LLM tests failed: {error_msg}")
-        print(f"   This usually means the LLM modules or their dependencies are not available")
+        print(
+            "   This usually means the LLM modules or their dependencies are not available"
+        )
         return False, error_msg
     except Exception as e:
         error_msg = f"{e}"
         print(f"❌ LLM tests failed: {error_msg}")
-        print(f"   Full traceback:")
+        print("   Full traceback:")
         traceback.print_exc()
         return False, error_msg
+
 
 def run_all_tests():
     """Run all test suites."""
     print("🚀 Running All Test Suites...")
     print("=" * 60)
-    
+
+    # Ensure default test user exists before running tests
+    print("👤 Setting up test environment...")
+    try:
+        from tests.test_utils import ensure_default_test_user
+
+        ensure_default_test_user()
+        print("✅ Test environment ready")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not ensure test user exists: {e}")
+        print("   Tests may fail if test user is not available")
+
     test_suites = [
         ("Backend Tests", run_backend_tests),
         ("Frontend Tests", run_frontend_tests),
         ("Integration Tests", run_integration_tests),
         ("LLM Tests", run_llm_tests),
     ]
-    
+
     results = []
     failed_suites = []
     error_messages = []
-    
+
     for suite_name, test_func in test_suites:
         try:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Running {suite_name}")
-            print('='*50)
+            print("=" * 50)
             result = test_func()
-            
+
             # Handle both simple boolean and tuple (success, error_msg) returns
             if isinstance(result, tuple):
                 success, error_msg = result
@@ -122,13 +150,13 @@ def run_all_tests():
             else:
                 success = result
                 error_msg = None
-            
+
             results.append((suite_name, success))
             if not success:
                 failed_suites.append(suite_name)
                 if error_msg:
                     error_messages.append(f"{suite_name}: {error_msg}")
-                    
+
         except KeyboardInterrupt:
             print(f"\n⚠️  {suite_name} interrupted by user")
             results.append((suite_name, False))
@@ -138,45 +166,48 @@ def run_all_tests():
         except Exception as e:
             error_msg = f"Unexpected exception: {e}"
             print(f"❌ {suite_name} failed with {error_msg}")
-            print(f"   Full traceback:")
+            print("   Full traceback:")
             traceback.print_exc()
             results.append((suite_name, False))
             failed_suites.append(suite_name)
             error_messages.append(f"{suite_name}: {error_msg}")
-    
+
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("OVERALL TEST SUMMARY")
-    print('='*60)
-    
+    print("=" * 60)
+
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for suite_name, result in results:
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"{suite_name}: {status}")
-    
+
     print(f"\nOverall: {passed}/{total} test suites passed")
-    
+
     if failed_suites:
         print(f"\nFailed test suites: {', '.join(failed_suites)}")
-        
+
         # Display error messages
         if error_messages:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("ERROR MESSAGES")
-            print('='*60)
+            print("=" * 60)
             for error_msg in error_messages:
                 print(f"❌ {error_msg}")
-    
+
     if passed == total:
         print("🎉 All test suites passed!")
     else:
         print("💥 Some test suites failed!")
         if len(failed_suites) == 1:
-            print(f"   Only {failed_suites[0]} failed - you can run it individually with: --suite {failed_suites[0].lower().replace(' ', '')}")
-    
+            print(
+                f"   Only {failed_suites[0]} failed - you can run it individually with: --suite {failed_suites[0].lower().replace(' ', '')}"
+            )
+
     return passed == total
+
 
 def main():
     """Main function to handle command line arguments."""
@@ -185,11 +216,11 @@ def main():
         "--suite",
         choices=["backend", "frontend", "integration", "llm", "all"],
         default="all",
-        help="Test suite to run (default: all)"
+        help="Test suite to run (default: all)",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         if args.suite == "all":
             success = run_all_tests()
@@ -204,7 +235,7 @@ def main():
         else:
             print(f"❌ Unknown test suite: {args.suite}")
             return 1
-        
+
         return 0 if success else 1
     except KeyboardInterrupt:
         print("\n⚠️  Test execution interrupted by user")
@@ -214,5 +245,6 @@ def main():
         traceback.print_exc()
         return 1
 
+
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

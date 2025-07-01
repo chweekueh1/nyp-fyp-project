@@ -1,6 +1,4 @@
-2025-07-01 11:49:55 - INFO - root - Checking if Docker daemon is running with 'docker info'.
-2025-07-01 11:49:55 - INFO - root - Docker daemon is already running.
-2025-07-01 11:49:55 - INFO - root - Checking for existing Docker image 'nyp-fyp-chatbot'.
-2025-07-01 11:49:55 - INFO - root - No existing 'nyp-fyp-chatbot' image found.
-2025-07-01 11:49:55 - INFO - root - Building Docker image 'nyp-fyp-chatbot' with clean build.
-2025-07-01 12:01:33 - INFO - root - Docker image built successfully with clean installation.
+2025-07-01 13:11:18 - INFO - root - Checking if Docker daemon is running with 'docker info'.
+2025-07-01 13:11:18 - INFO - root - Docker daemon is already running.
+2025-07-01 13:11:18 - INFO - root - Docker image 'nyp-fyp-chatbot' already exists.
+2025-07-01 13:11:18 - INFO - root - Running Docker container for 'nyp-fyp-chatbot'.

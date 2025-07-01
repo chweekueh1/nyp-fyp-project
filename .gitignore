@@ -5,6 +5,7 @@
 
 # Ignore Python cache
 __pycache__/
+.ruff_cache/
 
 # Ignore logs
 logs/

@@ -3,6 +3,7 @@ from typing import Tuple, Any, List, Dict
 import gradio as gr
 # Backend import moved to function level to avoid early ChromaDB initialization
 
+
 def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
     """Load all chat histories for a user.
 
@@ -28,6 +29,7 @@ def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
             all_histories[cid] = [["[Error loading chat]", str(e)]]
     return all_histories
 
+
 def handle_search(username: str, query: str) -> str:
     """Handle search query and return formatted results."""
     if not username or not query.strip():
@@ -45,28 +47,32 @@ def handle_search(username: str, query: str) -> str:
 
         # Format results for display
         formatted_results = [f"# 🔍 Search Results for '{query}'\n"]
-        formatted_results.append(f"Found {len(results)} chat(s) with matching content:\n")
+        formatted_results.append(
+            f"Found {len(results)} chat(s) with matching content:\n"
+        )
 
         for i, result in enumerate(results, 1):
-            chat_name = result['chat_name']
-            match_count = result['match_count']
-            chat_preview = result['chat_preview']
+            chat_name = result["chat_name"]
+            match_count = result["match_count"]
+            chat_preview = result["chat_preview"]
 
             formatted_results.append(f"## {i}. {chat_name}")
-            formatted_results.append(f"**Matches:** {match_count} | **Preview:** {chat_preview}")
+            formatted_results.append(
+                f"**Matches:** {match_count} | **Preview:** {chat_preview}"
+            )
 
             # Show first few matching messages
-            for match in result['matching_messages'][:2]:  # Show max 2 matches per chat
-                user_msg = match['user_message']
-                bot_msg = match['bot_message']
+            for match in result["matching_messages"][:2]:  # Show max 2 matches per chat
+                user_msg = match["user_message"]
+                bot_msg = match["bot_message"]
 
-                if match['user_match']:
+                if match["user_match"]:
                     formatted_results.append(f"**User:** {user_msg}")
-                if match['bot_match']:
+                if match["bot_match"]:
                     formatted_results.append(f"**Bot:** {bot_msg}")
 
-            if len(result['matching_messages']) > 2:
-                remaining = len(result['matching_messages']) - 2
+            if len(result["matching_messages"]) > 2:
+                remaining = len(result["matching_messages"]) - 2
                 formatted_results.append(f"*... and {remaining} more matches*")
 
             formatted_results.append("---")
@@ -76,7 +82,25 @@ def handle_search(username: str, query: str) -> str:
     except Exception as e:
         return f"Error searching: {str(e)}"
 
-def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_state: gr.State, setup_events: bool = True) -> Tuple[gr.Dropdown, gr.Button, gr.Chatbot, gr.Textbox, gr.Button, gr.Textbox, gr.Button, gr.Markdown, gr.Textbox, gr.Button, gr.Markdown]:
+
+def chatbot_ui(
+    username_state: gr.State,
+    chat_history_state: gr.State,
+    chat_id_state: gr.State,
+    setup_events: bool = True,
+) -> Tuple[
+    gr.Dropdown,
+    gr.Button,
+    gr.Chatbot,
+    gr.Textbox,
+    gr.Button,
+    gr.Textbox,
+    gr.Button,
+    gr.Markdown,
+    gr.Textbox,
+    gr.Button,
+    gr.Markdown,
+]:
     """
     Create the chatbot interface components with chat history loading, search, and renaming.
 
@@ -114,12 +138,18 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
 
         # Chat renaming components
         with gr.Row():
-            rename_input = gr.Textbox(label="Rename current chat", placeholder="Enter new name for current chat...")
+            rename_input = gr.Textbox(
+                label="Rename current chat",
+                placeholder="Enter new name for current chat...",
+            )
             rename_btn = gr.Button("🏷️ Rename", variant="secondary", size="sm")
 
         # Search components
         with gr.Row():
-            search_input = gr.Textbox(label="Search chat history", placeholder="Search through all your chats...")
+            search_input = gr.Textbox(
+                label="Search chat history",
+                placeholder="Search through all your chats...",
+            )
             search_btn = gr.Button("🔍 Search", variant="secondary", size="sm")
 
         # Search results (initially visible but empty)
@@ -131,7 +161,11 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         chatbot = gr.Chatbot(label="Chat History", height=400, type="messages")
 
         with gr.Row():
-            chat_input = gr.Textbox(label="Type your message", placeholder="Type your message here...", scale=4)
+            chat_input = gr.Textbox(
+                label="Type your message",
+                placeholder="Type your message here...",
+                scale=4,
+            )
             send_btn = gr.Button("Send", variant="primary", scale=1)
 
         debug_md = gr.Markdown(visible=True)
@@ -143,6 +177,7 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         try:
             # Lazy import to avoid early ChromaDB initialization
             import backend
+
             hist = backend.get_chat_history(chat_id, username)
             # Convert tuples to messages format
             messages = []
@@ -153,14 +188,18 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         except Exception as e:
             return [{"role": "assistant", "content": f"[Error loading chat] {str(e)}"}]
 
-    def on_chat_select(username: str, selected_chat_id: str) -> Tuple[List[Dict[str, str]], str]:
+    def on_chat_select(
+        username: str, selected_chat_id: str
+    ) -> Tuple[List[Dict[str, str]], str]:
         """Handle chat selection from dropdown."""
         if not username or not selected_chat_id:
             return [], ""
         history = load_chat_history(username, selected_chat_id)
         return history, selected_chat_id
 
-    def create_new_chat(username: str) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
+    def create_new_chat(
+        username: str,
+    ) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
         """Create a new chat session."""
         if not username:
             return gr.update(), "", []
@@ -168,6 +207,7 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         # Create new chat and get its ID
         # Lazy import to avoid early ChromaDB initialization
         import backend
+
         new_chat_id = backend.create_and_persist_new_chat(username)
 
         # Get updated list of chats
@@ -176,7 +216,9 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
 
         return gr.update(choices=chat_ids, value=new_chat_id), new_chat_id, []
 
-    def send_message(user: str, msg: str, history: List[Dict[str, str]], chat_id: str) -> Tuple[str, List[Dict[str, str]], str, Dict[str, Any], str]:
+    def send_message(
+        user: str, msg: str, history: List[Dict[str, str]], chat_id: str
+    ) -> Tuple[str, List[Dict[str, str]], str, Dict[str, Any], str]:
         """
         Handle sending a message and updating the chat history with smart naming.
 
@@ -208,20 +250,26 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         tuple_history = []
         for i in range(0, len(history), 2):
             if i + 1 < len(history):
-                user_msg = history[i].get('content', '')
-                bot_msg = history[i + 1].get('content', '')
+                user_msg = history[i].get("content", "")
+                bot_msg = history[i + 1].get("content", "")
                 tuple_history.append([user_msg, bot_msg])
 
-        # Get response from backend
-        response_dict = backend.get_chatbot_response({
-            'username': user,  # Changed from 'user' to 'username' to match backend expectation
-            'message': msg,
-            'history': tuple_history,  # Backend expects tuples format
-            'chat_id': chat_id
-        })
+        # Get response from backend (async function)
+        import asyncio
 
-        backend_history = response_dict.get('history', tuple_history)
-        response_val = response_dict.get('response', '')
+        response_dict = asyncio.run(
+            backend.get_chatbot_response(
+                {
+                    "username": user,  # Changed from 'user' to 'username' to match backend expectation
+                    "message": msg,
+                    "history": tuple_history,  # Backend expects tuples format
+                    "chat_id": chat_id,
+                }
+            )
+        )
+
+        backend_history = response_dict.get("history", tuple_history)
+        response_val = response_dict.get("response", "")
         if not isinstance(response_val, str):
             response_val = str(response_val)
 
@@ -241,9 +289,17 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
             except Exception as e:
                 print(f"Warning: Could not update chat selector: {e}")
 
-        return "", new_history, f"Message sent successfully", chat_selector_update, chat_id
+        return (
+            "",
+            new_history,
+            "Message sent successfully",
+            chat_selector_update,
+            chat_id,
+        )
 
-    def initialize_chats(username: str) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
+    def initialize_chats(
+        username: str,
+    ) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
         """Initialize chat selector with user's existing chats."""
         if not username:
             return gr.update(choices=[], value=None), "", []
@@ -262,11 +318,15 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         else:
             messages_history = []
 
-        return gr.update(choices=chat_ids, value=selected), selected or "", messages_history
+        return (
+            gr.update(choices=chat_ids, value=selected),
+            selected or "",
+            messages_history,
+        )
 
-
-
-    def handle_rename(username: str, current_chat_id: str, new_name: str) -> Tuple[str, Dict[str, Any], str]:
+    def handle_rename(
+        username: str, current_chat_id: str, new_name: str
+    ) -> Tuple[str, Dict[str, Any], str]:
         """Handle chat renaming and return updated UI state."""
         if not username or not current_chat_id or not new_name.strip():
             return "Please enter a new name for the chat.", gr.update(), current_chat_id
@@ -274,6 +334,7 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         try:
             # Lazy import to avoid early ChromaDB initialization
             import backend
+
             # Call backend rename function
             result = backend.rename_chat(current_chat_id, new_name.strip(), username)
 
@@ -285,9 +346,17 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
                 chat_ids = list(all_chats.keys())
                 chat_selector_update = gr.update(choices=chat_ids, value=new_chat_id)
 
-                return f"✅ Chat renamed to '{new_chat_id}'", chat_selector_update, new_chat_id
+                return (
+                    f"✅ Chat renamed to '{new_chat_id}'",
+                    chat_selector_update,
+                    new_chat_id,
+                )
             else:
-                return f"❌ Failed to rename chat: {result['error']}", gr.update(), current_chat_id
+                return (
+                    f"❌ Failed to rename chat: {result['error']}",
+                    gr.update(),
+                    current_chat_id,
+                )
 
         except Exception as e:
             return f"❌ Error renaming chat: {str(e)}", gr.update(), current_chat_id
@@ -297,55 +366,68 @@ def chatbot_ui(username_state: gr.State, chat_history_state: gr.State, chat_id_s
         chat_selector.change(
             fn=on_chat_select,
             inputs=[username_state, chat_selector],
-            outputs=[chatbot, chat_id_state]
+            outputs=[chatbot, chat_id_state],
         )
 
         new_chat_btn.click(
             fn=create_new_chat,
             inputs=[username_state],
-            outputs=[chat_selector, chat_id_state, chatbot]
+            outputs=[chat_selector, chat_id_state, chatbot],
         )
 
         send_btn.click(
             fn=send_message,
             inputs=[username_state, chat_input, chatbot, chat_id_state],
-            outputs=[chat_input, chatbot, debug_md, chat_selector, chat_id_state]
+            outputs=[chat_input, chatbot, debug_md, chat_selector, chat_id_state],
         )
 
         # Search event handlers
         search_btn.click(
             fn=handle_search,
             inputs=[username_state, search_input],
-            outputs=[search_results]
+            outputs=[search_results],
         )
 
         search_input.submit(
             fn=handle_search,
             inputs=[username_state, search_input],
-            outputs=[search_results]
+            outputs=[search_results],
         )
 
         # Rename event handlers
         rename_btn.click(
             fn=handle_rename,
             inputs=[username_state, chat_id_state, rename_input],
-            outputs=[debug_md, chat_selector, chat_id_state]
+            outputs=[debug_md, chat_selector, chat_id_state],
         )
 
         rename_input.submit(
             fn=handle_rename,
             inputs=[username_state, chat_id_state, rename_input],
-            outputs=[debug_md, chat_selector, chat_id_state]
+            outputs=[debug_md, chat_selector, chat_id_state],
         )
 
         # Initialize on username change
         username_state.change(
             fn=initialize_chats,
             inputs=[username_state],
-            outputs=[chat_selector, chat_id_state, chatbot]
+            outputs=[chat_selector, chat_id_state, chatbot],
         )
 
-    return chat_selector, new_chat_btn, chatbot, chat_input, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md
+    return (
+        chat_selector,
+        new_chat_btn,
+        chatbot,
+        chat_input,
+        send_btn,
+        search_input,
+        search_btn,
+        search_results,
+        rename_input,
+        rename_btn,
+        debug_md,
+    )
+
 
 def test_chatbot_ui():
     """
@@ -360,7 +442,19 @@ def test_chatbot_ui():
         chat_id = gr.State("test_chat_id")
 
         # Test UI creation
-        chat_selector, new_chat_btn, chatbot, chat_input, send_btn, search_input, search_btn, search_results, rename_input, rename_btn, debug_md = chatbot_ui(username, chat_history, chat_id, setup_events=False)
+        (
+            chat_selector,
+            new_chat_btn,
+            chatbot,
+            chat_input,
+            send_btn,
+            search_input,
+            search_btn,
+            search_results,
+            rename_input,
+            rename_btn,
+            debug_md,
+        ) = chatbot_ui(username, chat_history, chat_id, setup_events=False)
         assert chat_selector is not None, "Chat selector should be created"
         assert new_chat_btn is not None, "New chat button should be created"
         assert chatbot is not None, "Chatbot component should be created"
@@ -377,6 +471,7 @@ def test_chatbot_ui():
     except Exception as e:
         print(f"test_chatbot_ui: FAILED - {e}")
         raise
+
 
 if __name__ == "__main__":
     test_chatbot_ui()

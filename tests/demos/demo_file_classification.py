@@ -6,19 +6,18 @@ This demo showcases the file upload and classification functionality.
 """
 
 import sys
-import os
 from pathlib import Path
+import gradio as gr
+from gradio_modules.file_classification import file_classification_interface
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import gradio as gr
-from gradio_modules.file_classification import file_classification_interface
 
 def create_demo():
     """Create the file classification demo interface."""
-    
+
     print("🎯 File Classification Demo")
     print("=" * 50)
     print("Features:")
@@ -28,7 +27,7 @@ def create_demo():
     print("  💾 File storage in user uploads directory")
     print("  📋 Upload history tracking")
     print("=" * 50)
-    
+
     # Custom CSS for the demo
     demo_css = """
     .demo-header {
@@ -59,14 +58,15 @@ def create_demo():
         padding: 15px;
     }
     """
-    
+
     with gr.Blocks(title="File Classification Demo", css=demo_css) as demo:
-        
         # Demo header
         with gr.Column(elem_classes="demo-header"):
             gr.Markdown("# 📄 File Classification Demo")
-            gr.Markdown("Upload files for automatic security classification and sensitivity analysis")
-        
+            gr.Markdown(
+                "Upload files for automatic security classification and sensitivity analysis"
+            )
+
         # Demo features info
         with gr.Column(elem_classes="feature-box"):
             gr.Markdown("""
@@ -85,27 +85,27 @@ def create_demo():
             4. 📊 Results displayed with reasoning
             5. 💾 File stored in uploads directory
             """)
-        
+
         # Login simulation for demo
         with gr.Row():
             with gr.Column(scale=2):
                 demo_username = gr.Textbox(
                     label="Demo Username",
                     value="test",
-                    placeholder="Enter username for demo"
+                    placeholder="Enter username for demo",
                 )
             with gr.Column(scale=1):
                 login_btn = gr.Button("Set User", variant="primary")
-        
+
         # User state
         username_state = gr.State("")
         login_status = gr.Markdown("Please set a username to begin the demo.")
-        
+
         # File classification interface (initially hidden)
         with gr.Column(visible=False) as classification_interface:
             # Use the actual file classification interface
-            components = file_classification_interface(username_state)
-        
+            file_classification_interface(username_state)
+
         # Demo instructions
         with gr.Column(elem_classes="feature-box"):
             gr.Markdown("""
@@ -122,7 +122,7 @@ def create_demo():
             - Upload a document with personal data
             - Try different content types to see classification differences
             """)
-        
+
         # Demo event handlers
         def handle_demo_login(username):
             """Handle demo login."""
@@ -130,61 +130,65 @@ def create_demo():
                 return (
                     "",
                     gr.update(value="❌ Please enter a username"),
-                    gr.update(visible=False)
+                    gr.update(visible=False),
                 )
-            
+
             username = username.strip()
             return (
                 username,
-                gr.update(value=f"✅ **Demo user set:** {username}\n\nYou can now upload files for classification!"),
-                gr.update(visible=True)
+                gr.update(
+                    value=f"✅ **Demo user set:** {username}\n\nYou can now upload files for classification!"
+                ),
+                gr.update(visible=True),
             )
-        
+
         login_btn.click(
             fn=handle_demo_login,
             inputs=[demo_username],
-            outputs=[username_state, login_status, classification_interface]
+            outputs=[username_state, login_status, classification_interface],
         )
-        
+
         # Auto-login on Enter
         demo_username.submit(
             fn=handle_demo_login,
             inputs=[demo_username],
-            outputs=[username_state, login_status, classification_interface]
+            outputs=[username_state, login_status, classification_interface],
         )
-    
+
     return demo
+
 
 def main():
     """Launch the file classification demo."""
-    
+
     # Check if backend is available
     try:
         from utils import get_chatbot_dir
+
         print(f"✅ Backend available - uploads will be saved to: {get_chatbot_dir()}")
     except Exception as e:
         print(f"⚠️ Backend warning: {e}")
-    
+
     # Check if classification model is available
     try:
-        from llm.classificationModel import classify_text
         print("✅ Classification model available")
     except Exception as e:
         print(f"⚠️ Classification model warning: {e}")
         print("   Classification will use fallback responses")
-    
+
     print("\n🚀 Starting File Classification Demo...")
-    
+
     demo = create_demo()
-    
+
     # Launch demo
     demo.launch(
         server_name="127.0.0.1",
         server_port=7867,
         share=False,
         show_error=True,
-        quiet=False
+        quiet=False,
     )
+
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import gradio as gr
 import sys
-import asyncio
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -10,7 +9,8 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 # Import backend functions directly
-from backend import ask_question, get_chat_history, save_message_async
+from backend import ask_question
+
 
 def test_chat_interface():
     """Test the chat interface with all features."""
@@ -20,10 +20,10 @@ def test_chat_interface():
         username_state = gr.State("test")
         current_chat_id_state = gr.State("test_chat_id")
         chat_history_state = gr.State([])
-        
+
         # Header
         gr.Markdown("# Chat Interface Test")
-        
+
         # Import and create chat interface
         try:
             from gradio_modules.chat_interface import chat_interface
@@ -32,14 +32,14 @@ def test_chat_interface():
                 logged_in_state=logged_in_state,
                 username_state=username_state,
                 current_chat_id_state=current_chat_id_state,
-                chat_history_state=chat_history_state
+                chat_history_state=chat_history_state,
             )
         except ImportError as e:
             gr.Markdown(f"⚠️ Chat interface import failed: {e}")
             gr.Markdown("Using fallback chat interface...")
 
             # Fallback simple chat interface
-            chatbot = gr.Chatbot(label="Chat", type='messages')
+            chatbot = gr.Chatbot(label="Chat", type="messages")
             msg = gr.Textbox(label="Message", placeholder="Type your message here...")
             send_btn = gr.Button("Send")
 
@@ -56,9 +56,9 @@ def test_chat_interface():
             send_btn.click(
                 fn=simple_chat,
                 inputs=[msg, chatbot, username_state],
-                outputs=[chatbot, msg]
+                outputs=[chatbot, msg],
             )
-        
+
         # Status display
         gr.Markdown("## Test Instructions")
         gr.Markdown("""
@@ -74,80 +74,97 @@ def test_chat_interface():
         - Backend functions should be called directly
         - Error messages should show for invalid inputs
         """)
-    
+
     return app
+
 
 def test_chatbot_interface():
     """Test the chatbot interface."""
-    
+
     async def handle_chat_message(message, username, chat_id, chat_history):
         """Handle chat message using backend function directly."""
         print(f"Chat message: {message} from {username} in chat {chat_id}")
         try:
             if not message or not message.strip():
                 return chat_history, "❌ Please enter a message"
-            
+
             # Call backend function directly
             result = await ask_question(message, chat_id, username)
             print(f"Backend chat result: {result}")
-            
-            if result.get('code') == '200':
+
+            if result.get("code") == "200":
                 # Add user message to history
-                user_message = {"role": "user", "content": message, "timestamp": "2024-01-01T10:00:00Z"}
-                assistant_message = {"role": "assistant", "content": result.get('answer', 'No response'), "timestamp": "2024-01-01T10:00:01Z"}
-                
+                user_message = {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": "2024-01-01T10:00:00Z",
+                }
+                assistant_message = {
+                    "role": "assistant",
+                    "content": result.get("answer", "No response"),
+                    "timestamp": "2024-01-01T10:00:01Z",
+                }
+
                 new_history = chat_history + [user_message, assistant_message]
-                return new_history, f"✅ Response: {result.get('answer', 'No response')}"
+                return (
+                    new_history,
+                    f"✅ Response: {result.get('answer', 'No response')}",
+                )
             else:
-                return chat_history, f"❌ Chat error: {result.get('message', 'Unknown error')}"
+                return (
+                    chat_history,
+                    f"❌ Chat error: {result.get('message', 'Unknown error')}",
+                )
         except Exception as e:
             print(f"Chat error: {e}")
             return chat_history, f"❌ Chat error: {str(e)}"
-    
+
     with gr.Blocks(title="Chatbot Interface Test") as app:
         # Initialize states
-        logged_in_state = gr.State(True)
+        gr.State(True)
         username_state = gr.State("test")
         chat_history_state = gr.State([])
         chat_id_state = gr.State("test_chat_id")
-        
+
         # Header
         gr.Markdown("# Chatbot Interface Test")
-        
+
         # Input and output
-        message_input = gr.Textbox(label="Message", placeholder="Type your message here...")
+        message_input = gr.Textbox(
+            label="Message", placeholder="Type your message here..."
+        )
         send_button = gr.Button("Send", variant="primary")
         chat_output = gr.Markdown("Chat history will appear here...")
         status_output = gr.Markdown("Status: Ready")
-        
+
         # Event handler
         send_button.click(
             fn=handle_chat_message,
             inputs=[message_input, username_state, chat_id_state, chat_history_state],
             outputs=[chat_history_state, status_output],
-            api_name="send_message"
+            api_name="send_message",
         )
-        
+
         # Update chat display when history changes
         def update_chat_display(history):
             if not history:
                 return "No messages yet..."
-            
+
             display = ""
             for msg in history:
-                role = msg.get('role', 'unknown')
-                content = msg.get('content', '')
-                timestamp = msg.get('timestamp', '')
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                timestamp = msg.get("timestamp", "")
                 display += f"**{role.title()}** ({timestamp}): {content}\n\n"
             return display
-        
+
         chat_history_state.change(
             fn=update_chat_display,
             inputs=[chat_history_state],
             outputs=[chat_output],
-            api_name="update_chat_display"
+            api_name="update_chat_display",
         )
-        
+
         # Status display
         gr.Markdown("## Test Instructions")
         gr.Markdown("""
@@ -163,8 +180,9 @@ def test_chatbot_interface():
         - Chat history should update properly
         - Error messages should show for invalid inputs
         """)
-    
+
     return app
+
 
 if __name__ == "__main__":
     app = test_chat_interface()
@@ -176,7 +194,9 @@ if __name__ == "__main__":
         "quiet": False,
         "show_error": True,
         "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
-        "server_port": 7860,        # Use the same port as main app
+        "server_port": 7860,  # Use the same port as main app
     }
-    print(f"🌐 Launching chat test app on {launch_config['server_name']}:{launch_config['server_port']}")
+    print(
+        f"🌐 Launching chat test app on {launch_config['server_name']}:{launch_config['server_port']}"
+    )
     app.launch(**launch_config)
