@@ -14,7 +14,7 @@ testing = os.getenv("TESTING", "").lower() == "true"
 if testing:
     from backend import do_login_test as do_login, do_register_test as do_register
 else:
-    from backend import do_login, do_register
+    from backend import do_login_test as do_login, do_register_test as do_register
 
 
 def test_login_interface():

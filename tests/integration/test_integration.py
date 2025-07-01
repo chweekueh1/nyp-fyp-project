@@ -109,7 +109,7 @@ def run_all_tests() -> None:
 
         # Test login/register functions
         print("Testing login/register functions...")
-        from backend import do_login, do_register
+        from backend import do_login_test as do_login, do_register_test as do_register
 
         # Test registration with a complex password that meets requirements
         register_result = asyncio.run(

@@ -60,7 +60,7 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
     cp .env.dev .env
 
     # Edit .env and add your OpenAI API key
-    # OPENAI_API_KEY=your_openai_api_key_here
+    # OPENAI_API_KEY=your_openai_api_key
     ```
 
 6. **Run the setup script**
@@ -281,6 +281,18 @@ The test suite will:
 * Validate login and authentication systems
 
 > **Note:** Tests run in a clean Docker environment with all dependencies pre-installed, ensuring consistent test results across different systems.
+
+---
+
+## 🧪 Running Individual Test Files
+
+You can run any individual test file directly using the setup script:
+
+```bash
+python setup.py --test-file tests/frontend/test_login_ui.py
+```
+
+Replace the path with any test file you want to run. This will execute the test file using your current Python environment and print the results to the console.
 
 ---
 

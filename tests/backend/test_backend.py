@@ -34,6 +34,7 @@ from backend import (
     fuzzy_search_chats,
     render_all_chats,
     change_password,
+    do_login_test as do_login_backend,
 )
 
 # Import utils functions
@@ -154,13 +155,6 @@ async def test_do_login():
     """Test login functionality."""
     print("🔍 Testing do_login function...")
     try:
-        import os
-
-        testing = os.getenv("TESTING", "").lower() == "true"
-        if testing:
-            from backend import do_login_test as do_login_backend
-        else:
-            from backend import do_login as do_login_backend
         # Test with valid credentials (mock)
         with patch("backend.verify_password", return_value=True):
             result = await do_login_backend("test_user", "TestPass123!")

@@ -622,6 +622,23 @@ repos:
         sys.exit(1)
 
 
+def run_test_file(test_file: str) -> None:
+    """
+    Run an individual test file using the current Python environment.
+
+    :param test_file: Path to the test file to run.
+    :type test_file: str
+    :return: None
+    :rtype: None
+    """
+    if not os.path.exists(test_file):
+        print(f"❌ Test file not found: {test_file}")
+        sys.exit(1)
+    print(f"🚀 Running test file: {test_file}")
+    result = subprocess.run([sys.executable, test_file])
+    sys.exit(result.returncode)
+
+
 def main():
     """Main function to set up the environment and install dependencies."""
     if running_in_docker():
@@ -773,6 +790,11 @@ if __name__ == "__main__":
         "--pre-commit",
         action="store_true",
         help="Install pre-commit hooks with ruff for code quality checks.",
+    )
+    parser.add_argument(
+        "--test-file",
+        type=str,
+        help="Run an individual test file (e.g., tests/frontend/test_login_ui.py)",
     )
     args = parser.parse_args()
 
@@ -930,6 +952,8 @@ if __name__ == "__main__":
                 f"Unexpected error during Docker test file run: {e}", exc_info=True
             )
             sys.exit(1)
+    elif args.test_file:
+        run_test_file(args.test_file)
     # This block executes if no specific argparse argument matches
     elif running_in_docker():
         # This part assumes that if running in Docker and no other args, it should launch the app.

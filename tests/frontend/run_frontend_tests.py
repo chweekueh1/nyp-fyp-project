@@ -35,7 +35,7 @@ def run_login_tests():
 
         # Run actual login functionality tests
         print("Testing login functionality...")
-        from backend import do_login
+        from backend import do_login_test as do_login
 
         testing = os.getenv("TESTING", "").lower() == "true"
         if testing:

@@ -19,9 +19,10 @@ def test_chat_history_ui():
     chat_history = gr.State([])
 
     # Test UI creation
-    search_box, search_btn, results_md = chat_history_ui(
-        username, chat_id, chat_history
-    )
+    with gr.Blocks():
+        search_box, search_btn, results_md = chat_history_ui(
+            username, chat_id, chat_history
+        )
     assert search_box is not None, "Search box component should be created"
     assert search_btn is not None, "Search button should be created"
     assert results_md is not None, "Results markdown should be created"

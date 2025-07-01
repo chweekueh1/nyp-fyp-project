@@ -18,20 +18,20 @@ def test_chatbot_ui():
     chat_history = gr.State([])
     chat_id = gr.State("test_chat_id")
 
-    # Test UI creation
-    (
-        chat_selector,
-        new_chat_btn,
-        chatbot,
-        chat_input,
-        send_btn,
-        search_input,
-        search_btn,
-        search_results,
-        rename_input,
-        rename_btn,
-        debug_md,
-    ) = chatbot_ui(username, chat_history, chat_id, setup_events=False)
+    with gr.Blocks():
+        (
+            chat_selector,
+            new_chat_btn,
+            chatbot,
+            chat_input,
+            send_btn,
+            search_input,
+            search_btn,
+            search_results,
+            rename_input,
+            rename_btn,
+            debug_md,
+        ) = chatbot_ui(username, chat_history, chat_id, setup_events=False)
     assert chat_selector is not None, "Chat selector should be created"
     assert new_chat_btn is not None, "New chat button should be created"
     assert chatbot is not None, "Chatbot component should be created"

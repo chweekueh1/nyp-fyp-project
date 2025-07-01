@@ -19,9 +19,10 @@ def test_file_upload_ui():
     chat_id = gr.State("test_chat_id")
 
     # Test UI creation
-    file_upload, file_btn, file_debug_md = file_upload_ui(
-        username, chat_history, chat_id
-    )
+    with gr.Blocks():
+        file_upload, file_btn, file_debug_md = file_upload_ui(
+            username, chat_history, chat_id
+        )
     assert file_upload is not None, "File upload component should be created"
     assert file_btn is not None, "File button should be created"
     assert file_debug_md is not None, "Debug markdown should be created"
