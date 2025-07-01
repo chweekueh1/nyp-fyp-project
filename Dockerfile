@@ -1,54 +1,87 @@
 # syntax=docker/dockerfile:1
 
-# Stage 1: System dependencies on Ubuntu
-FROM ubuntu:22.04 AS system-deps
+# Multi-stage build: Use Python slim for dependency installation
+FROM python:3.12-slim AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
-
+# Install system dependencies for building Python packages
 RUN apt-get update && \
-    apt-get install -y software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
     apt-get install -y \
-        python3.12 \
-        python3.12-venv \
         build-essential \
-        tesseract-ocr \
-        pandoc \
-        poppler-utils \
-        unzip \
-        curl \
-        git && \
-    rm -rf /var/lib/apt/lists/*
-
-# Stage 2: Python app layer
-FROM python:3.12-slim AS app
-
-WORKDIR /app
-
-# Install unzip for extracting dependencies.zip
-RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*
-
-# Copy system dependencies from previous stage (if needed)
-# (Not strictly necessary for apt-installed binaries, but left for clarity)
+        libffi-dev \
+        libssl-dev \
+        zlib1g-dev \
+        libjpeg-dev \
+        libfreetype6-dev \
+        liblcms2-dev \
+        libopenjp2-7-dev \
+        libtiff5-dev \
+        tk-dev \
+        tcl-dev \
+        libharfbuzz-dev \
+        libfribidi-dev \
+        libimagequant-dev \
+        libxcb1-dev \
+        libpng-dev \
+        cmake \
+        ninja-build \
+        pkg-config \
+        && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt ./
-
-# Create and activate venv, then install requirements
-RUN python -m venv .venv && \
-    . .venv/bin/activate && \
-    pip install --upgrade pip && \
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the codebase
+# Final stage: Use Alpine for runtime
+FROM python:3.12-alpine
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV GRADIO_SERVER_NAME="0.0.0.0"
+ENV GRADIO_SERVER_PORT="7860"
+
+WORKDIR /app
+
+# Install runtime system dependencies (Alpine packages)
+RUN apk add --no-cache \
+    tesseract-ocr \
+    pandoc-cli \
+    poppler-utils \
+    unzip \
+    curl \
+    git \
+    # Runtime libraries needed for Python packages
+    libffi \
+    openssl \
+    zlib \
+    jpeg \
+    freetype \
+    lcms2 \
+    openjpeg \
+    tiff \
+    tk \
+    tcl \
+    harfbuzz \
+    fribidi \
+    libimagequant \
+    libxcb \
+    libpng \
+    && rm -rf /var/cache/apk/*
+
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy the entire application
 COPY . .
 
-# Expose Gradio default port
+# Create necessary directories
+RUN mkdir -p data/chat_sessions data/user_info data/vector_store/chroma_db logs
+
+# Expose the port Gradio will listen on
 EXPOSE 7860
 
-# Set environment variables for Python
-ENV PYTHONUNBUFFERED=1
-
-# Entrypoint: use setup.py as a friendly interface for venv activation and app launch
+# Set the entrypoint with support for different commands
 ENTRYPOINT ["python", "setup.py"] 

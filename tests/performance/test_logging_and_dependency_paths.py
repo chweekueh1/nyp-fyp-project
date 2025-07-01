@@ -85,13 +85,13 @@ def test_dependency_paths_configuration():
         expected_deps_dir = os.path.join(get_chatbot_dir(), 'data', 'dependencies')
         
         # Check pandoc path structure
-        if os.name == 'nt':  # Windows
+        if sys.platform == 'win32':  # Windows
             expected_pandoc = os.path.join(expected_deps_dir, 'pandoc', 'pandoc.exe')
         else:  # Linux/macOS
             expected_pandoc = os.path.join(expected_deps_dir, 'pandoc', 'bin', 'pandoc')
         
         # Check tesseract path structure
-        if os.name == 'nt':  # Windows
+        if sys.platform == 'win32':  # Windows
             expected_tesseract = os.path.join(expected_deps_dir, 'tesseract', 'tesseract.exe')
         else:  # Linux/macOS
             expected_tesseract = os.path.join(expected_deps_dir, 'tesseract', 'bin', 'tesseract')
@@ -213,18 +213,18 @@ def test_cross_platform_compatibility():
     
     try:
         from utils import get_chatbot_dir
-        import platform
-        
+        import sys
         # Get system info
-        system = platform.system()
+        system = sys.platform
         print(f"  🖥️ Operating System: {system}")
+        import platform
         print(f"  🐍 Python Version: {platform.python_version()}")
         
         # Get chatbot directory
         chatbot_dir = get_chatbot_dir()
         
         # Verify path separators are correct for the platform
-        if system == 'Windows':
+        if sys.platform == 'win32':
             # Windows should handle both / and \ but prefer \
             assert '\\' in chatbot_dir or '/' in chatbot_dir, "Windows path should contain separators"
         else:

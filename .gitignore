@@ -5,3 +5,12 @@
 
 # Ignore Python cache
 __pycache__/
+
+# Ignore logs
+logs/
+logs/*
+
+# Ignore data
+data/
+data/*
+data/*/*

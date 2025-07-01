@@ -370,12 +370,31 @@ def test_rate_limiting():
     """Test rate limiting functionality."""
     print("🔍 Testing rate limiting functionality...")
     try:
-        from backend import rate_limiter
+        from backend import chat_rate_limiter, file_upload_rate_limiter, audio_rate_limiter, auth_rate_limiter, get_rate_limit_info
         
         # Test rate limiter initialization
-        assert rate_limiter.max_requests == 60, f"Expected max_requests 60, got {rate_limiter.max_requests}"
-        assert rate_limiter.time_window == 60, f"Expected time_window 60, got {rate_limiter.time_window}"
-        print("  ✅ Rate limiter initialization passed")
+        assert chat_rate_limiter.max_requests == 60, f"Expected chat max_requests 60, got {chat_rate_limiter.max_requests}"
+        assert chat_rate_limiter.time_window == 60, f"Expected chat time_window 60, got {chat_rate_limiter.time_window}"
+        print("  ✅ Chat rate limiter initialization passed")
+        
+        assert file_upload_rate_limiter.max_requests == 10, f"Expected file upload max_requests 10, got {file_upload_rate_limiter.max_requests}"
+        assert file_upload_rate_limiter.time_window == 60, f"Expected file upload time_window 60, got {file_upload_rate_limiter.time_window}"
+        print("  ✅ File upload rate limiter initialization passed")
+        
+        assert audio_rate_limiter.max_requests == 20, f"Expected audio max_requests 20, got {audio_rate_limiter.max_requests}"
+        assert audio_rate_limiter.time_window == 60, f"Expected audio time_window 60, got {audio_rate_limiter.time_window}"
+        print("  ✅ Audio rate limiter initialization passed")
+        
+        assert auth_rate_limiter.max_requests == 5, f"Expected auth max_requests 5, got {auth_rate_limiter.max_requests}"
+        assert auth_rate_limiter.time_window == 300, f"Expected auth time_window 300, got {auth_rate_limiter.time_window}"
+        print("  ✅ Auth rate limiter initialization passed")
+        
+        # Test get_rate_limit_info function
+        chat_info = get_rate_limit_info("chat")
+        assert chat_info["max_requests"] == 60, f"Expected chat max_requests 60, got {chat_info['max_requests']}"
+        assert chat_info["time_window"] == 60, f"Expected chat time_window 60, got {chat_info['time_window']}"
+        assert chat_info["requests_per_second"] == 1.0, f"Expected chat requests_per_second 1.0, got {chat_info['requests_per_second']}"
+        print("  ✅ Rate limit info function passed")
         
         print("✅ test_rate_limiting: PASSED")
     except Exception as e:

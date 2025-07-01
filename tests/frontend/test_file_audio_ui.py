@@ -149,7 +149,16 @@ def test_audio_input_interface():
     return app
 
 if __name__ == "__main__":
-    print("Creating file upload interface test...")
     app = test_file_upload_interface()
-    print("Launching file upload interface test...")
-    app.launch(debug=True, share=False)
+    # Use Docker-compatible launch configuration
+    launch_config = {
+        "debug": True,
+        "share": False,
+        "inbrowser": False,
+        "quiet": False,
+        "show_error": True,
+        "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
+        "server_port": 7860,        # Use the same port as main app
+    }
+    print(f"🌐 Launching file upload test app on {launch_config['server_name']}:{launch_config['server_port']}")
+    app.launch(**launch_config)

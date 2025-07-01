@@ -167,7 +167,16 @@ def test_chatbot_interface():
     return app
 
 if __name__ == "__main__":
-    print("Creating chat interface test...")
     app = test_chat_interface()
-    print("Launching chat interface test...")
-    app.launch(debug=True, share=False)
+    # Use Docker-compatible launch configuration
+    launch_config = {
+        "debug": True,
+        "share": False,
+        "inbrowser": False,
+        "quiet": False,
+        "show_error": True,
+        "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
+        "server_port": 7860,        # Use the same port as main app
+    }
+    print(f"🌐 Launching chat test app on {launch_config['server_name']}:{launch_config['server_port']}")
+    app.launch(**launch_config)

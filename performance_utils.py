@@ -148,13 +148,20 @@ def optimize_gradio_performance():
 def get_optimized_launch_config():
     """Get optimized launch configuration."""
     return {
-        "debug": False,  # Disable debug mode for production
-        "share": False,
+        "debug": False,      # Disable debug mode for production
+        "share": False,      # Essential: Ensures it's not a public Gradio share link
         "inbrowser": False,  # Don't auto-open browser
         "quiet": True,
         "show_error": True,
-        "favicon_path": None,  # Skip favicon loading
+
+        # --- ADD THESE TWO LINES FOR DOCKER EXPOSURE ---
+        "server_name": "0.0.0.0",  # Tells Gradio to listen on all available network interfaces
+        "server_port": 7860,       # Tells Gradio to listen on port 7860 inside the container
     }
+
+# And then in your main app file (e.g., app.py), you'd use it like:
+# launch_config = get_optimized_launch_config()
+# demo.launch(**launch_config)
 
 class CacheManager:
     """Manage various caches for better performance."""
@@ -386,9 +393,10 @@ class ProcessOptimizer:
         try:
             import psutil
             import os
+            import sys
 
             # Set high priority on Windows, nice value on Unix
-            if os.name == 'nt':  # Windows
+            if sys.platform == 'win32':  # Windows
                 psutil.Process().nice(psutil.HIGH_PRIORITY_CLASS)
             else:  # Unix/Linux
                 os.nice(-5)  # Higher priority

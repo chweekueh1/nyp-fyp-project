@@ -27,6 +27,23 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Rate limiting configuration
+DEFAULT_RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
+DEFAULT_RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+
+# Different rate limits for different operations
+CHAT_RATE_LIMIT_REQUESTS = int(os.getenv("CHAT_RATE_LIMIT_REQUESTS", str(DEFAULT_RATE_LIMIT_REQUESTS)))
+CHAT_RATE_LIMIT_WINDOW = int(os.getenv("CHAT_RATE_LIMIT_WINDOW", str(DEFAULT_RATE_LIMIT_WINDOW)))
+
+FILE_UPLOAD_RATE_LIMIT_REQUESTS = int(os.getenv("FILE_UPLOAD_RATE_LIMIT_REQUESTS", "10"))
+FILE_UPLOAD_RATE_LIMIT_WINDOW = int(os.getenv("FILE_UPLOAD_RATE_LIMIT_WINDOW", "60"))
+
+AUDIO_RATE_LIMIT_REQUESTS = int(os.getenv("AUDIO_RATE_LIMIT_REQUESTS", "20"))
+AUDIO_RATE_LIMIT_WINDOW = int(os.getenv("AUDIO_RATE_LIMIT_WINDOW", "60"))
+
+AUTH_RATE_LIMIT_REQUESTS = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "5"))
+AUTH_RATE_LIMIT_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW", "300"))  # 5 minutes
+
 default_chat_path = os.path.join("data", "chats")
 CHAT_DATA_PATH = os.path.join(get_chatbot_dir(), os.getenv("CHAT_DATA_PATH", default_chat_path))
 
@@ -82,12 +99,58 @@ class RateLimiter:
         user_requests.append(now)
         return True
 
-# Initialize rate limiter
-rate_limiter = RateLimiter()
+# Initialize different rate limiters for different operations
+chat_rate_limiter = RateLimiter(CHAT_RATE_LIMIT_REQUESTS, CHAT_RATE_LIMIT_WINDOW)
+file_upload_rate_limiter = RateLimiter(FILE_UPLOAD_RATE_LIMIT_REQUESTS, FILE_UPLOAD_RATE_LIMIT_WINDOW)
+audio_rate_limiter = RateLimiter(AUDIO_RATE_LIMIT_REQUESTS, AUDIO_RATE_LIMIT_WINDOW)
+auth_rate_limiter = RateLimiter(AUTH_RATE_LIMIT_REQUESTS, AUTH_RATE_LIMIT_WINDOW)
 
-async def check_rate_limit(user_id: str) -> bool:
-    """Check if a user has exceeded their rate limit."""
-    return await rate_limiter.check_and_update(user_id)
+async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
+    """Check if a user has exceeded their rate limit for a specific operation."""
+    if operation_type == "chat":
+        return await chat_rate_limiter.check_and_update(user_id)
+    elif operation_type == "file_upload":
+        return await file_upload_rate_limiter.check_and_update(user_id)
+    elif operation_type == "audio":
+        return await audio_rate_limiter.check_and_update(user_id)
+    elif operation_type == "auth":
+        return await auth_rate_limiter.check_and_update(user_id)
+    else:
+        # Default to chat rate limiter
+        return await chat_rate_limiter.check_and_update(user_id)
+
+def get_rate_limit_info(operation_type: str = "chat") -> dict:
+    """Get rate limit information for a specific operation."""
+    if operation_type == "chat":
+        return {
+            "max_requests": CHAT_RATE_LIMIT_REQUESTS,
+            "time_window": CHAT_RATE_LIMIT_WINDOW,
+            "requests_per_second": CHAT_RATE_LIMIT_REQUESTS / CHAT_RATE_LIMIT_WINDOW
+        }
+    elif operation_type == "file_upload":
+        return {
+            "max_requests": FILE_UPLOAD_RATE_LIMIT_REQUESTS,
+            "time_window": FILE_UPLOAD_RATE_LIMIT_WINDOW,
+            "requests_per_second": FILE_UPLOAD_RATE_LIMIT_REQUESTS / FILE_UPLOAD_RATE_LIMIT_WINDOW
+        }
+    elif operation_type == "audio":
+        return {
+            "max_requests": AUDIO_RATE_LIMIT_REQUESTS,
+            "time_window": AUDIO_RATE_LIMIT_WINDOW,
+            "requests_per_second": AUDIO_RATE_LIMIT_REQUESTS / AUDIO_RATE_LIMIT_WINDOW
+        }
+    elif operation_type == "auth":
+        return {
+            "max_requests": AUTH_RATE_LIMIT_REQUESTS,
+            "time_window": AUTH_RATE_LIMIT_WINDOW,
+            "requests_per_second": AUTH_RATE_LIMIT_REQUESTS / AUTH_RATE_LIMIT_WINDOW
+        }
+    else:
+        return {
+            "max_requests": CHAT_RATE_LIMIT_REQUESTS,
+            "time_window": CHAT_RATE_LIMIT_WINDOW,
+            "requests_per_second": CHAT_RATE_LIMIT_REQUESTS / CHAT_RATE_LIMIT_WINDOW
+        }
 
 # Lazy imports for performance
 def get_chroma_db():
@@ -289,8 +352,9 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
     logging.error(f"ask_question called with question={question!r}, chat_id={chat_id!r}, username={username!r}")
     if not question or not chat_id or not username:
         return {'error': 'Invalid question or chat_id or username', 'code': '400'}
-    if not await check_rate_limit(username):
-        return {'error': f"Rate limit exceeded. Please wait {rate_limiter.time_window} seconds.", 'code': '429'}
+    if not await check_rate_limit(username, "chat"):
+        rate_limit_info = get_rate_limit_info("chat")
+        return {'error': f"Rate limit exceeded. Please wait {rate_limit_info['time_window']} seconds.", 'code': '429'}
     sanitized_question = sanitize_input(question)
     try:
         # Get LLM functions lazily
@@ -316,7 +380,7 @@ async def ask_question(question: str, chat_id: str, username: str) -> dict[str, 
 
 
 
-def get_chatbot_response(ui_state: dict) -> dict:
+async def get_chatbot_response(ui_state: dict) -> dict:
     """
     Chatbot interface: generates a response using the LLM and updates history.
     Now includes message persistence to chat session files.
@@ -333,6 +397,11 @@ def get_chatbot_response(ui_state: dict) -> dict:
     if not username:
         return {'history': history, 'response': '[Error] Username required for message persistence', 'debug': 'No username provided.'}
 
+    # Check rate limit for chat operations
+    if not await check_rate_limit(username, "chat"):
+        rate_limit_info = get_rate_limit_info("chat")
+        return {'history': history, 'response': f'[Error] Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.', 'debug': 'Rate limit exceeded.'}
+
     try:
         # Use your LLM chat model with lazy loading
         llm_funcs = get_llm_functions()
@@ -347,17 +416,11 @@ def get_chatbot_response(ui_state: dict) -> dict:
 
         # Persist messages to chat session file asynchronously
         try:
-            # Run the async save operations
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                # Save user message
-                loop.run_until_complete(save_message_async(username, chat_id, {"role": "user", "content": message}))
-                # Save bot response
-                loop.run_until_complete(save_message_async(username, chat_id, {"role": "assistant", "content": response}))
-                print(f"[DEBUG] Messages persisted to chat session {chat_id}")
-            finally:
-                loop.close()
+            # Save user message
+            await save_message_async(username, chat_id, {"role": "user", "content": message})
+            # Save bot response
+            await save_message_async(username, chat_id, {"role": "assistant", "content": response})
+            print(f"[DEBUG] Messages persisted to chat session {chat_id}")
         except Exception as persist_error:
             print(f"[WARNING] Failed to persist messages: {persist_error}")
             # Continue anyway since we have the response
@@ -369,7 +432,7 @@ def get_chatbot_response(ui_state: dict) -> dict:
         print(f"[ERROR] backend.get_chatbot_response exception: {e}")
         return {'history': history, 'response': f'[Error] {e}', 'debug': f'Exception: {e}'}
 
-def audio_to_text(ui_state: dict) -> dict:
+async def audio_to_text(ui_state: dict) -> dict:
     """
     Audio input interface: transcribes audio and gets a chatbot response.
     """
@@ -380,6 +443,14 @@ def audio_to_text(ui_state: dict) -> dict:
     chat_id = ui_state.get('chat_id', 'default')
     if not audio_file:
         return {'history': history, 'response': '[No audio file provided]', 'debug': 'No audio.'}
+    if not username:
+        return {'history': history, 'response': '[Error] Username required for audio processing', 'debug': 'No username provided.'}
+    
+    # Check rate limit for audio operations
+    if not await check_rate_limit(username, "audio"):
+        rate_limit_info = get_rate_limit_info("audio")
+        return {'history': history, 'response': f'[Error] Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.', 'debug': 'Rate limit exceeded.'}
+    
     try:
         # Get LLM functions lazily
         llm_funcs = get_llm_functions()
@@ -402,7 +473,7 @@ def audio_to_text(ui_state: dict) -> dict:
         print(f"[ERROR] backend.audio_to_text exception: {e}")
         return {'history': history, 'response': f'[Error] {e}', 'debug': f'Exception: {e}'}
 
-def handle_uploaded_file(ui_state: dict) -> dict:
+async def handle_uploaded_file(ui_state: dict) -> dict:
     """
     File upload interface: processes the file and saves it permanently.
     """
@@ -416,6 +487,11 @@ def handle_uploaded_file(ui_state: dict) -> dict:
         return {'history': history, 'response': '[Error] Username required for file upload', 'debug': 'No username.'}
     if not file_obj:
         return {'history': history, 'response': '[No file uploaded]', 'debug': 'No file.'}
+    
+    # Check rate limit for file upload operations
+    if not await check_rate_limit(username, "file_upload"):
+        rate_limit_info = get_rate_limit_info("file_upload")
+        return {'history': history, 'response': f'[Error] Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.', 'debug': 'Rate limit exceeded.'}
     try:
         # Get LLM and data processing functions lazily
         llm_funcs = get_llm_functions()
@@ -622,6 +698,11 @@ def get_completion(prompt: str, model: str = "gpt-3.5-turbo", max_tokens: int = 
 async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
     """Handle user login with username or email support."""
     try:
+        # Check rate limit for authentication operations
+        if not await check_rate_limit(username_or_email, "auth"):
+            rate_limit_info = get_rate_limit_info("auth")
+            return {'code': '429', 'message': f'Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.'}
+        
         if not os.path.exists(USER_DB_PATH):
             return {'code': '404', 'message': 'User database not found'}
 
@@ -674,6 +755,11 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
 async def do_register(username: str, password: str, email: str = "") -> Dict[str, str]:
     """Handle user registration with validation."""
     try:
+        # Check rate limit for authentication operations
+        if not await check_rate_limit(username, "auth"):
+            rate_limit_info = get_rate_limit_info("auth")
+            return {'code': '429', 'message': f'Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.'}
+        
         from hashing import validate_username, is_password_complex, validate_email_allowed, hash_password
 
         # Validate username
@@ -1085,6 +1171,14 @@ async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
     try:
         if not audio_file:
             return {'error': 'No audio file provided', 'code': '400'}
+        
+        if not username:
+            return {'error': 'Username required for audio processing', 'code': '400'}
+        
+        # Check rate limit for audio operations
+        if not await check_rate_limit(username, "audio"):
+            rate_limit_info = get_rate_limit_info("audio")
+            return {'error': f'Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.', 'code': '429'}
 
         # Create temporary file
         import tempfile
@@ -1107,6 +1201,11 @@ async def upload_file(file_content: bytes, filename: str, username: str) -> dict
         # Simple implementation for testing
         if not file_content or not filename or not username:
             return {'error': 'Invalid file, filename, or username', 'code': '400'}
+        
+        # Check rate limit for file upload operations
+        if not await check_rate_limit(username, "file_upload"):
+            rate_limit_info = get_rate_limit_info("file_upload")
+            return {'error': f'Rate limit exceeded. Please wait {rate_limit_info["time_window"]} seconds.', 'code': '429'}
 
         # For now, just return success - in a real implementation this would process the file
         return {'status': 'OK', 'code': '200', 'filename': filename, 'message': 'File uploaded successfully'}

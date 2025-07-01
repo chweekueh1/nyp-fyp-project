@@ -130,6 +130,40 @@ def run_with_cleanup(test_func, *args, **kwargs):
     finally:
         cleanup_test_users()
 
+def get_docker_launch_config(debug=True, port=7860):
+    """
+    Get Docker-compatible launch configuration for Gradio apps.
+    
+    Args:
+        debug (bool): Whether to run in debug mode
+        port (int): Port to run on (default 7860)
+    
+    Returns:
+        dict: Launch configuration dictionary
+    """
+    return {
+        "debug": debug,
+        "share": False,
+        "inbrowser": False,
+        "quiet": False,
+        "show_error": True,
+        "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
+        "server_port": port,        # Use specified port
+    }
+
+def launch_test_app_with_docker_config(app, test_name, port=7860):
+    """
+    Launch a test app with Docker-compatible configuration.
+    
+    Args:
+        app: Gradio app to launch
+        test_name (str): Name of the test for logging
+        port (int): Port to run on (default 7860)
+    """
+    launch_config = get_docker_launch_config(debug=True, port=port)
+    print(f"🌐 Launching {test_name} test app on {launch_config['server_name']}:{launch_config['server_port']}")
+    app.launch(**launch_config)
+
 if __name__ == "__main__":
     print("🧹 Running test user cleanup...")
     success = cleanup_test_users()

@@ -2,7 +2,6 @@
 # This shebang line ensures the script is executable directly on Linux systems.
 
 import os
-import zipfile
 import subprocess
 import sys
 import shutil
@@ -25,12 +24,12 @@ print('setup.py argv:', sys.argv)
 def _add_shebang_to_python_files(directory: str):
     """
     Adds a shebang line '#!/usr/bin/env python3' to Python files
-    in the given directory and sits subdirectories, if one is not already present.
+    in the given directory and its subdirectories, if one is not already present.
     Skips files in the .venv directory.
     """
     logger.info(f"Checking Python files in '{directory}' for shebang lines...")
     for root, dirs, files in os.walk(directory):
-        # Exclude .venv directory from traversal
+        # Exclude .venv and __pycache__ directories from traversal
         if '.venv' in dirs:
             dirs.remove('.venv')
         if '__pycache__' in dirs:
@@ -57,104 +56,201 @@ def _add_shebang_to_python_files(directory: str):
     logger.info("Shebang check complete.")
 
 
-def extract_dependencies():
-    """Extracts contents of dependencies.zip to the chatbot's dependencies directory."""
-    # Use os.path.join for cross-platform path construction for literals
-    zip_path = rel2abspath(os.path.join(".", "dependencies.zip"))
-    extract_to_dir = rel2abspath(os.path.join(get_chatbot_dir(), "dependencies"))
-
-    if not os.path.exists(zip_path):
-        logger.warning(
-            f"Dependency zip file not found at: {zip_path}. Skipping extraction."
-        )
-        return
-
-    logger.info(f"Attempting to extract dependencies from {zip_path} to {extract_to_dir}...")
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            # zipfile.extractall handles path separators correctly internally based on OS
-            zip_ref.extractall(extract_to_dir)
-        logger.info(f"Dependencies extracted successfully to: {extract_to_dir}")
-    except zipfile.BadZipFile:
-        logger.error(
-            f"Failed to extract '{zip_path}': It is a bad zip file. Please check the zip file integrity.", exc_info=True
-        )
-        sys.exit(1)
-    except Exception as e:
-        logger.error(
-            f"An unexpected error occurred during dependency extraction: {e}",
-            exc_info=True,
-        )
-        sys.exit(1)
-
-
 def running_in_docker():
     """Detect if running inside a Docker container."""
     return os.path.exists('/.dockerenv') or os.environ.get('IN_DOCKER') == '1'
 
 
 def ensure_docker_running():
-    # Check if Docker is available
+    """
+    Checks if Docker is installed and its daemon is running.
+    If not running, attempts to start the daemon on Linux.
+    Exits if Docker is not available or cannot be started.
+    """
+    # 1. Check if Docker is installed (executable in PATH)
     if shutil.which('docker') is None:
         print("❌ Docker is not installed or not in PATH. Please install Docker first.")
+        logger.error("Docker executable not found in PATH.")
         sys.exit(1)
-    # Try 'docker info' to see if daemon is running
+
+    # 2. Check if Docker daemon is running
     try:
+        logger.info("Checking if Docker daemon is running with 'docker info'.")
+        # Use subprocess.DEVNULL for stdout/stderr to suppress output unless there's an error
         subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return  # Docker is running
+        print("✅ Docker daemon is already running.")
+        logger.info("Docker daemon is already running.")
+        return  # Docker is already running, so we're good to go
     except subprocess.CalledProcessError:
-        pass
-    # If not running, try to start it (Linux only)
-    if platform.system() == "Linux":
-        print("⚠️  Docker daemon is not running. Attempting to start it with 'sudo systemctl start docker'...")
-        try:
-            subprocess.run(["sudo", "systemctl", "start", "docker"], check=True)
-            # Wait a moment for Docker to start
-            for _ in range(5):
-                try:
-                    subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    print("✅ Docker daemon started successfully.")
-                    return
-                except subprocess.CalledProcessError:
-                    time.sleep(1)
-            print("❌ Docker daemon could not be started automatically. Please start it manually with:")
-            print("  sudo systemctl start docker")
+        # Docker is not running, proceed to attempt to start it
+        print("⚠️  Docker daemon is not running. Attempting to start it...")
+        logger.warning("Docker daemon is not running. Attempting to start.")
+
+        # 3. Attempt to start Docker (Linux specific)
+        if sys.platform == "linux":
+            print("Attempting to start Docker daemon with 'sudo systemctl start docker'...")
+            logger.info("Attempting to start Docker daemon via systemctl (Linux).")
+            try:
+                # Use sudo, as starting Docker service typically requires it
+                subprocess.run(["sudo", "systemctl", "start", "docker"], check=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) # Keep this quiet unless error
+
+                # Wait and check for Docker to start
+                for i in range(1, 11): # Increased retry attempts and wait time
+                    try:
+                        subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        print("✅ Docker daemon started successfully.")
+                        logger.info("Docker daemon started successfully.")
+                        return # Docker started, return
+                    except subprocess.CalledProcessError:
+                        print(f"Waiting for Docker to start... ({i}/10)")
+                        time.sleep(2) # Wait 2 seconds between checks
+
+                # If loop finishes, Docker did not start
+                print("❌ Docker daemon could not be started automatically after multiple retries.")
+                print("Please start it manually with: 'sudo systemctl start docker'")
+                logger.error("Failed to start Docker daemon automatically after retries.")
+                sys.exit(1)
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to execute 'sudo systemctl start docker': {e}")
+                print("Please ensure you have sudo privileges and Docker is correctly configured.")
+                logger.error(f"Failed to execute systemctl command: {e}", exc_info=True)
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ An unexpected error occurred while trying to start Docker: {e}")
+                print("Please start Docker manually.")
+                logger.error(f"Unexpected error when starting Docker: {e}", exc_info=True)
+                sys.exit(1)
+        elif sys.platform == "darwin":
+            print("❌ Docker daemon is not running. Please start Docker Desktop from your Applications folder.")
+            logger.error("Docker not running on macOS. User advised to start Docker Desktop.")
             sys.exit(1)
-        except Exception as e:
-            print(f"❌ Failed to start Docker daemon: {e}\nPlease start Docker manually with:\n  sudo systemctl start docker")
+        elif sys.platform == "win32":
+            print("❌ Docker daemon is not running. Please start Docker Desktop from your Start menu.")
+            logger.error("Docker not running on Windows. User advised to start Docker Desktop.")
             sys.exit(1)
-    elif platform.system() == "Darwin":
-        print("❌ Docker daemon is not running. Please start Docker Desktop from your Applications folder.")
+        else:
+            print("❌ Docker daemon is not running. Please consult your OS documentation to start Docker.")
+            logger.error("Docker not running on unsupported OS. User advised to start manually.")
+            sys.exit(1)
+    except FileNotFoundError:
+        # This handles the unlikely case where 'docker' command itself is not found,
+        # but shutil.which should have caught it earlier. Still good for robustness.
+        print("❌ 'docker' command not found. Please ensure Docker is installed and in your PATH.")
+        logger.error("'docker' command not found. Docker might not be installed correctly.")
         sys.exit(1)
-    elif platform.system() == "Windows":
-        print("❌ Docker daemon is not running. Please start Docker Desktop from your Start menu.")
-        sys.exit(1)
-    else:
-        print("❌ Docker daemon is not running. Please consult your OS documentation to start Docker.")
+    except Exception as e:
+        # Catch any other unexpected errors during the initial 'docker info' check
+        print(f"❌ An unexpected error occurred while checking Docker status: {e}")
+        logger.error(f"Unexpected error while checking Docker status: {e}", exc_info=True)
         sys.exit(1)
 
 
 def docker_build():
-    ensure_docker_running()
-    # Remove any existing nyp-fyp-chatbot image before building
+    """Builds the Docker image 'nyp-fyp-chatbot' with --no-cache, removing any existing one first."""
+    ensure_docker_running() # Ensures Docker daemon is running before attempting to build
+
+    # --- THIS PART HANDLES OVERRIDING (REMOVING) THE EXISTING IMAGE ---
     print("🔄 Checking for existing Docker image 'nyp-fyp-chatbot'...")
+    logger.info("Checking for existing Docker image 'nyp-fyp-chatbot'.")
     try:
         result = subprocess.run(["docker", "images", "-q", "nyp-fyp-chatbot"], capture_output=True, text=True, check=True)
         image_id = result.stdout.strip()
         if image_id:
             print(f"🗑️  Removing existing Docker image 'nyp-fyp-chatbot' (ID: {image_id})...")
+            logger.info(f"Removing existing Docker image '{image_id}'.")
+            # The '-f' flag forces removal even if container is using it (though --rm on run is better)
             subprocess.run(["docker", "rmi", "-f", "nyp-fyp-chatbot"], check=True)
             print("✅ Removed old Docker image.")
+            logger.info("Old Docker image removed successfully.")
         else:
             print("No existing 'nyp-fyp-chatbot' image found.")
+            logger.info("No existing 'nyp-fyp-chatbot' image found.")
     except Exception as e:
         print(f"⚠️  Could not check or remove existing image: {e}")
-    print("🐳 Building Docker image 'nyp-fyp-chatbot' with BuildKit...")
+        logger.warning(f"Could not check or remove existing image: {e}")
+    # --- END OF IMAGE OVERRIDE LOGIC ---
+
+    print("🐳 Building Docker image 'nyp-fyp-chatbot' with clean build (no cache)...")
+    logger.info("Building Docker image 'nyp-fyp-chatbot' with clean build.")
     env = os.environ.copy()
     env["DOCKER_BUILDKIT"] = "1"
-    subprocess.run(["docker", "build", "-t", "nyp-fyp-chatbot", "."], check=True, env=env)
+    try:
+        # Force clean build with no cache and no layer caching
+        subprocess.run([
+            "docker", "build",
+            "--no-cache",          # Don't use any cached layers
+            "--pull",              # Always pull latest base image
+            "--progress=plain",    # Show detailed build output
+            "-t", "nyp-fyp-chatbot",
+            "."
+        ], check=True, env=env, stdout=sys.stdout, stderr=sys.stderr)
+        print("✅ Docker image built successfully with clean installation.")
+        logger.info("Docker image built successfully with clean installation.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker image build failed: {e}")
+        logger.error(f"Docker image build failed: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker build: {e}")
+        logger.error(f"Unexpected error during Docker build: {e}", exc_info=True)
+        sys.exit(1)
+
+
+def docker_build_prod():
+    """Builds the Docker image 'nyp-fyp-chatbot' using cache."""
+    ensure_docker_running() # Ensures Docker daemon is running before attempting to build
+
+    # --- THIS PART HANDLES OVERRIDING (REMOVING) THE EXISTING IMAGE ---
+    # (Optional: You might choose to skip this for prod builds if you always want to overwrite,
+    # or keep it as it doesn't hurt and provides clear feedback)
+    print("🔄 Checking for existing Docker image 'nyp-fyp-chatbot' for production build...")
+    logger.info("Checking for existing Docker image 'nyp-fyp-chatbot' for production build.")
+    try:
+        result = subprocess.run(["docker", "images", "-q", "nyp-fyp-chatbot"], capture_output=True, text=True, check=True)
+        image_id = result.stdout.strip()
+        if image_id:
+            print(f"🗑️  Removing existing Docker image 'nyp-fyp-chatbot' (ID: {image_id})...")
+            logger.info(f"Removing existing Docker image '{image_id}'.")
+            subprocess.run(["docker", "rmi", "-f", "nyp-fyp-chatbot"], check=True)
+            print("✅ Removed old Docker image.")
+            logger.info("Old Docker image removed successfully for production build.")
+        else:
+            print("No existing 'nyp-fyp-chatbot' image found.")
+            logger.info("No existing 'nyp-fyp-chatbot' image found for production build.")
+    except Exception as e:
+        print(f"⚠️  Could not check or remove existing image for production build: {e}")
+        logger.warning(f"Could not check or remove existing image for production build: {e}")
+    # --- END OF IMAGE OVERRIDE LOGIC ---
+
+    print("🐳 Building Docker image 'nyp-fyp-chatbot' using cache for production...")
+    logger.info("Building Docker image 'nyp-fyp-chatbot' using cache for production.")
+    env = os.environ.copy()
+    env["DOCKER_BUILDKIT"] = "1"
+    try:
+        # Build using cache by default (no --no-cache flag)
+        # --pull ensures base images are up-to-date
+        subprocess.run([
+            "docker", "build",
+            "--pull",              # Always pull latest base image
+            "--progress=plain",    # Show detailed build output
+            "-t", "nyp-fyp-chatbot",
+            "."
+        ], check=True, env=env, stdout=sys.stdout, stderr=sys.stderr)
+        print("✅ Docker image built successfully using cache.")
+        logger.info("Docker image built successfully using cache.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker image production build failed: {e}")
+        logger.error(f"Docker image production build failed: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker production build: {e}")
+        logger.error(f"Unexpected error during Docker production build: {e}", exc_info=True)
+        sys.exit(1)
+
 
 def ensure_docker_image():
+    """Ensures the 'nyp-fyp-chatbot' Docker image exists, building it with --no-cache if necessary."""
     ensure_docker_running()
     # Check if the Docker image exists
     try:
@@ -162,59 +258,126 @@ def ensure_docker_image():
             "docker", "images", "-q", "nyp-fyp-chatbot"
         ], capture_output=True, text=True, check=True)
         if not result.stdout.strip():
-            print("⚠️  Docker image 'nyp-fyp-chatbot' not found. Building it now...")
+            print("⚠️  Docker image 'nyp-fyp-chatbot' not found. Building it now with --no-cache...")
+            logger.info("Docker image 'nyp-fyp-chatbot' not found. Initiating build with --no-cache.")
+            # This calls docker_build() which includes the --no-cache logic
             docker_build()
+        else:
+            logger.info("Docker image 'nyp-fyp-chatbot' already exists.")
     except Exception as e:
         print(f"❌ Failed to check Docker images: {e}")
+        logger.error(f"Failed to check Docker images: {e}", exc_info=True)
         sys.exit(1)
 
+
 def docker_run():
-    ensure_docker_image()
+    """Runs the Docker container for 'nyp-fyp-chatbot'."""
+    ensure_docker_image() # Ensures the image exists before running
     print("🐳 Running Docker container for 'nyp-fyp-chatbot'...")
+    logger.info("Running Docker container for 'nyp-fyp-chatbot'.")
     cmd = [
-        "docker", "run", "--env-file", ".env",
+        "docker", "run", "--rm", # Add --rm to automatically remove container on exit
+        "--env-file", ".env",
         "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
-        "-p", "7860:7860", "nyp-fyp-chatbot"
+        "-p", "7860:7860", "nyp-fyp-chatbot"  # Map host port 7860 to container port 7860
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
+        logger.info("Docker container exited successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker container exited with an error: {e}")
+        logger.error(f"Docker container exited with an error: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred while running Docker container: {e}")
+        logger.error(f"Unexpected error while running Docker container: {e}", exc_info=True)
+        sys.exit(1)
+
 
 def docker_test():
+    """Runs tests inside the Docker container."""
     ensure_docker_image()
     print("🐳 Running tests in Docker container...")
+    logger.info("Running tests inside Docker container.")
+    # The --run-tests argument tells the entrypoint/command inside the Dockerfile to execute tests
     cmd = [
-        "docker", "run", "--env-file", ".env",
+        "docker", "run", "--rm", # Add --rm for temporary test container
+        "--env-file", ".env",
         "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
         "-it", "nyp-fyp-chatbot", "--run-tests"
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
+        print("✅ Docker tests completed successfully.")
+        logger.info("Docker tests completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker test run failed: {e}")
+        logger.error(f"Docker test run failed: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker test run: {e}")
+        logger.error(f"Unexpected error during Docker test run: {e}", exc_info=True)
+        sys.exit(1)
+
 
 def docker_shell():
+    """Opens a shell in the Docker container."""
     ensure_docker_image()
     print("🐳 Opening a shell in the Docker container...")
+    logger.info("Opening a shell in Docker container.")
     cmd = [
-        "docker", "run", "--env-file", ".env",
+        "docker", "run", "--rm", -it, # --rm and -it are good for interactive shells
+        "--env-file", ".env",
         "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
-        "-it", "nyp-fyp-chatbot", "/bin/bash"
+        "nyp-fyp-chatbot", "/bin/bash" # Explicitly specify bash as command
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
+        logger.info("Docker shell session exited.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker shell session exited with an error: {e}")
+        logger.error(f"Docker shell session exited with an error: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker shell: {e}")
+        logger.error(f"Unexpected error during Docker shell: {e}", exc_info=True)
+        sys.exit(1)
+
 
 def docker_export():
+    """Exports the Docker image 'nyp-fyp-chatbot' to a tar file."""
     ensure_docker_image()
     output_file = "nyp-fyp-chatbot.tar"
     print(f"📦 Exporting Docker image 'nyp-fyp-chatbot' to {output_file} ...")
+    logger.info(f"Exporting Docker image to {output_file}.")
     try:
-        subprocess.run(["docker", "save", "-o", output_file, "nyp-fyp-chatbot"], check=True)
+        subprocess.run(["docker", "save", "-o", output_file, "nyp-fyp-chatbot"], check=True,
+                       stdout=sys.stdout, stderr=sys.stderr)
         print(f"✅ Docker image exported successfully to {output_file}")
-    except Exception as e:
+        logger.info("Docker image exported successfully.")
+    except subprocess.CalledProcessError as e:
         print(f"❌ Failed to export Docker image: {e}")
+        logger.error(f"Failed to export Docker image: {e}", exc_info=True)
         sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker export: {e}")
+        logger.error(f"Unexpected error during Docker export: {e}", exc_info=True)
+        sys.exit(1)
+
 
 def main():
     """Main function to set up the environment and install dependencies."""
     if running_in_docker():
         logger.info("Detected Docker environment. Skipping setup.py environment/venv/dependency logic.")
         logger.info("All dependencies should be installed via Dockerfile. No further setup required.")
+
+        # In Docker, just ensure data directories exist
+        os.makedirs("data/chat_sessions", exist_ok=True)
+        os.makedirs("data/user_info", exist_ok=True)
+        os.makedirs("data/vector_store/chroma_db", exist_ok=True)
+        os.makedirs("logs", exist_ok=True)
         return
+
     logger.info("Starting environment setup script...")
 
     # Step 0: Ensure the base chatbot directory exists and logging is set up
@@ -224,13 +387,10 @@ def main():
     # Step 1: Add shebang to all Python files in the current project directory (and subdirectories)
     _add_shebang_to_python_files(os.getcwd())
 
-    # Step 2: Extract external dependencies
-    extract_dependencies()
-
-    # Step 3: Define the path for the main virtual environment
+    # Step 2: Define the path for the main virtual environment
     venv_path = rel2abspath(".venv")
 
-    # Step 4: Remove existing main virtual environment if it exists
+    # Step 3: Remove existing main virtual environment if it exists
     if os.path.exists(venv_path):
         logger.info(f"Removing existing main virtual environment at: {venv_path}")
         try:
@@ -242,7 +402,7 @@ def main():
             )
             sys.exit(1)
 
-    # Step 5: Create a new main Python virtual environment
+    # Step 4: Create a new main Python virtual environment
     logger.info(f"Creating new main virtual environment at: {venv_path}")
     try:
         # sys.executable ensures the venv is created with the same Python interpreter running this script
@@ -257,13 +417,13 @@ def main():
         logger.error(f"Failed to create main virtual environment: {e}", exc_info=True)
         sys.exit(1)
 
-    # Step 6: Determine pip executable path within the new main venv
+    # Step 5: Determine pip executable path within the new main venv
     if sys.platform == "win32":
         pip_path = os.path.join(venv_path, "Scripts", "pip.exe")
     else:  # Linux, macOS, and other Unix-like systems
         pip_path = os.path.join(venv_path, "bin", "pip")
 
-    # Step 7: Install Python dependencies from requirements.txt into the main venv
+    # Step 6: Install Python dependencies from requirements.txt into the main venv
     requirements_file = rel2abspath("requirements.txt")
     if os.path.exists(requirements_file):
         logger.info(f"Installing Python dependencies from '{requirements_file}' into main venv...")
@@ -292,15 +452,15 @@ def main():
     logger.info("Environment setup complete.")
     # Provide activation instructions for the user for the main virtual environment
     if sys.platform == "win32":
-        activate_command = f"call {os.path.join(venv_path, 'Scripts', 'activate')}"
+        activate_command = f"call \"{os.path.join(venv_path, 'Scripts', 'activate')}\"" # Added quotes for spaces in path
     else:
-        activate_command = f"source {os.path.join(venv_path, 'bin', 'activate')}"
+        activate_command = f"source \"{os.path.join(venv_path, 'bin', 'activate')}\"" # Added quotes for spaces in path
     logger.info(f"To activate the main Python virtual environment, run: {activate_command}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Setup and Docker helper for NYP-FYP Chatbot.")
-    parser.add_argument("--docker-build", action="store_true", help="Build the Docker image.")
+    parser.add_argument("--docker-build", action="store_true", help="Build the Docker image with --no-cache.")
     parser.add_argument("--docker-run", action="store_true", help="Run the Docker container.")
     parser.add_argument("--docker-test", action="store_true", help="Run the test suite in Docker.")
     parser.add_argument("--docker-shell", action="store_true", help="Open a shell in the Docker container.")
@@ -308,21 +468,74 @@ if __name__ == "__main__":
     parser.add_argument("--run-tests", action="store_true", help="Run the test suite inside the container.")
     parser.add_argument("--docker-test-file", type=str, help="Run a specific test file in Docker (provide the path to the test file)")
     parser.add_argument("--run-test-file", type=str, help="Run a specific test file inside the container (internal use)")
+    parser.add_argument(
+        "--docker-prod", action="store_true",
+        help="Build the Docker image with cache and run the app. Equivalent to --docker-build-prod and --docker-run."
+    )
     args = parser.parse_args()
 
     # Handle --run-tests and --run-test-file first to avoid interference
+    # These are typically executed *inside* the Docker container or a local venv after setup
     if args.run_tests:
         print("🧪 Running test suite inside the container...")
-        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
-        subprocess.run([venv_python, "tests/run_all_tests.py"], check=True)
+        logger.info("Running test suite inside the container (internal call).")
+
+        # Use the virtual environment Python for running tests
+        if sys.platform == "win32":
+            venv_python_exec = os.path.join(os.getcwd(), '.venv', 'Scripts', 'python.exe')
+        else:
+            venv_python_exec = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
+
+        if os.path.exists(venv_python_exec):
+            try:
+                subprocess.run([venv_python_exec, "tests/run_all_tests.py"], check=True, stdout=sys.stdout, stderr=sys.stderr)
+                print("✅ Test suite completed successfully.")
+                logger.info("Test suite completed successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Test suite failed: {e}")
+                logger.error(f"Test suite failed: {e}", exc_info=True)
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ An unexpected error occurred during test run: {e}")
+                logger.error(f"Unexpected error during test run: {e}", exc_info=True)
+                sys.exit(1)
+        else:
+            print("❌ Cannot find Python executable in .venv to run tests. Ensure .venv is correctly set up.")
+            logger.error(".venv Python executable not found for running tests.")
+            sys.exit(1)
         sys.exit(0)
-    if args.run_test_file:
+    elif args.run_test_file:
         print(f"🧪 Running test file {args.run_test_file} inside the container...")
-        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
-        subprocess.run([venv_python, args.run_test_file], check=True)
+        logger.info(f"Running specific test file {args.run_test_file} inside the container (internal call).")
+        
+        # Use the virtual environment Python for running tests
+        if sys.platform == "win32":
+            venv_python_exec = os.path.join(os.getcwd(), '.venv', 'Scripts', 'python.exe')
+        else:
+            venv_python_exec = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
+
+        if os.path.exists(venv_python_exec):
+            try:
+                subprocess.run([venv_python_exec, args.run_test_file], check=True, stdout=sys.stdout, stderr=sys.stderr)
+                print(f"✅ Test file {args.run_test_file} completed successfully.")
+                logger.info(f"Test file {args.run_test_file} completed successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Test file {args.run_test_file} failed: {e}")
+                logger.error(f"Test file {args.run_test_file} failed: {e}", exc_info=True)
+                sys.exit(1)
+            except Exception as e:
+                print(f"❌ An unexpected error occurred during test file run: {e}")
+                logger.error(f"Unexpected error during test file run: {e}", exc_info=True)
+                sys.exit(1)
+        else:
+            print("❌ Cannot find Python executable in .venv to run the test file. Ensure .venv is correctly set up.")
+            logger.error(".venv Python executable not found for running specific test file.")
+            sys.exit(1)
         sys.exit(0)
-    if args.docker_build:
-        docker_build()
+
+    # Handle Docker commands (these run the setup script itself with arguments)
+    elif args.docker_build:
+        docker_build() # This calls the build with --no-cache
     elif args.docker_run:
         docker_run()
     elif args.docker_test:
@@ -331,22 +544,79 @@ if __name__ == "__main__":
         docker_shell()
     elif args.docker_export:
         docker_export()
+    elif args.docker_prod:
+        print("🚀 Running production deployment: Building Docker image (with cache) and then running the app...")
+        logger.info("Initiating Docker production deployment.")
+        docker_build_prod() # Build with cache
+        docker_run()        # Then run the app
+        print("✅ Docker production deployment complete.")
+        logger.info("Docker production deployment completed.")
     elif args.docker_test_file:
         ensure_docker_image()
         print(f"🐳 Running test file {args.docker_test_file} in Docker container...")
+        logger.info(f"Running specific test file {args.docker_test_file} in Docker container (external call).")
         cmd = [
-            "docker", "run", "--env-file", ".env",
+            "docker", "run", "--rm", "-it", # --rm for temporary container, -it for interactive if needed by test
+            "--env-file", ".env",
             "-v", f"{os.path.expanduser('~')}/.nypai-chatbot:/root/.nypai-chatbot",
-            "-it", "nyp-fyp-chatbot", "--run-test-file", args.docker_test_file
+            "nyp-fyp-chatbot", "--run-test-file", args.docker_test_file # Pass to the internal script
         ]
-        subprocess.run(cmd, check=True)
-    elif running_in_docker():
-        print("🐳 Detected Docker environment. Activating .venv and launching app.py...")
-        venv_python = os.path.join(os.getcwd(), '.venv', 'bin', 'python')
-        if not os.path.exists(venv_python):
-            print("❌ .venv not found! Please check Docker build.")
+        try:
+            subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
+            print(f"✅ Docker test file {args.docker_test_file} completed successfully.")
+            logger.info(f"Docker test file {args.docker_test_file} completed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Docker test file {args.docker_test_file} failed: {e}")
+            logger.error(f"Docker test file {args.docker_test_file} failed: {e}", exc_info=True)
             sys.exit(1)
-        os.execv(venv_python, [venv_python, 'app.py'])
-    else:
-        main()
+        except Exception as e:
+            print(f"❌ An unexpected error occurred during Docker test file run: {e}")
+            logger.error(f"Unexpected error during Docker test file run: {e}", exc_info=True)
+            sys.exit(1)
+    # This block executes if no specific argparse argument matches
+    elif running_in_docker():
+        # This part assumes that if running in Docker and no other args, it should launch the app.
+        # This implies that `app.py` is the main entrypoint when running the Docker container normally.
+        print("🐳 Detected Docker environment. Activating .venv and launching app.py...")
+        logger.info("Detected Docker environment. Attempting to launch app.py.")
 
+        # Determine the correct python executable path within the venv in Docker
+        venv_dir = os.path.join(os.getcwd(), '.venv')
+        if sys.platform == "win32":
+            venv_python = os.path.join(venv_dir, 'Scripts', 'python.exe')
+        else:
+            venv_python = os.path.join(venv_dir, 'bin', 'python')
+
+        if not os.path.exists(venv_python):
+            print(f"❌ .venv Python executable not found at '{venv_python}'! Please check Dockerfile build process.")
+            logger.error(f".venv Python executable not found at '{venv_python}' inside Docker.")
+            sys.exit(1)
+
+        # Use os.execv to replace the current process with the app.py process
+        # This is more efficient than subprocess.run if this script's only job is to launch the app
+        # after initial checks in Docker.
+        try:
+            logger.info(f"Executing '{venv_python} app.py'.")
+            os.execv(venv_python, [venv_python, 'app.py'])
+        except Exception as e:
+            print(f"❌ Failed to execute app.py: {e}")
+            logger.error(f"Failed to execute app.py: {e}", exc_info=True)
+            sys.exit(1)
+    else:
+        # If no specific Docker command and not in Docker, show usage and require flags
+        print("❌ No command specified. This script requires CLI flags to run.")
+        print("\nAvailable commands:")
+        print("  --docker-build     Build Docker image with --no-cache")
+        print("  --docker-run       Run Docker container")
+        print("  --docker-test      Run test suite in Docker")
+        print("  --docker-shell     Open shell in Docker container")
+        print("  --docker-export    Export Docker image to tar file")
+        print("  --docker-prod      Build with cache and run app")
+        print("  --docker-test-file <path>  Run specific test file in Docker")
+        print("\nFor local development setup, use:")
+        print("  python setup.py --help")
+        print("\nFor Docker operations, use:")
+        print("  python setup.py --docker-build")
+        print("  python setup.py --docker-run")
+        print("  python setup.py --docker-test")
+        sys.exit(1)
