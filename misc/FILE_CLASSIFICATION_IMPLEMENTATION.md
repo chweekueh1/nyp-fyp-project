@@ -27,14 +27,16 @@ I have successfully implemented a comprehensive file upload and classification i
 ### 📁 **File Management**
 
 **Allowed File Extensions:**
+
 ```python
 ALLOWED_EXTENSIONS = [
-    '.txt', '.pdf', '.docx', '.doc', '.xlsx', '.xls', 
+    '.txt', '.pdf', '.docx', '.doc', '.xlsx', '.xls',
     '.pptx', '.ppt', '.md', '.rtf', '.csv'
 ]
 ```
 
 **Storage Structure:**
+
 ```
 {get_chatbot_dir()}/
 └── uploads/
@@ -47,23 +49,26 @@ ALLOWED_EXTENSIONS = [
 ### 🔍 **Classification Features**
 
 **Security Classifications:**
+
 - Official(Open)
-- Official(Closed) 
+- Official(Closed)
 - Restricted
 - Confidential
 - Secret
 - Top Secret
 
 **Sensitivity Levels:**
+
 - Non-Sensitive
 - Sensitive Normal
 - Sensitive High
 
 **Output Format:**
+
 ```json
 {
     "classification": "Confidential",
-    "sensitivity": "Sensitive High", 
+    "sensitivity": "Sensitive High",
     "reasoning": "Document contains financial data and strategic plans..."
 }
 ```
@@ -106,23 +111,27 @@ ALLOWED_EXTENSIONS = [
 ## 📋 **Feature Specifications**
 
 ### **File Upload Validation**
+
 - ✅ Extension-based filtering (hardcoded whitelist)
 - ✅ File size validation (configurable limits)
 - ✅ Username-based access control
 - ✅ Unique filename generation to prevent conflicts
 
 ### **Content Processing**
+
 - ✅ Text extraction from multiple file formats
 - ✅ Content preprocessing for classification
 - ✅ Error handling for unsupported content
 
 ### **Classification Engine**
+
 - ✅ Integration with existing LLM classification model
 - ✅ Structured JSON output format
 - ✅ Detailed reasoning and explanation
 - ✅ Conservative classification approach (higher security when uncertain)
 
 ### **User Interface**
+
 - ✅ Clean, intuitive upload interface
 - ✅ Real-time status updates during processing
 - ✅ Comprehensive results display
@@ -140,7 +149,7 @@ is_file_allowed(filename: str) -> bool
 # File storage
 save_uploaded_file(file_obj, username: str) -> Tuple[str, str]
 
-# Content extraction  
+# Content extraction
 extract_file_content(file_path: str) -> str
 
 # Classification
@@ -153,18 +162,21 @@ get_uploads_dir(username: str) -> str
 ### **Integration Points**
 
 1. **Backend Classification**
+
    ```python
    from llm.classificationModel import classify_text
    from llm.dataProcessing import ExtractText
    ```
 
 2. **File Storage**
+
    ```python
    from utils import get_chatbot_dir
    uploads_dir = os.path.join(get_chatbot_dir(), 'uploads', username)
    ```
 
 3. **Main App Integration**
+
    ```python
    from file_classification import file_classification_interface
    # Added as new tab in main application
@@ -173,6 +185,7 @@ get_uploads_dir(username: str) -> str
 ## 🎉 **Success Metrics**
 
 ### ✅ **Functional Requirements Met**
+
 - ✅ Separate interface tab for file upload
 - ✅ Hardcoded list of allowed file extensions
 - ✅ Integration with backend classification function
@@ -181,6 +194,7 @@ get_uploads_dir(username: str) -> str
 - ✅ User-specific file management
 
 ### ✅ **Quality Attributes**
+
 - ✅ **Usability**: Intuitive interface with clear feedback
 - ✅ **Security**: File type validation and user isolation
 - ✅ **Reliability**: Comprehensive error handling
@@ -190,6 +204,7 @@ get_uploads_dir(username: str) -> str
 ## 🚀 **How to Use**
 
 ### **For End Users:**
+
 1. Run the main application: `python app.py`
 2. Login with your credentials
 3. Click on "📄 File Classification" tab
@@ -197,6 +212,7 @@ get_uploads_dir(username: str) -> str
 5. Review the classification results
 
 ### **For Developers:**
+
 1. Run the standalone demo: `python tests/demos/demo_file_classification.py`
 2. Run integration tests: `python tests/integration/test_file_classification_integration.py`
 3. Verify functionality: `python verify_file_classification.py`
@@ -215,6 +231,7 @@ The implementation provides a solid foundation for future enhancements:
 ## 🎯 **Summary**
 
 The file classification feature has been successfully implemented with:
+
 - ✅ Complete integration with the main application
 - ✅ Robust file handling and validation
 - ✅ AI-powered security classification

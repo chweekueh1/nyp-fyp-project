@@ -32,7 +32,7 @@ def create_demo_app():
         - **Chat Session Management**: Switch between different conversations
         - **New Chat Creation**: Start fresh conversations anytime
         - **Message Persistence**: All messages are saved to your chat history
-        
+
         **Instructions:**
         1. Enter a username to simulate login
         2. Your existing chats will load in the dropdown

@@ -7,15 +7,18 @@ The debug tests confirm that the chatbot UI is properly integrated into the main
 ## 🚀 Step-by-Step Verification
 
 ### Step 1: Launch the Main App
+
 ```bash
 python app.py
 ```
 
 ### Step 2: Open in Browser
+
 - The app should open automatically at `http://127.0.0.1:7860`
 - If not, manually navigate to that URL
 
 ### Step 3: Login/Register
+
 **IMPORTANT**: The chatbot UI is only visible after logging in!
 
 1. **Register a new account**:
@@ -29,12 +32,15 @@ python app.py
    - Click "Login"
 
 ### Step 4: Locate the Chat Tab
+
 After successful login, you should see:
+
 1. **Main interface with tabs**
 2. **Look for the "💬 Chat" tab** (should be the first tab)
 3. **Click on the Chat tab**
 
 ### Step 5: Verify Chatbot Components
+
 In the Chat tab, you should see:
 
 ```
@@ -54,17 +60,20 @@ In the Chat tab, you should see:
 
 ## 🔧 Troubleshooting
 
-### If you don't see the Chat tab:
+### If you don't see the Chat tab
+
 1. **Check login status**: Make sure you're logged in
 2. **Refresh the page**: Clear browser cache and refresh
 3. **Check browser console**: Press F12 and look for errors
 
-### If the Chat tab is empty:
+### If the Chat tab is empty
+
 1. **Check browser developer tools** (F12) for JavaScript errors
 2. **Try a different browser** to rule out browser-specific issues
 3. **Check the terminal** where you launched the app for error messages
 
-### If components are not working:
+### If components are not working
+
 1. **Check that you can click the "New Chat" button**
 2. **Try typing in the message input field**
 3. **Verify the chat selector dropdown is clickable**
@@ -81,17 +90,20 @@ To quickly test if the integration is working:
 
 ## 📊 Expected Behavior
 
-### On Login:
+### On Login
+
 - Main interface becomes visible
 - Chat selector loads with existing chats (if any)
 - First chat is automatically selected
 
-### On New Chat:
+### On New Chat
+
 - New chat appears in the dropdown
 - Chat history area clears
 - Ready to send messages
 
-### On Send Message:
+### On Send Message
+
 - Message appears in chat history
 - Bot response appears below user message
 - Message input clears
@@ -99,17 +111,18 @@ To quickly test if the integration is working:
 
 ## 🎯 Integration Features Confirmed
 
-✅ **Chat History Loading**: Existing chats load automatically  
-✅ **Message Persistence**: All messages are saved to files  
-✅ **Chat Session Management**: Create, select, and switch between chats  
-✅ **Real-time Updates**: Chat selector updates when new chats are created  
-✅ **Backend Integration**: Proper integration with LLM and database  
+✅ **Chat History Loading**: Existing chats load automatically
+✅ **Message Persistence**: All messages are saved to files
+✅ **Chat Session Management**: Create, select, and switch between chats
+✅ **Real-time Updates**: Chat selector updates when new chats are created
+✅ **Backend Integration**: Proper integration with LLM and database
 
 ## 🆘 Still Not Working?
 
 If you've followed all steps and still don't see the chatbot UI:
 
 1. **Run the debug script**:
+
    ```bash
    python debug_chatbot_ui.py
    ```
@@ -117,6 +130,7 @@ If you've followed all steps and still don't see the chatbot UI:
 2. **Check the output** - it should show all components are created
 
 3. **Try the minimal test app**:
+
    ```bash
    python demo_chatbot_with_history.py
    ```

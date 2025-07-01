@@ -97,7 +97,7 @@ def test_search_interface():
         2. **Fuzzy Search:** Try the fuzzy search functionality
         3. **Show All Chats:** Click to display all chats
         4. **Search Results:** Results should be displayed
-        
+
         **Expected Behavior:**
         - Search button should be responsive
         - Backend search functions should be called directly
@@ -172,7 +172,7 @@ def test_chat_history_interface():
         1. **Search History:** Enter a search term and click Search History
         2. **History Results:** Search results should be displayed
         3. **Error Handling:** Try searching with empty queries
-        
+
         **Expected Behavior:**
         - Search History button should be responsive
         - Backend search function should be called directly

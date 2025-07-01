@@ -90,7 +90,7 @@ def test_file_upload_interface():
         2. **Upload File:** Click the Upload File button
         3. **Classify File:** Click the Classify File button
         4. **File Processing:** Check that the file is processed by backend
-        
+
         **Expected Behavior:**
         - File upload should work
         - Upload File button should be responsive
@@ -150,7 +150,7 @@ def test_audio_input_interface():
         2. **Transcribe Audio:** Click the Transcribe Audio button
         3. **Audio Processing:** Check that the audio is processed by backend
         4. **Transcription Results:** Verify transcription results are displayed
-        
+
         **Expected Behavior:**
         - Audio recording should work
         - Transcribe Audio button should be responsive

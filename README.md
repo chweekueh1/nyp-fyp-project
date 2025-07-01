@@ -16,28 +16,28 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
 ### Prerequisites
 
-  * **Python 3.12.0 or higher**: Ensure you have a compatible Python version installed.
-  * **Git**: Required for cloning the repository.
-  * **OpenAI API key**: Necessary for AI functionalities.
-  * **Compiler Tools**:
-      * **Windows**: Microsoft Visual C++ Build Tools are required for certain Python packages (like ChromaDB) that need to compile C/C++ extensions.
-      * **Linux**: While Python's `pip` generally handles compilation on Linux if standard build tools are available, you might need to install `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) if you encounter compilation errors for specific packages.
+* **Python 3.12.0 or higher**: Ensure you have a compatible Python version installed.
+* **Git**: Required for cloning the repository.
+* **OpenAI API key**: Necessary for AI functionalities.
+* **Compiler Tools**:
+  * **Windows**: Microsoft Visual C++ Build Tools are required for certain Python packages (like ChromaDB) that need to compile C/C++ extensions.
+  * **Linux**: While Python's `pip` generally handles compilation on Linux if standard build tools are available, you might need to install `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) if you encounter compilation errors for specific packages.
 
 ### Installation
 
-1.  **Clone the repository**
+1. **Clone the repository**
 
     ```bash
     git clone <repository-url>
     cd nyp-fyp-project
     ```
 
-2.  **Install Python Version 3.12.0 (if you don't have it)**
+2. **Install Python Version 3.12.0 (if you don't have it)**
 
       * **Windows**: You can download it from [Python.org](https://www.python.org/downloads/release/python-31210/). During installation, make sure to **check the box "Add python.exe to PATH"**.
       * **Linux**: It's recommended to install Python via your distribution's package manager (e.g., `sudo apt install python3.12` on Debian/Ubuntu, `sudo pacman -S python` on Arch Linux) or using a version manager like `pyenv`.
 
-3.  **Install Compiler Tools (if prompted or encountering errors)**
+3. **Install Compiler Tools (if prompted or encountering errors)**
 
       * **Windows (Microsoft Visual C++ Build Tools)**:
           * Download from [visualstudio.microsoft.com/visual-cpp-build-tools/](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
@@ -50,10 +50,10 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
           * Debian/Ubuntu: `sudo apt install build-essential python3-dev`
           * Arch Linux: `sudo pacman -S base-devel python` (usually part of base installation)
 
-4.  **The rest of the installation is handled by the setup script. Proceed to step 7!**
+4. **The rest of the installation is handled by the setup script. Proceed to step 7!**
     (The setup script will create and manage the virtual environment, install Python dependencies, and set up Pandoc/Tesseract.)
 
-5.  **Set up environment variables**
+5. **Set up environment variables**
 
     ```bash
     # Copy the development environment template
@@ -63,7 +63,7 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
     # OPENAI_API_KEY=your_openai_api_key_here
     ```
 
-6.  **Run the setup script**
+6. **Run the setup script**
 
     ```bash
     python setup.py
@@ -78,9 +78,11 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 Docker is required to build and run the application in a containerized environment. Follow the instructions for your platform:
 
 ### Linux
-- **Recommended:** Use your distribution's package manager or the official Docker installation script.
-- Official instructions: https://docs.docker.com/engine/install/
-- Example for Ubuntu:
+
+* **Recommended:** Use your distribution's package manager or the official Docker installation script.
+* Official instructions: <https://docs.docker.com/engine/install/>
+* Example for Ubuntu:
+
   ```bash
   sudo apt-get update
   sudo apt-get install -y ca-certificates curl gnupg
@@ -98,12 +100,14 @@ Docker is required to build and run the application in a containerized environme
   ```
 
 ### macOS
-- Download and install Docker Desktop: https://www.docker.com/products/docker-desktop/
-- After installation, start Docker Desktop from Applications.
+
+* Download and install Docker Desktop: <https://www.docker.com/products/docker-desktop/>
+* After installation, start Docker Desktop from Applications.
 
 ### Windows
-- Download and install Docker Desktop: https://www.docker.com/products/docker-desktop/
-- After installation, start Docker Desktop from the Start menu.
+
+* Download and install Docker Desktop: <https://www.docker.com/products/docker-desktop/>
+* After installation, start Docker Desktop from the Start menu.
 
 > For more details, see the [official Docker documentation](https://docs.docker.com/get-docker/).
 
@@ -113,36 +117,46 @@ Docker is required to build and run the application in a containerized environme
 
 You can use the `setup.py` script to run common Docker commands with simple flags, instead of typing out long Docker commands:
 
-- **Build the Docker image:**
+* **Build the Docker image:**
+
   ```bash
   python setup.py --docker-build
   sudo python3 setup.py --docker-build
   ```
-- **Run the Docker container:**
+
+* **Run the Docker container:**
+
   ```bash
   python setup.py --docker-run
   sudo python3 setup.py --docker-run
   ```
-- **Run the test suite in Docker:**
+
+* **Run the test suite in Docker:**
+
   ```bash
   python setup.py --docker-test
   sudo python3 setup.py --docker-test
   ```
-- **Run a specific test file in Docker:**
+
+* **Run a specific test file in Docker:**
+
   ```bash
   python setup.py --docker-test-file tests/frontend/test_login_ui.py
   sudo python3 setup.py --docker-test-file tests/frontend/test_login_ui.py
   ```
-- **Open a shell in the Docker container:**
+
+* **Open a shell in the Docker container:**
+
   ```bash
   python setup.py --docker-shell
   sudo python3 setup.py --docker-shell
   ```
 
 These commands will:
-- Use your `.env` file for environment variables
-- Mount your local `~/.nypai-chatbot` directory for persistent data
-- Expose the application on port 7860
+
+* Use your `.env` file for environment variables
+* Mount your local `~/.nypai-chatbot` directory for persistent data
+* Expose the application on port 7860
 
 > You can still use the raw Docker commands if you prefer, but the above shortcuts are recommended for convenience.
 
@@ -154,8 +168,8 @@ The application stores user data in a dedicated directory to ensure data persist
 
 ### **Data Location**
 
-- **Local Development**: `~/.nypai-chatbot/`
-- **Docker**: `/root/.nypai-chatbot/` (mounted from host `~/.nypai-chatbot/`)
+* **Local Development**: `~/.nypai-chatbot/`
+* **Docker**: `/root/.nypai-chatbot/` (mounted from host `~/.nypai-chatbot/`)
 
 ### **Directory Structure**
 
@@ -173,20 +187,21 @@ The application stores user data in a dedicated directory to ensure data persist
 
 ### **Data Protection**
 
-- ✅ **User data is preserved** during builds and updates
-- ✅ **Test users are isolated** from production users
-- ✅ **Chat sessions persist** across application restarts
-- ✅ **Build system won't override** existing user data
+* ✅ **User data is preserved** during builds and updates
+* ✅ **Test users are isolated** from production users
+* ✅ **Chat sessions persist** across application restarts
+* ✅ **Build system won't override** existing user data
 
 ### **User Database Separation**
 
-- **Production Users**: Stored in `users.json`
-- **Test Users**: Stored in `test_users.json` (completely separate)
+* **Production Users**: Stored in `users.json`
+* **Test Users**: Stored in `test_users.json` (completely separate)
 
 This ensures that:
-- Test runs don't affect production user data
-- Production users are never accidentally deleted during testing
-- Test data can be easily cleaned up without affecting real users
+
+* Test runs don't affect production user data
+* Production users are never accidentally deleted during testing
+* Test data can be easily cleaned up without affecting real users
 
 ### **Viewing Data Storage Info**
 
@@ -205,34 +220,39 @@ python tests/test_data_storage.py
 The test suite is fully integrated into the Docker container and includes:
 
 ### **Frontend Tests**
-- Login interface tests
-- Chat interface tests  
-- Search interface tests
-- File upload and audio input tests
+
+* Login interface tests
+* Chat interface tests
+* Search interface tests
+* File upload and audio input tests
 
 ### **Backend Tests**
-- API endpoint tests
-- Database integration tests
-- File processing tests
+
+* API endpoint tests
+* Database integration tests
+* File processing tests
 
 ### **Integration Tests**
-- End-to-end workflow tests
-- Chatbot functionality tests
-- File classification tests
+
+* End-to-end workflow tests
+* Chatbot functionality tests
+* File classification tests
 
 ### **Running Tests**
 
 **Run all tests:**
+
 ```bash
 python setup.py --docker-test
 ```
 
 **Run specific test categories:**
+
 ```bash
 # Frontend tests only
 python setup.py --docker-test-file tests/frontend/run_frontend_tests.py
 
-# Backend tests only  
+# Backend tests only
 python setup.py --docker-test-file tests/backend/test_backend.py
 
 # Integration tests only
@@ -240,6 +260,7 @@ python setup.py --docker-test-file tests/integration/test_integration.py
 ```
 
 **Run individual test files:**
+
 ```bash
 # Login UI tests
 python setup.py --docker-test-file tests/frontend/test_login_ui.py
@@ -252,11 +273,12 @@ python setup.py --docker-test-file tests/frontend/test_file_classification.py
 ```
 
 The test suite will:
-- Create test Gradio applications to validate UI components
-- Test backend API functionality
-- Verify file upload and processing capabilities
-- Check chat and search functionality
-- Validate login and authentication systems
+
+* Create test Gradio applications to validate UI components
+* Test backend API functionality
+* Verify file upload and processing capabilities
+* Check chat and search functionality
+* Validate login and authentication systems
 
 > **Note:** Tests run in a clean Docker environment with all dependencies pre-installed, ensuring consistent test results across different systems.
 
@@ -274,21 +296,24 @@ python setup.py --pre-commit
 ```
 
 This will:
-- Install pre-commit in your virtual environment
-- Create a `.pre-commit-config.yaml` file with ruff configuration
-- Install git hooks for automatic code quality checks
-- Run ruff on all files to fix formatting issues
+
+* Install pre-commit in your virtual environment
+* Create a `.pre-commit-config.yaml` file with ruff configuration
+* Install git hooks for automatic code quality checks
+* Run ruff on all files to fix formatting issues
 
 ### **What Pre-commit Does**
 
 The pre-commit hooks automatically:
-- **Format code** using ruff-format
-- **Lint code** using ruff with auto-fix
-- **Check for common issues** like unused imports, undefined variables, etc.
+
+* **Format code** using ruff-format
+* **Lint code** using ruff with auto-fix
+* **Check for common issues** like unused imports, undefined variables, etc.
 
 ### **Usage**
 
 **Automatic (on git commit):**
+
 ```bash
 git add .
 git commit -m "Your commit message"
@@ -296,6 +321,7 @@ git commit -m "Your commit message"
 ```
 
 **Manual runs:**
+
 ```bash
 # Run on all files
 pre-commit run --all-files
@@ -311,8 +337,9 @@ pre-commit run ruff-format --all-files
 ### **Configuration**
 
 The `.pre-commit-config.yaml` file includes:
-- **ruff**: Fast Python linter with auto-fix
-- **ruff-format**: Fast Python code formatter
+
+* **ruff**: Fast Python linter with auto-fix
+* **ruff-format**: Fast Python code formatter
 
 ### **Testing Pre-commit Setup**
 
@@ -324,6 +351,7 @@ python tests/test_pre_commit_setup.py
 ### **Troubleshooting**
 
 If pre-commit hooks fail:
+
 1. **Auto-fix issues**: `pre-commit run --all-files`
 2. **Skip hooks temporarily**: `git commit --no-verify`
 3. **Update hooks**: `pre-commit autoupdate`
@@ -358,7 +386,7 @@ docker build -t nyp-fyp-chatbot .
 docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
 ```
 
-The application will be available at http://localhost:7860.
+The application will be available at <http://localhost:7860>.
 
 ---
 
@@ -367,11 +395,14 @@ The application will be available at http://localhost:7860.
 When running the application in Docker on Linux, you may need to configure firewalld to allow external access to the application. The following configurations are only needed if you want to access the app from other machines on your network or from the internet.
 
 ### **Local Development (No Firewall Changes Needed)**
+
 If you're only accessing the app from the same machine:
-- No firewalld changes required
-- Access via `http://localhost:7860`
+
+* No firewalld changes required
+* Access via `http://localhost:7860`
 
 ### **Network Access (Firewall Changes Required)**
+
 If you want to access from other machines on the network:
 
 ```bash
@@ -389,6 +420,7 @@ sudo firewall-cmd --list-ports
 ```
 
 ### **Alternative: Allow Docker Interface**
+
 For more specific Docker-only access:
 
 ```bash
@@ -403,6 +435,7 @@ sudo firewall-cmd --reload
 ```
 
 ### **Check Your Active Zone**
+
 ```bash
 # See which zone is active
 sudo firewall-cmd --get-active-zones
@@ -412,6 +445,7 @@ sudo firewall-cmd --permanent --zone=YOUR_ZONE --add-port=7860/tcp
 ```
 
 ### **Testing Firewall Configuration**
+
 ```bash
 # Test if port 7860 is accessible locally
 curl http://localhost:7860
@@ -426,12 +460,14 @@ ss -tlnp | grep 7860
 ```
 
 ### **Security Considerations**
+
 1. **Only open what you need**: Only add port 7860 if you need external access
 2. **Use specific zones**: Consider using a more restrictive zone than 'public'
 3. **Monitor access**: Keep an eye on who's accessing your application
 4. **Consider VPN**: For production use, consider VPN access instead of direct port exposure
 
 ### **Troubleshooting Firewall Issues**
+
 If the app still isn't accessible after adding the firewall rule:
 
 ```bash
@@ -459,6 +495,7 @@ sudo systemctl start firewalld
 You can run all or individual test files in Docker using the setup.py CLI flags:
 
 **Run all tests in Docker:**
+
 ```bash
 python3 setup.py --docker-test
 ```
@@ -513,16 +550,16 @@ nyp-fyp-project/
 
 ## 📊 Features
 
-  - **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
-  - **User Authentication**: Login and registration system
-  - **Chat Interface**: Real-time chat with AI assistant
-  - **Search Functionality**: Search through chat history
-  - **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
-  - **Audio Input**: Voice-to-text functionality
-  - **Chat History**: Persistent chat sessions
-  - **Global Search**: Command-based navigation and search
-  - **OCR Integration**: Text extraction from images using Tesseract
-  - **Document Processing**: Support for various document formats via Pandoc
+* **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
+* **User Authentication**: Login and registration system
+* **Chat Interface**: Real-time chat with AI assistant
+* **Search Functionality**: Search through chat history
+* **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
+* **Audio Input**: Voice-to-text functionality
+* **Chat History**: Persistent chat sessions
+* **Global Search**: Command-based navigation and search
+* **OCR Integration**: Text extraction from images using Tesseract
+* **Document Processing**: Support for various document formats via Pandoc
 
 ---
 
@@ -530,36 +567,36 @@ nyp-fyp-project/
 
 ### Common Issues
 
-1.  **Import Errors**
+1. **Import Errors**
 
-      - Ensure you're in the correct directory.
-      - Activate the virtual environment.
-      - Check that all dependencies are installed.
+      * Ensure you're in the correct directory.
+      * Activate the virtual environment.
+      * Check that all dependencies are installed.
 
-2.  **API Key Issues**
+2. **API Key Issues**
 
-      - Verify your OpenAI API key is correct.
-      - Check that the `.env` file exists and is properly formatted.
-      - Ensure the API key has sufficient credits.
+      * Verify your OpenAI API key is correct.
+      * Check that the `.env` file exists and is properly formatted.
+      * Ensure the API key has sufficient credits.
 
-3.  **Port Conflicts**
+3. **Port Conflicts**
 
-      - The default port is 7860.
-      - If occupied, Gradio will automatically use the next available port.
+      * The default port is 7860.
+      * If occupied, Gradio will automatically use the next available port.
 
-4.  **Environment Variables**
+4. **Environment Variables**
 
-      - Check the `.env` file if using one.
-      - Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
+      * Check the `.env` file if using one.
+      * Ensure all required variables are set, paying attention to **path separators** (`/` for Linux/macOS, but also accepted by Windows Python).
 
-5.  **Compiler Tools**
+5. **Compiler Tools**
 
-      - **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
-      - **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
+      * **Windows**: Microsoft Visual C++ Build Tools are required for ChromaDB functionality. Install the latest MSVC build tools if you encounter compilation errors.
+      * **Linux**: Ensure you have `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) installed if you see compilation issues.
 
-6.  **Dependencies**
+6. **Dependencies**
 
-      - Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
+      * Ensure Pandoc and Tesseract OCR are properly installed and accessible. The `setup.py` script handles this, but if it fails, manual checks might be needed.
 
 ---
 

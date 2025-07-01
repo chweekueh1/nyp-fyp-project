@@ -123,17 +123,17 @@ def create_final_demo():
                 1. **Don't select a chat** from the dropdown
                 2. Type: "How do I learn Python programming?"
                 3. Click Send - watch a new chat appear with name "Learn Python Programming"
-                
-                ### 🏷️ Chat Renaming  
+
+                ### 🏷️ Chat Renaming
                 1. Select any chat from the dropdown
                 2. Type a new name in the rename field: "My Python Learning Chat"
                 3. Click "🏷️ Rename" - watch the dropdown update instantly
-                
+
                 ### 🔍 Smart Search
                 1. Create several chats with different topics
                 2. Search for keywords like "Python", "programming", "learn"
                 3. See intelligent results with context and previews
-                
+
                 ### 📝 Conversation Flow
                 1. Send messages and see them persist automatically
                 2. Switch between chats to see your conversation history

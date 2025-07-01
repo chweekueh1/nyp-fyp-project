@@ -5,7 +5,9 @@ This directory contains interactive demonstrations of the chatbot's features and
 ## 📱 Available Demos
 
 ### `demo_final_working_chatbot.py`
+
 **Complete Feature Demonstration**
+
 - ✅ All bug fixes implemented
 - 🔍 Smart search functionality
 - 🧠 Intelligent chat naming
@@ -14,48 +16,60 @@ This directory contains interactive demonstrations of the chatbot's features and
 - ⚡ Optimized performance
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_final_working_chatbot.py
 ```
 
 ### `demo_enhanced_chatbot.py`
+
 **Enhanced Features Showcase**
+
 - 🔍 Searchable chat history
 - 🧠 Smart auto-naming from first message
 - 📝 Auto-updating dropdown
 - 💬 Persistent conversations
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_enhanced_chatbot.py
 ```
 
 ### `demo_chatbot_with_history.py`
+
 **Chat History Management**
+
 - 💾 Persistent chat sessions
 - 📚 Chat history loading
 - 🔄 Session switching
 - 📝 Message persistence
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_chatbot_with_history.py
 ```
 
 ### `demo_file_classification.py`
+
 **File Classification Interface**
+
 - 📁 File upload with validation
 - 🔍 Security classification analysis
 - 📊 Sensitivity level detection
 - 💾 Upload history tracking
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_file_classification.py
 ```
 
 ### `demo_enhanced_classification.py`
+
 **Enhanced Classification System**
+
 - 🔧 Multiple extraction methods (pandoc, tesseract OCR)
 - 🎨 Beautiful response formatting with emojis
 - ⚡ Performance optimization demonstrations
@@ -63,18 +77,22 @@ python tests/demos/demo_file_classification.py
 - 🔍 Dependency detection and installation guidance
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_enhanced_classification.py
 ```
 
 ### `demo_audio_interface.py`
+
 **Audio Input Interface**
+
 - 🎤 Voice input functionality
 - 🔊 Audio processing capabilities
 - 📝 Speech-to-text conversion
 - 🎵 Audio file handling
 
 **Usage:**
+
 ```bash
 python tests/demos/demo_audio_interface.py
 ```
@@ -82,30 +100,35 @@ python tests/demos/demo_audio_interface.py
 ## 🎯 Demo Features
 
 ### 🔍 **Smart Search**
+
 - Search through all your chat conversations
 - Intelligent keyword matching
 - Context-aware results with previews
 - Relevance-based ranking
 
 ### 🧠 **Intelligent Naming**
+
 - Automatic meaningful chat names from first message
 - "How do I learn Python?" → "Learn Python"
 - No more generic timestamp names
 - Smart keyword extraction
 
 ### 🏷️ **Chat Management**
+
 - Rename any chat to organize conversations
 - Safe filename handling with validation
 - Instant UI updates
 - Content preservation during rename
 
 ### 📝 **Live Updates**
+
 - Dropdown updates automatically when creating/renaming chats
 - Real-time search results
 - Seamless conversation flow
 - No page refreshes needed
 
 ### ⚡ **Performance**
+
 - Optimized backend initialization
 - No infinite loading loops
 - Fast startup and reliable operation
@@ -120,29 +143,34 @@ python tests/demos/demo_audio_interface.py
 
 ## 🧪 Testing Scenarios
 
-### For `demo_final_working_chatbot.py`:
+### For `demo_final_working_chatbot.py`
+
 1. **Auto-Naming Test:** Type "What is machine learning?" without selecting a chat
 2. **Rename Test:** Select a chat and rename it to "My ML Chat"
 3. **Search Test:** Search for "machine" to find your chat
 4. **Multi-Chat Test:** Create several chats and switch between them
 
-### For `demo_enhanced_chatbot.py`:
+### For `demo_enhanced_chatbot.py`
+
 1. **Create Multiple Chats:** Try different topics (Python, JavaScript, databases)
 2. **Test Search:** Search for keywords across all chats
 3. **Verify Persistence:** Close and reopen to see saved conversations
 
-### For `demo_enhanced_classification.py`:
+### For `demo_enhanced_classification.py`
+
 1. **Dependency Check:** See which dependencies (pandoc, tesseract) are available
 2. **Content Extraction:** Test with different file types (.txt, .docx, .pdf, .png)
 3. **Performance Test:** Observe processing speed with large files
 4. **Formatting Demo:** See beautiful classification responses with emojis
 
-### For `demo_file_classification.py`:
+### For `demo_file_classification.py`
+
 1. **Upload Test:** Upload different file types and see classification
 2. **History Test:** Check upload history and file management
 3. **User Management:** Test with different demo usernames
 
-### For `demo_audio_interface.py`:
+### For `demo_audio_interface.py`
+
 1. **Voice Input:** Test microphone input functionality
 2. **Audio Files:** Upload and process audio files
 3. **Speech Recognition:** Test speech-to-text conversion
@@ -156,12 +184,14 @@ python tests/demos/demo_audio_interface.py
 
 ## 🔧 Troubleshooting
 
-### Common Issues:
+### Common Issues
+
 - **Port conflicts:** Demos use different ports (7865, 7866, etc.)
 - **API key missing:** Set `OPENAI_API_KEY` environment variable
 - **Dependencies:** Run `pip install -r requirements.txt`
 
-### Getting Help:
+### Getting Help
+
 - Check the main project README.md
 - Run the comprehensive test suite: `python tests/comprehensive_test_suite.py`
 - Review error logs in the terminal output
@@ -169,12 +199,14 @@ python tests/demos/demo_audio_interface.py
 ## 📊 Demo vs Tests
 
 **Demos** are for:
+
 - Interactive exploration of features
 - Visual verification of UI components
 - Manual testing of user workflows
 - Showcasing capabilities to stakeholders
 
 **Tests** are for:
+
 - Automated validation of functionality
 - Regression testing
 - Performance benchmarking

@@ -71,13 +71,13 @@ def create_demo():
         with gr.Column(elem_classes="feature-box"):
             gr.Markdown("""
             ### 🎯 Demo Features
-            
+
             **Supported File Types:** `.txt`, `.pdf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.md`, `.rtf`, `.csv`
-            
+
             **Classification Categories:**
             - **Security:** Official(Open), Official(Closed), Restricted, Confidential, Secret, Top Secret
             - **Sensitivity:** Non-Sensitive, Sensitive Normal, Sensitive High
-            
+
             **Demo Workflow:**
             1. 📁 Upload a supported file type
             2. 🔍 System extracts text content
@@ -110,13 +110,13 @@ def create_demo():
         with gr.Column(elem_classes="feature-box"):
             gr.Markdown("""
             ### 📝 Demo Instructions
-            
+
             1. **Set Username:** Enter a demo username above and click "Set User"
             2. **Upload File:** Choose a file from the supported types
             3. **Classify:** Click "Upload & Classify" to process the file
             4. **Review Results:** Check the classification, sensitivity, and reasoning
             5. **View History:** See your uploaded files in the history section
-            
+
             **Sample Files to Try:**
             - Create a `.txt` file with confidential business information
             - Upload a document with personal data

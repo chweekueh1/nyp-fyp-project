@@ -70,4 +70,4 @@ COPY . .
 EXPOSE 7860
 
 # Set the entrypoint with support for different commands
-ENTRYPOINT ["python", "setup.py"] 
+ENTRYPOINT ["python", "setup.py"]

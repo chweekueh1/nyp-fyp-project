@@ -78,13 +78,13 @@ def create_audio_demo():
             with gr.Accordion("🎯 How to Test the Audio Features", open=False):
                 gr.Markdown("""
                 ### Testing Steps:
-                
+
                 1. **Record Audio**: Click the microphone button to record your voice
                 2. **Upload Audio**: Or upload an audio file (MP3, WAV, etc.)
                 3. **Process**: Click "Process Audio" to transcribe and get response
                 4. **Edit**: Use the edit feature to modify transcription if needed
                 5. **History**: View your audio session history
-                
+
                 ### Supported Features:
                 - 🎙️ Real-time audio recording
                 - 📁 Audio file upload (MP3, WAV, M4A, FLAC, OGG)
@@ -98,12 +98,12 @@ def create_audio_demo():
         with gr.Column(elem_classes="info-box"):
             gr.Markdown("""
             ### 📋 Demo Instructions
-            
+
             **Prerequisites:**
             - Backend must be initialized (run `python app.py` first)
             - OpenAI API key must be configured for transcription
             - Audio permissions may be required for recording
-            
+
             **Testing Tips:**
             - Speak clearly and at moderate pace
             - Keep recordings under 25MB

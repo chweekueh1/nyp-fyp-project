@@ -5,6 +5,7 @@ Comprehensive, fully-updated testing framework for the NYP Final Year Project Ch
 ## 🔧 Recent Updates (Latest)
 
 **✅ All Test Runners Fixed and Updated:**
+
 - **Backend Tests**: Added missing functions (`set_chat_name`, `delete_test_user`)
 - **Frontend Tests**: Fixed function signatures and import issues
 - **LLM Tests**: Rewrote to use actual functions instead of non-existent service classes
@@ -63,6 +64,7 @@ tests/
 ## 🚀 Quick Start
 
 ### Run All Tests
+
 ```bash
 # Comprehensive test suite (recommended)
 python tests/comprehensive_test_suite.py
@@ -73,6 +75,7 @@ python tests/run_tests.py      # ✅ All issues fixed
 ```
 
 ### Run Specific Test Categories
+
 ```bash
 # Backend tests only ✅ FIXED
 python tests/backend/test_backend.py
@@ -90,6 +93,7 @@ python tests/integration/test_enhanced_chatbot_features.py
 ```
 
 ### Run Interactive Demos
+
 ```bash
 # Complete working demo
 python tests/demos/demo_final_working_chatbot.py
@@ -101,25 +105,33 @@ python tests/demos/demo_enhanced_chatbot.py
 ## 🧪 Test Categories
 
 ### 🔬 **Unit Tests** ✅ ALL FIXED
+
 Test individual components in isolation:
+
 - **Backend:** Core functionality, database operations, API handling ✅ **Missing functions added**
 - **Frontend:** UI components, user interactions, state management ✅ **Import issues fixed**
 - **LLM:** Language model integration, response generation ✅ **Completely rewritten**
 
 ### 🔗 **Integration Tests** ✅ ALL IMPROVED
+
 Test component interactions:
+
 - **App Integration:** Full application workflow testing ✅ **Error handling improved**
 - **Feature Integration:** Enhanced features working together ✅ **More tolerant of failures**
 - **UI Integration:** Frontend-backend communication ✅ **Gradio compatibility fixed**
 
 ### 🎭 **Demo Tests**
+
 Interactive demonstrations:
+
 - **Feature Showcases:** Visual demonstrations of capabilities
 - **User Workflows:** End-to-end user experience testing
 - **Stakeholder Demos:** Presentation-ready demonstrations
 
 ### 🛠️ **Utility Tests**
+
 Diagnostic and debugging tools:
+
 - **Issue Diagnosis:** Problem identification and resolution
 - **Performance Testing:** Speed and reliability validation
 - **Debug Tools:** Development and troubleshooting utilities
@@ -127,17 +139,20 @@ Diagnostic and debugging tools:
 ## 🔧 Detailed Fix Summary
 
 ### Backend Test Fixes ✅
+
 - **Added missing functions**: `set_chat_name()`, `delete_test_user()`
 - **Fixed function signatures**: Updated parameter handling
 - **Improved error handling**: Better exception management
 
 ### Frontend Test Fixes ✅
+
 - **Fixed import issues**: Resolved relative import problems
 - **Updated function calls**: Corrected parameter signatures for `login_interface()`, `audio_interface()`
 - **Gradio compatibility**: Updated Chatbot components to use `type='messages'`
 - **Fallback mechanisms**: Added graceful fallbacks for import failures
 
 ### LLM Test Fixes ✅ (Complete Rewrite)
+
 - **Removed non-existent service classes**: Replaced with actual function imports
 - **Updated all test functions**: Now use real functions from `llm.chatModel`, `llm.classificationModel`, `llm.dataProcessing`
 - **Added proper mocking**: Prevents actual API calls during testing
@@ -145,12 +160,14 @@ Diagnostic and debugging tools:
 - **All 11 tests passing**: Complete test coverage restored
 
 ### Integration Test Fixes ✅
+
 - **Improved error tolerance**: Tests now accept both success and expected failure codes
 - **Fixed async function calls**: Proper handling of async/await patterns
 - **Better password validation**: Uses complex passwords that meet requirements
 - **Enhanced error reporting**: More informative failure messages
 
 ### Gradio Deprecation Fix ✅
+
 - **Updated Chatbot components**: Changed from deprecated 'tuples' to 'messages' format
 - **Message format conversion**: All chat history now uses OpenAI-style dictionaries
 - **Backward compatibility**: Maintains compatibility with existing chat data
@@ -192,6 +209,7 @@ The comprehensive test suite provides detailed reporting:
 ## 🔧 Test Configuration
 
 ### Environment Setup
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -204,7 +222,9 @@ export TEST_DB_PATH="/path/to/test/database"
 ```
 
 ### Test Data
+
 Tests use isolated environments:
+
 - Temporary directories for file operations
 - Mock databases for data testing
 - Separate configuration for API testing
@@ -212,12 +232,14 @@ Tests use isolated environments:
 ## 🎯 Testing Best Practices
 
 ### ✅ **Do:**
+
 - Run tests before committing code changes
 - Use the comprehensive test suite for full validation
 - Test both success and failure scenarios
 - Keep test data isolated and clean
 
 ### ❌ **Don't:**
+
 - Skip tests when making changes
 - Use production data in tests
 - Ignore failing tests
@@ -225,21 +247,24 @@ Tests use isolated environments:
 
 ## 🐛 Troubleshooting
 
-### Common Issues:
+### Common Issues
 
 **Tests timing out:**
+
 ```bash
 # Increase timeout in comprehensive_test_suite.py
 timeout=300  # 5 minutes instead of 2
 ```
 
 **Port conflicts:**
+
 ```bash
 # Demos use different ports automatically
 # Check for running processes on ports 7860-7870
 ```
 
 **API key issues:**
+
 ```bash
 # Set environment variable
 export OPENAI_API_KEY="sk-..."
@@ -249,6 +274,7 @@ echo "OPENAI_API_KEY=sk-..." > .env
 ```
 
 **Import errors:**
+
 ```bash
 # Ensure project root is in Python path
 export PYTHONPATH="${PYTHONPATH}:/path/to/project"
@@ -263,7 +289,7 @@ For automated testing in CI/CD pipelines:
 - name: Run Test Suite
   run: |
     python tests/comprehensive_test_suite.py
-    
+
 - name: Upload Test Results
   uses: actions/upload-artifact@v2
   with:

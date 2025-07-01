@@ -51,15 +51,15 @@ def create_test_files():
     # Test file 1: Confidential business document
     confidential_content = """
     CONFIDENTIAL BUSINESS PLAN
-    
+
     This document contains proprietary information about our company's strategic plans
     for the next fiscal year. The information includes:
-    
+
     - Financial projections and revenue targets
     - Competitive analysis and market positioning
     - Personnel changes and organizational restructuring
     - Merger and acquisition discussions
-    
+
     This information is classified as CONFIDENTIAL and should only be shared with
     authorized personnel who have signed appropriate non-disclosure agreements.
     """
@@ -67,35 +67,35 @@ def create_test_files():
     # Test file 2: Public information document
     public_content = """
     PUBLIC COMPANY ANNOUNCEMENT
-    
+
     We are pleased to announce our participation in the upcoming industry conference.
     This public event will showcase our latest products and services to potential
     customers and partners.
-    
+
     Event Details:
     - Date: Next month
     - Location: Convention Center
     - Public registration available
-    
+
     This information is publicly available and can be shared freely.
     """
 
     # Test file 3: Personal data document
     personal_content = """
     EMPLOYEE PERSONAL INFORMATION
-    
+
     Name: John Doe
     Employee ID: EMP001
     Social Security Number: 123-45-6789
     Home Address: 123 Main Street, City, State 12345
     Phone Number: (555) 123-4567
     Email: john.doe@company.com
-    
+
     Emergency Contact:
     Name: Jane Doe
     Relationship: Spouse
     Phone: (555) 987-6543
-    
+
     This document contains personally identifiable information (PII) and should be
     handled according to data protection policies.
     """

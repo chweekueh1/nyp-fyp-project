@@ -33,7 +33,7 @@ def test_login_interface():
         3. **Password Visibility:** Click the eye icon to toggle password visibility
         4. **Back to Login:** Click to switch back to login mode
         5. **Registration:** Try registering with valid credentials
-        
+
         **Expected Behavior:**
         - Login button should respond and show success/error messages
         - Register button should switch the interface to registration mode
@@ -146,7 +146,7 @@ def test_simple_login():
         3. Click **Toggle Password** - should show/hide password
         4. Enter different passwords in password and confirm password
         5. Click **Register** - should show password mismatch error
-        
+
         **Expected Behavior:**
         - All buttons should be clickable
         - Login should work with test/test credentials

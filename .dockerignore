@@ -20,4 +20,4 @@ Thumbs.db
 
 # Ignore large local files not needed in image
 *.log
-*.tmp 
+*.tmp

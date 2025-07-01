@@ -45,7 +45,7 @@ def demo_enhanced_classification():
 
         # Create a test document
         test_content = """CONFIDENTIAL DOCUMENT
-        
+
 Project Alpha - Technical Specifications
 
 This document contains sensitive information about the new product development.

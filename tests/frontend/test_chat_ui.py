@@ -67,7 +67,7 @@ def test_chat_interface():
         2. **Chat History:** Messages should appear in the chat history
         3. **Error Handling:** Try sending empty messages
         4. **State Updates:** Chat history should update properly
-        
+
         **Expected Behavior:**
         - Send button should be responsive
         - Messages should appear in chat history
@@ -173,7 +173,7 @@ def test_chatbot_interface():
         2. **Chatbot Response:** Should get a response from the backend
         3. **History Updates:** Chat history should update with new messages
         4. **Error Handling:** Try sending empty messages
-        
+
         **Expected Behavior:**
         - Send button should be responsive
         - Backend should generate responses
