@@ -298,7 +298,6 @@ python setup.py --pre-commit
 This will:
 
 * Install pre-commit in your virtual environment
-* Create a `.pre-commit-config.yaml` file with ruff configuration
 * Install git hooks for automatic code quality checks
 * Run ruff on all files to fix formatting issues
 

@@ -7,6 +7,7 @@ import sys
 import os
 from pathlib import Path
 from llm.chatModel import initialize_llm_and_db
+from infra_utils import get_chatbot_dir
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -22,9 +23,6 @@ def test_file_upload_directory_structure():
     try:
         # Set test environment
         os.environ["TESTING"] = "true"
-
-        # Import only the utils we need
-        from utils import get_chatbot_dir
 
         # Test production directory structure
         os.environ["TESTING"] = "false"

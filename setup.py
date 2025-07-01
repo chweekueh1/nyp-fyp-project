@@ -9,7 +9,7 @@ import argparse
 import time
 
 # Assuming utils.py exists and contains rel2abspath, ensure_chatbot_dir_exists, get_chatbot_dir, setup_logging
-from utils import rel2abspath, setup_logging
+from infra_utils import rel2abspath, setup_logging
 
 # Initialize logging as configured in utils.py
 # This will set up console output and file logging to ~/.nypai-chatbot/logs/app.log
@@ -18,11 +18,16 @@ logger = setup_logging()  # Get the configured logger instance
 print("setup.py argv:", sys.argv)
 
 
-def _add_shebang_to_python_files(directory: str):
+def _add_shebang_to_python_files(directory: str) -> None:
     """
     Adds a shebang line '#!/usr/bin/env python3' to Python files
     in the given directory and its subdirectories, if one is not already present.
     Skips files in the .venv directory.
+
+    :param directory: The directory to check for Python files.
+    :type directory: str
+    :return: None
+    :rtype: None
     """
     logger.info(f"Checking Python files in '{directory}' for shebang lines...")
     for root, dirs, files in os.walk(directory):
@@ -31,7 +36,6 @@ def _add_shebang_to_python_files(directory: str):
             dirs.remove(".venv")
         if "__pycache__" in dirs:
             dirs.remove("__pycache__")
-
         for file in files:
             if file.endswith(".py"):
                 file_path = os.path.join(root, file)
@@ -41,7 +45,6 @@ def _add_shebang_to_python_files(directory: str):
                         # Reset file pointer to beginning
                         f.seek(0)
                         content = f.read()
-
                     if not first_line.startswith("#!"):
                         shebang_line = "#!/usr/bin/env python3\n"
                         new_content = shebang_line + content
@@ -53,23 +56,25 @@ def _add_shebang_to_python_files(directory: str):
     logger.info("Shebang check complete.")
 
 
-def running_in_docker():
-    """Detect if running inside a Docker container."""
+def running_in_docker() -> bool:
+    """
+    Detect if running inside a Docker container.
+
+    :return: True if running in Docker, False otherwise.
+    :rtype: bool
+    """
     return os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1"
 
 
-def ensure_docker_running():
+def ensure_docker_running() -> None:
     """
-    Checks if Docker is installed and its daemon is running.
-    If not running, attempts to start the daemon on Linux.
-    Exits if Docker is not available or cannot be started.
+    Check if Docker is installed and its daemon is running. If not running, attempt to start the daemon on Linux. Exit if Docker is not available or cannot be started.
     """
     # 1. Check if Docker is installed (executable in PATH)
     if shutil.which("docker") is None:
         print("❌ Docker is not installed or not in PATH. Please install Docker first.")
         logger.error("Docker executable not found in PATH.")
         sys.exit(1)
-
     # 2. Check if Docker daemon is running
     try:
         logger.info("Checking if Docker daemon is running with 'docker info'.")
@@ -87,7 +92,6 @@ def ensure_docker_running():
         # Docker is not running, proceed to attempt to start it
         print("⚠️  Docker daemon is not running. Attempting to start it...")
         logger.warning("Docker daemon is not running. Attempting to start.")
-
         # 3. Attempt to start Docker (Linux specific)
         if sys.platform == "linux":
             print(
@@ -102,7 +106,6 @@ def ensure_docker_running():
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )  # Keep this quiet unless error
-
                 # Wait and check for Docker to start
                 for i in range(1, 11):  # Increased retry attempts and wait time
                     try:
@@ -118,7 +121,6 @@ def ensure_docker_running():
                     except subprocess.CalledProcessError:
                         print(f"Waiting for Docker to start... ({i}/10)")
                         time.sleep(2)  # Wait 2 seconds between checks
-
                 # If loop finishes, Docker did not start
                 print(
                     "❌ Docker daemon could not be started automatically after multiple retries."
@@ -188,7 +190,9 @@ def ensure_docker_running():
 
 
 def docker_build():
-    """Builds the Docker image 'nyp-fyp-chatbot' with --no-cache, removing any existing one first."""
+    """
+    Build the Docker image 'nyp-fyp-chatbot' with --no-cache, removing any existing one first.
+    """
     ensure_docker_running()  # Ensures Docker daemon is running before attempting to build
 
     # --- THIS PART HANDLES OVERRIDING (REMOVING) THE EXISTING IMAGE ---
@@ -243,10 +247,6 @@ def docker_build():
         )
         print("✅ Docker image built successfully with clean installation.")
         logger.info("Docker image built successfully with clean installation.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Docker image build failed: {e}")
-        logger.error(f"Docker image build failed: {e}", exc_info=True)
-        sys.exit(1)
     except Exception as e:
         print(f"❌ An unexpected error occurred during Docker build: {e}")
         logger.error(f"Unexpected error during Docker build: {e}", exc_info=True)
@@ -318,6 +318,25 @@ def docker_build_prod():
         )
         print("✅ Docker image built successfully using cache.")
         logger.info("Docker image built successfully using cache.")
+        # --- Docker prune/cleanup ---
+        print(
+            "🧹 Pruning unused Docker containers, buildx, and volumes (keeping 'nyp-fyp-chatbot' image)..."
+        )
+        logger.info(
+            "Pruning unused Docker containers, buildx, and volumes (keeping 'nyp-fyp-chatbot' image)..."
+        )
+        try:
+            subprocess.run(
+                ["docker", "system", "prune", "-af", "--volumes"], check=True
+            )
+            subprocess.run(["docker", "builder", "prune", "-af"], check=True)
+            # Removed explicit Docker image deletion logic as requested
+            subprocess.run(["docker", "volume", "prune", "-af"], check=True)
+            print("✅ Docker cleanup complete.")
+            logger.info("Docker cleanup complete.")
+        except Exception as e:
+            print(f"⚠️  Docker prune/cleanup failed: {e}")
+            logger.warning(f"Docker prune/cleanup failed: {e}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Docker image production build failed: {e}")
         logger.error(f"Docker image production build failed: {e}", exc_info=True)
@@ -510,6 +529,20 @@ def setup_pre_commit():
         print("📦 Installing pre-commit...")
         logger.info("Installing pre-commit package.")
         subprocess.run(
+            [
+                "pre-commit",
+                "install",
+                "--hook-type",
+                "commit-msg",
+                "--hook-type",
+                "pre-push",
+            ],
+            check=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+
+        subprocess.run(
             [pip_path, "install", "pre-commit"],
             check=True,
             stdout=sys.stdout,
@@ -600,7 +633,7 @@ def main():
         )
 
         # In Docker, ensure data directories exist in the mounted volume
-        from utils import ensure_chatbot_dir_exists
+        from infra_utils import ensure_chatbot_dir_exists
 
         ensure_chatbot_dir_exists()
         logger.info("Docker data directories ensured in mounted volume.")

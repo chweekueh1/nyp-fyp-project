@@ -50,7 +50,7 @@ def test_file_upload_interface():
     with gr.Blocks(title="File Upload Interface Test") as app:
         # Initialize states
         gr.State(True)  # Start logged in for testing
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         gr.State([])
         gr.State("test_chat_id")
 
@@ -120,7 +120,7 @@ def test_audio_input_interface():
     with gr.Blocks(title="Audio Input Interface Test") as app:
         # Initialize states
         gr.State(True)
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         gr.State([])
         gr.State("test_chat_id")
 

@@ -90,28 +90,6 @@ def chat_history_ui(
     return search_box, search_btn, results_md
 
 
-def test_chat_history_ui():
-    """Test the chat history UI components."""
-    try:
-        # Create test states
-        username = gr.State("test_user")
-        chat_id = gr.State("test_chat_id")
-        chat_history = gr.State([])
-
-        # Test UI creation
-        search_box, search_btn, results_md = chat_history_ui(
-            username, chat_id, chat_history
-        )
-        assert search_box is not None, "Search box component should be created"
-        assert search_btn is not None, "Search button should be created"
-        assert results_md is not None, "Results markdown should be created"
-
-        print("test_chat_history_ui: PASSED")
-    except Exception as e:
-        print(f"test_chat_history_ui: FAILED - {e}")
-        raise
-
-
 def fuzzy_find_chats(user: str, query: str) -> str:
     """Fuzzy search through all chats for a user."""
     if not user or not query:
@@ -135,7 +113,3 @@ def fuzzy_find_chats(user: str, query: str) -> str:
     if not results:
         return "No matching chats found."
     return "\n\n".join(results)
-
-
-if __name__ == "__main__":
-    test_chat_history_ui()

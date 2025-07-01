@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 import bcrypt
 import re
+from typing import Optional, Tuple, List
 
 
-def hash_password(password):
+def hash_password(password: str) -> str:
     """
-    Hashes a plaintext password using bcrypt.
-    Generates a new salt for each hash and embeds it in the returned hash.
+    Hash a plaintext password using bcrypt.
+
+    :param password: The plaintext password to hash.
+    :type password: str
+    :return: The hashed password as a UTF-8 string.
+    :rtype: str
+    :raises ValueError: If the password is empty or not a string.
     """
+    if not isinstance(password, str) or not password:
+        raise ValueError("Password must be a non-empty string.")
     # bcrypt.gensalt() generates a random salt.
     # The 'rounds' parameter controls the computational cost.
     # Higher rounds mean more security but also more CPU usage.
@@ -16,24 +24,39 @@ def hash_password(password):
     return hashed_password.decode("utf-8")  # Store as a UTF-8 string
 
 
-def verify_password(password, hashed_password):
+def verify_password(password: str, hashed_password: str) -> bool:
     """
-    Verifies a plaintext password against a stored hashed password.
+    Verify a plaintext password against a stored hashed password.
+
+    :param password: The plaintext password to verify.
+    :type password: str
+    :param hashed_password: The hashed password to compare against.
+    :type hashed_password: str
+    :return: True if the password matches, False otherwise.
+    :rtype: bool
+    :raises ValueError: If either argument is not a string or is empty.
     """
+    if not isinstance(password, str) or not password:
+        raise ValueError("Password must be a non-empty string.")
+    if not isinstance(hashed_password, str) or not hashed_password:
+        raise ValueError("Hashed password must be a non-empty string.")
     # bcrypt.checkpw automatically extracts the salt from the hashed password
     # and re-hashes the plaintext password with that salt for comparison.
-    hashed_password = (
-        hashed_password.encode("utf-8")
-        if isinstance(hashed_password, str)
-        else hashed_password
-    )
-    password = password.encode("utf-8") if isinstance(password, str) else password
-    return bcrypt.checkpw(password, hashed_password)
+    hashed_password_bytes = hashed_password.encode("utf-8")
+    password_bytes = password.encode("utf-8")
+    return bcrypt.checkpw(password_bytes, hashed_password_bytes)
 
 
 # Function to validate email format
-def validate_email(email):
-    """Validate email format using regex."""
+def validate_email(email: str) -> Tuple[bool, str]:
+    """
+    Validate email format using regex.
+
+    :param email: The email address to validate.
+    :type email: str
+    :return: Tuple of (is_valid, message).
+    :rtype: tuple[bool, str]
+    """
     if not email or not email.strip():
         return False, "Email is required."
 
@@ -46,8 +69,19 @@ def validate_email(email):
 
 
 # Function to validate email against allowed list
-def validate_email_allowed(email, allowed_emails=None):
-    """Validate email against allowed domains/addresses."""
+def validate_email_allowed(
+    email: str, allowed_emails: Optional[List[str]] = None
+) -> Tuple[bool, str]:
+    """
+    Validate email against allowed domains/addresses.
+
+    :param email: The email address to validate.
+    :type email: str
+    :param allowed_emails: List of allowed emails or domains.
+    :type allowed_emails: Optional[List[str]]
+    :return: Tuple of (is_valid, message).
+    :rtype: tuple[bool, str]
+    """
     if not email or not email.strip():
         return False, "Email is required."
 
@@ -82,8 +116,15 @@ def validate_email_allowed(email, allowed_emails=None):
 
 
 # Function to validate username
-def validate_username(username):
-    """Validate username requirements."""
+def validate_username(username: str) -> Tuple[bool, str]:
+    """
+    Validate username requirements.
+
+    :param username: The username to validate.
+    :type username: str
+    :return: Tuple of (is_valid, message).
+    :rtype: tuple[bool, str]
+    """
     if not username or not username.strip():
         return False, "Username is required."
 
@@ -108,8 +149,15 @@ def validate_username(username):
 
 
 # Function to validate password complexity
-def is_password_complex(password):
-    """Validate password complexity with updated requirements."""
+def is_password_complex(password: str) -> Tuple[bool, str]:
+    """
+    Validate password complexity with updated requirements.
+
+    :param password: The password to validate.
+    :type password: str
+    :return: Tuple of (is_valid, message).
+    :rtype: tuple[bool, str]
+    """
     if not password:
         return False, "Password is required."
 

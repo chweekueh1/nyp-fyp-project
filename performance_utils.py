@@ -16,18 +16,30 @@ logger = logging.getLogger(__name__)
 
 
 class PerformanceMonitor:
-    """Monitor and log performance metrics."""
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.start_times = {}
         self.metrics = {}
 
-    def start_timer(self, operation: str):
-        """Start timing an operation."""
+    def start_timer(self, operation: str) -> None:
+        """
+        Start timing an operation.
+
+        :param operation: The name of the operation to time.
+        :type operation: str
+        :return: None
+        :rtype: None
+        """
         self.start_times[operation] = time.time()
 
     def end_timer(self, operation: str) -> float:
-        """End timing an operation and return duration."""
+        """
+        End timing an operation and return duration.
+
+        :param operation: The name of the operation to end timing for.
+        :type operation: str
+        :return: The duration in seconds.
+        :rtype: float
+        """
         if operation in self.start_times:
             duration = time.time() - self.start_times[operation]
             self.metrics[operation] = duration
@@ -36,8 +48,35 @@ class PerformanceMonitor:
         return 0.0
 
     def get_metrics(self) -> Dict[str, float]:
-        """Get all performance metrics."""
+        """
+        Get all performance metrics.
+
+        :return: A dictionary of operation names to durations.
+        :rtype: Dict[str, float]
+        """
         return self.metrics.copy()
+
+    def mark_startup_phase(self, phase_name: str) -> None:
+        """
+        Mark a specific startup phase completion.
+
+        :param phase_name: The name of the startup phase.
+        :type phase_name: str
+        :return: None
+        :rtype: None
+        """
+        if self.startup_start_time is None:
+            logger.warning(
+                "⚠️ Startup tracking not started, call start_startup_tracking() first"
+            )
+            return
+
+        import time
+
+        current_time = time.time()
+        phase_duration = current_time - self.startup_start_time
+        self.startup_phases[phase_name] = phase_duration
+        logger.info(f"📍 Startup phase '{phase_name}' reached at {phase_duration:.2f}s")
 
 
 # Global performance monitor
@@ -45,22 +84,39 @@ perf_monitor = PerformanceMonitor()
 
 
 class ConnectionPool:
-    """Simple connection pool for database connections."""
+    """
+    Simple connection pool for database connections.
 
-    def __init__(self, max_connections: int = 5):
+    :param max_connections: Maximum number of connections in the pool.
+    :type max_connections: int
+    """
+
+    def __init__(self, max_connections: int = 5) -> None:
         self.max_connections = max_connections
         self.connections = []
         self.lock = threading.Lock()
 
-    def get_connection(self):
-        """Get a connection from the pool."""
+    def get_connection(self) -> object:
+        """
+        Get a connection from the pool.
+
+        :return: A database connection or None if the pool is empty.
+        :rtype: object or None
+        """
         with self.lock:
             if self.connections:
                 return self.connections.pop()
             return None
 
-    def return_connection(self, connection):
-        """Return a connection to the pool."""
+    def return_connection(self, connection: object) -> None:
+        """
+        Return a connection to the pool.
+
+        :param connection: The database connection to return.
+        :type connection: object
+        :return: None
+        :rtype: None
+        """
         with self.lock:
             if len(self.connections) < self.max_connections:
                 self.connections.append(connection)
@@ -72,25 +128,48 @@ connection_pool = ConnectionPool()
 
 @lru_cache(maxsize=128)
 def cached_file_exists(path: str) -> bool:
-    """Cached file existence check."""
+    """
+    Cached file existence check.
+
+    :param path: The file path to check.
+    :type path: str
+    :return: True if the file exists, False otherwise.
+    :rtype: bool
+    """
     return os.path.exists(path)
 
 
 @lru_cache(maxsize=32)
 def get_temp_dir() -> str:
-    """Cached temp directory path."""
+    """
+    Cached temp directory path.
+
+    :return: The path to the temporary directory.
+    :rtype: str
+    """
     return tempfile.gettempdir()
 
 
 class LazyLoader:
-    """Lazy loading utility for expensive imports."""
+    """
+    Lazy loading utility for expensive imports.
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._modules = {}
         self._lock = threading.Lock()
 
-    def load_module(self, module_name: str, import_func):
-        """Load a module lazily."""
+    def load_module(self, module_name: str, import_func: callable) -> object | None:
+        """
+        Load a module lazily.
+
+        :param module_name: The name of the module to load.
+        :type module_name: str
+        :param import_func: The function to import the module.
+        :type import_func: callable
+        :return: The loaded module or None if loading failed.
+        :rtype: object or None
+        """
         if module_name not in self._modules:
             with self._lock:
                 if module_name not in self._modules:
@@ -112,14 +191,26 @@ lazy_loader = LazyLoader()
 
 
 class AsyncTaskManager:
-    """Manage background async tasks for better performance."""
+    """
+    Manage background async tasks for better performance.
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tasks = []
         self.completed_tasks = []
 
-    async def run_task(self, coro, name: str):
-        """Run a task and track its completion."""
+    async def run_task(self, coro: object, name: str) -> object:
+        """
+        Run a task and track its completion.
+
+        :param coro: The coroutine to run.
+        :type coro: object
+        :param name: The name of the task.
+        :type name: str
+        :return: The result of the coroutine.
+        :rtype: object
+        :raises Exception: If the coroutine raises an exception.
+        """
         perf_monitor.start_timer(f"task_{name}")
         try:
             result = await coro
@@ -132,8 +223,15 @@ class AsyncTaskManager:
         finally:
             perf_monitor.end_timer(f"task_{name}")
 
-    async def run_parallel_tasks(self, tasks: list):
-        """Run multiple tasks in parallel."""
+    async def run_parallel_tasks(self, tasks: list) -> list:
+        """
+        Run multiple tasks in parallel.
+
+        :param tasks: List of coroutine tasks to run.
+        :type tasks: list
+        :return: List of results or exceptions for each task.
+        :rtype: list
+        """
         return await asyncio.gather(*tasks, return_exceptions=True)
 
 
@@ -142,7 +240,12 @@ task_manager = AsyncTaskManager()
 
 
 def optimize_gradio_performance():
-    """Apply Gradio-specific performance optimizations."""
+    """
+    Apply Gradio-specific performance optimizations.
+
+    :return: Dictionary of Gradio performance settings.
+    :rtype: dict
+    """
     # Set environment variables for better performance
     os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
     os.environ.setdefault("GRADIO_SERVER_PORT", "7860")
@@ -158,7 +261,12 @@ def optimize_gradio_performance():
 
 
 def get_optimized_launch_config():
-    """Get optimized launch configuration."""
+    """
+    Get optimized launch configuration.
+
+    :return: Dictionary of launch configuration settings.
+    :rtype: dict
+    """
     return {
         "debug": False,  # Disable debug mode for production
         "share": False,  # Essential: Ensures it's not a public Gradio share link
@@ -177,27 +285,48 @@ def get_optimized_launch_config():
 
 
 class CacheManager:
-    """Manage various caches for better performance."""
+    """
+    Manage various caches for better performance.
+    """
 
     def __init__(self):
         self.caches = {}
         self.cache_stats = {}
 
     def get_cache(self, cache_name: str, maxsize: int = 128):
-        """Get or create a cache."""
+        """
+        Get or create a cache.
+
+        :param cache_name: The name of the cache.
+        :type cache_name: str
+        :param maxsize: The maximum size of the cache.
+        :type maxsize: int
+        :return: The cache dictionary.
+        :rtype: dict
+        """
         if cache_name not in self.caches:
             self.caches[cache_name] = {}
             self.cache_stats[cache_name] = {"hits": 0, "misses": 0}
         return self.caches[cache_name]
 
     def clear_cache(self, cache_name: str):
-        """Clear a specific cache."""
+        """
+        Clear a specific cache.
+
+        :param cache_name: The name of the cache to clear.
+        :type cache_name: str
+        """
         if cache_name in self.caches:
             self.caches[cache_name].clear()
             logger.info(f"🗑️ Cleared cache: {cache_name}")
 
-    def get_stats(self) -> Dict[str, Dict[str, int]]:
-        """Get cache statistics."""
+    def get_stats(self) -> dict:
+        """
+        Get cache statistics.
+
+        :return: Dictionary of cache statistics.
+        :rtype: dict
+        """
         return self.cache_stats.copy()
 
 
@@ -206,7 +335,9 @@ cache_manager = CacheManager()
 
 
 class StartupTimer:
-    """Comprehensive startup time tracking."""
+    """
+    Comprehensive startup time tracking.
+    """
 
     def __init__(self):
         self.startup_start_time = None
@@ -215,14 +346,23 @@ class StartupTimer:
         self.total_startup_time = 0
 
     def start_startup_tracking(self):
-        """Start tracking the complete app startup process."""
+        """
+        Start tracking the complete app startup process.
+        """
         import time
 
         self.startup_start_time = time.time()
         logger.info("🚀 Starting app startup time tracking...")
 
     def mark_startup_phase(self, phase_name: str):
-        """Mark a specific startup phase completion."""
+        """
+        Mark a specific startup phase completion.
+
+        :param phase_name: The name of the startup phase.
+        :type phase_name: str
+        :return: None
+        :rtype: None
+        """
         if self.startup_start_time is None:
             logger.warning(
                 "⚠️ Startup tracking not started, call start_startup_tracking() first"
@@ -237,7 +377,9 @@ class StartupTimer:
         logger.info(f"📍 Startup phase '{phase_name}' reached at {phase_duration:.2f}s")
 
     def complete_startup_tracking(self):
-        """Complete startup tracking and log comprehensive results."""
+        """
+        Complete the startup tracking and record the total startup time.
+        """
         if self.startup_start_time is None:
             logger.warning("⚠️ Startup tracking not started")
             return

@@ -6,17 +6,24 @@ from pathlib import Path
 
 
 def rel2abspath(relative_path: str) -> str:
+    """
+    Convert a relative path to an absolute path.
+
+    :param relative_path: The relative path to convert.
+    :type relative_path: str
+    :return: The absolute path.
+    :rtype: str
+    """
     return os.path.abspath(relative_path)
 
 
-def create_folders(path: str):
+def create_folders(path: str) -> None:
     """
-    Checks if a directory (and all its parent directories) exist.
-    If not, it creates them. This function is idempotent, meaning it
-    won't raise an error if the directories already exist.
+    Check if a directory (and all its parent directories) exists, and create them if not.
 
-    Args:
-        path (str): The full path of the directory to ensure exists.
+    :param path: The full path of the directory to ensure exists.
+    :type path: str
+    :raises OSError: If the directory cannot be created due to a file system error.
     """
     try:
         # os.makedirs creates all intermediate directories needed.
@@ -29,8 +36,10 @@ def create_folders(path: str):
         raise
 
 
-def ensure_chatbot_dir_exists():
-    """Ensure the chatbot directory exists in user's home directory."""
+def ensure_chatbot_dir_exists() -> None:
+    """
+    Ensure the chatbot directory exists in the user's home directory, including subdirectories for data organization.
+    """
     chatbot_dir = get_chatbot_dir()
     create_folders(chatbot_dir)
 
@@ -46,8 +55,13 @@ def ensure_chatbot_dir_exists():
         create_folders(subdir)
 
 
-def get_chatbot_dir():
-    """Return the chatbot directory path (~/.nypai-chatbot)."""
+def get_chatbot_dir() -> str:
+    """
+    Return the chatbot directory path (~/.nypai-chatbot).
+
+    :return: The path to the chatbot directory.
+    :rtype: str
+    """
     # Check if we're running in Docker
     if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
         # In Docker, use the mounted volume path
@@ -57,8 +71,13 @@ def get_chatbot_dir():
         return os.path.expanduser("~/.nypai-chatbot")
 
 
-def setup_logging():
-    """Set up centralized logging configuration in ~/.nypai-chatbot/logs."""
+def setup_logging() -> logging.Logger:
+    """
+    Set up centralized logging configuration in ~/.nypai-chatbot/logs.
+
+    :return: The configured logger instance.
+    :rtype: logging.Logger
+    """
     logs_dir = Path(get_chatbot_dir()) / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 

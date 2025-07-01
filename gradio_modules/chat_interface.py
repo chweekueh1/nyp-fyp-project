@@ -9,7 +9,7 @@ from backend import (
 import asyncio
 import sys
 from pathlib import Path
-from utils import setup_logging
+from infra_utils import setup_logging
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -23,8 +23,26 @@ logger = setup_logging()
 
 
 # Module-level function for testing
-async def _handle_chat_message(message, chat_history, username, chat_id):
-    """Handle chat message processing - module level function for testing."""
+async def _handle_chat_message(
+    message: str,
+    chat_history: list,
+    username: str,
+    chat_id: str,
+) -> tuple[str, list, dict, str]:
+    """
+    Handle chat message processing - module level function for testing.
+
+    :param message: The message to process.
+    :type message: str
+    :param chat_history: The current chat history.
+    :type chat_history: list
+    :param username: The username of the user.
+    :type username: str
+    :param chat_id: The chat ID.
+    :type chat_id: str
+    :return: Tuple containing updated message, chat history, error dict, and chat ID.
+    :rtype: tuple[str, list, dict, str]
+    """
     from backend import ask_question, create_and_persist_new_chat
 
     if not message.strip():
@@ -63,17 +81,15 @@ def chat_interface(
     """
     Create the chat interface components.
 
-    This function creates the chat UI components including:
-    - Chat history display
-    - Message input
-    - Send button
-    - Chat history state
-
-    Args:
-        logged_in_state (gr.State): State for tracking login status
-        username_state (gr.State): State for storing current username
-        current_chat_id_state (gr.State): State for storing current chat ID
-        chat_history_state (gr.State): State for storing chat history
+    :param logged_in_state: State for tracking login status.
+    :type logged_in_state: gr.State
+    :param username_state: State for storing current username.
+    :type username_state: gr.State
+    :param current_chat_id_state: State for storing current chat ID.
+    :type current_chat_id_state: gr.State
+    :param chat_history_state: State for storing chat history.
+    :type chat_history_state: gr.State
+    :return: None
     """
     with gr.Row():
         chat_selector = gr.Dropdown(choices=[], label="Select Chat")

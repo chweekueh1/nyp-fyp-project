@@ -213,3 +213,28 @@ python tests/demos/demo_audio_interface.py
 - Continuous integration
 
 Both are important for ensuring a robust, user-friendly chatbot experience!
+
+## 📚 Sphinx-Style Docstrings
+
+All demo scripts and utilities in this directory use [Sphinx-style docstrings](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#info-field-lists) for all functions, classes, and modules. This ensures:
+
+- Consistent documentation across all demos
+- Easy generation of API docs with Sphinx or similar tools
+- Clear parameter and return type annotations for all contributors
+
+**Example:**
+
+```python
+def example_demo(param1: str, param2: int) -> bool:
+    """
+    Brief description of what the demo function does.
+
+    :param param1: Description of the first parameter.
+    :type param1: str
+    :param param2: Description of the second parameter.
+    :type param2: int
+    :return: Description of the return value.
+    :rtype: bool
+    """
+    # ...
+```

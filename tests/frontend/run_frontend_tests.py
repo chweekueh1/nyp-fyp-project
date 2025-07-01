@@ -9,6 +9,7 @@ import sys
 import argparse
 import traceback
 from pathlib import Path
+import os
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent.parent
@@ -35,6 +36,10 @@ def run_login_tests():
         # Run actual login functionality tests
         print("Testing login functionality...")
         from backend import do_login
+
+        testing = os.getenv("TESTING", "").lower() == "true"
+        if testing:
+            from backend import do_login_test as do_login
 
         async def test_login_functionality():
             # Test valid login
@@ -264,119 +269,63 @@ def run_theme_styles_tests():
         return False
 
 
+def run_component_tests():
+    """Run isolated UI component tests for chatbot, chat history, and file upload."""
+    print("🧩 Running UI Component Tests...")
+    try:
+        from tests.frontend.test_chatbot_ui import test_chatbot_ui
+        from tests.frontend.test_chat_history_ui import test_chat_history_ui
+        from tests.frontend.test_file_upload_ui import test_file_upload_ui
+
+        print("Testing chatbot UI component...")
+        test_chatbot_ui()
+        print("✅ Chatbot UI component test passed")
+
+        print("Testing chat history UI component...")
+        test_chat_history_ui()
+        print("✅ Chat history UI component test passed")
+
+        print("Testing file upload UI component...")
+        test_file_upload_ui()
+        print("✅ File upload UI component test passed")
+
+        return True
+    except ImportError as e:
+        print(f"❌ Component tests failed: Import error - {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Component tests failed: {e}")
+        traceback.print_exc()
+        return False
+
+
 def run_all_tests():
     """Run all frontend tests."""
     print("🚀 Running All Frontend Tests...")
-
-    # Clean up any existing test users before starting
-    try:
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from test_utils import cleanup_test_users, create_test_user
-
-        print("🧹 Cleaning up any existing test users...")
-        cleanup_test_users()
-
-        # Create a test user for all tests
-        print("👤 Creating test user for test suite...")
-        test_username = "test_user"
-        test_password = "TestPass123!"
-        test_email = "test@example.com"
-
-        if create_test_user(test_username, test_password, test_email):
-            print(f"✅ Test user '{test_username}' created successfully")
-        else:
-            print(f"❌ Failed to create test user '{test_username}'")
-            return False
-
-    except Exception as e:
-        print(f"⚠️ Warning: Could not set up test users: {e}")
-        return False
-
-    tests = [
-        ("Login Tests", run_login_tests),
-        ("Chat Tests", run_chat_tests),
-        ("Search Tests", run_search_tests),
-        ("File/Audio Tests", run_file_audio_tests),
-        ("UI State Interaction Tests", run_ui_state_interaction_tests),
-        ("Theme/Styles Tests", run_theme_styles_tests),
-    ]
-
-    results = []
-    failed_tests = []
-    error_messages = []
-
-    for test_name, test_func in tests:
-        try:
-            print(f"\n{'=' * 50}")
-            print(f"Running {test_name}")
-            print("=" * 50)
-            result = test_func()
-            results.append((test_name, result))
-            if result:
-                print(f"✅ {test_name} completed successfully")
-            else:
-                print(f"❌ {test_name} failed")
-                failed_tests.append(test_name)
-                error_messages.append(f"{test_name}: Test function returned False")
-        except KeyboardInterrupt:
-            print(f"\n⚠️  {test_name} interrupted by user")
-            results.append((test_name, False))
-            failed_tests.append(test_name)
-            error_messages.append(f"{test_name}: Interrupted by user")
-            break
-        except Exception as e:
-            error_msg = f"Unexpected exception: {e}"
-            print(f"❌ {test_name} failed with {error_msg}")
-            print("   Full traceback:")
-            traceback.print_exc()
-            results.append((test_name, False))
-            failed_tests.append(test_name)
-            error_messages.append(f"{test_name}: {error_msg}")
-
-    # Summary
-    print(f"\n{'=' * 50}")
-    print("TEST SUMMARY")
-    print("=" * 50)
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
-
-    for test_name, result in results:
+    results = {
+        "Login": run_login_tests(),
+        "Chat": run_chat_tests(),
+        "Search": run_search_tests(),
+        "File/Audio": run_file_audio_tests(),
+        "UI State": run_ui_state_interaction_tests(),
+        "Theme Styles": run_theme_styles_tests(),
+        "Component": run_component_tests(),
+    }
+    print("\n📊 Test Results Summary")
+    print("-" * 30)
+    passed = 0
+    for name, result in results.items():
         status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{test_name}: {status}")
-
-    print(f"\nOverall: {passed}/{total} test suites passed")
-
-    if failed_tests:
-        print(f"\nFailed test suites: {', '.join(failed_tests)}")
-
-        # Display error messages
-        if error_messages:
-            print(f"\n{'=' * 50}")
-            print("ERROR MESSAGES")
-            print("=" * 50)
-            for error_msg in error_messages:
-                print(f"❌ {error_msg}")
-
-    # Clean up test users after all tests
-    try:
-        from test_utils import cleanup_test_users
-
-        print("\n🧹 Cleaning up test users after test run...")
-        cleanup_test_users()
-    except Exception as e:
-        print(f"⚠️ Warning: Could not clean up test users after tests: {e}")
-
-    # Return tuple with success status and error messages if any
-    if error_messages:
-        return False, "; ".join(error_messages)
-    else:
-        return True
+        print(f"{name}: {status}")
+        if result:
+            passed += 1
+    print(f"\nOverall: {passed}/{len(results)} tests passed")
+    return all(results.values())
 
 
 def launch_test_app(test_name):
     """Launch a specific test app."""
     print(f"🚀 Launching {test_name} test app...")
-
     if test_name == "login":
         from tests.frontend.test_login_ui import test_login_interface
 
@@ -393,6 +342,21 @@ def launch_test_app(test_name):
         from tests.frontend.test_chat_ui import test_chatbot_interface
 
         app = test_chatbot_interface()
+    elif test_name == "chatbot-ui":
+        from tests.frontend.test_chatbot_ui import test_chatbot_ui
+
+        test_chatbot_ui()
+        return True
+    elif test_name == "chat-history-ui":
+        from tests.frontend.test_chat_history_ui import test_chat_history_ui
+
+        test_chat_history_ui()
+        return True
+    elif test_name == "file-upload-ui":
+        from tests.frontend.test_file_upload_ui import test_file_upload_ui
+
+        test_file_upload_ui()
+        return True
     elif test_name == "search":
         from tests.frontend.test_search_ui import test_search_interface
 
@@ -419,36 +383,29 @@ def launch_test_app(test_name):
         run_ui_state_tests()
         return True
     elif test_name == "theme-styles":
-        from tests.frontend.test_theme_styles import run_theme_styles_tests
+        from tests.frontend.test_theme_styles import test_theme_styles
 
-        run_theme_styles_tests()
+        test_theme_styles()
         return True
     else:
         print(f"❌ Unknown test: {test_name}")
-        print(
-            "Available tests: login, simple-login, chat, chatbot, search, chat-history, file-upload, audio, ui-state, theme-styles, all"
-        )
         return False
-
-    print(f"✅ {test_name} test app created successfully")
-    print("Launching Gradio app...")
-
-    # Use the same launch configuration as the main app for Docker compatibility
-    launch_config = {
-        "debug": True,
-        "share": False,
-        "inbrowser": False,
-        "quiet": False,
-        "show_error": True,
-        "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
-        "server_port": 7860,  # Use the same port as main app
-    }
-
-    print(
-        f"🌐 Launching on {launch_config['server_name']}:{launch_config['server_port']}"
-    )
-    app.launch(**launch_config)
-    return True
+    # Launch the app if it was created
+    if "app" in locals():
+        launch_config = {
+            "debug": True,
+            "share": False,
+            "inbrowser": False,
+            "quiet": False,
+            "show_error": True,
+            "server_name": "0.0.0.0",
+            "server_port": 7860,
+        }
+        print(
+            f"🌐 Launching on {launch_config['server_name']}:{launch_config['server_port']}"
+        )
+        app.launch(**launch_config)
+        return True
 
 
 def main():

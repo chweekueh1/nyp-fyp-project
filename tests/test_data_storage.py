@@ -18,7 +18,7 @@ def test_chatbot_directory_structure():
     print("🧪 Testing chatbot directory structure...")
 
     try:
-        from utils import get_chatbot_dir, ensure_chatbot_dir_exists
+        from infra_utils import get_chatbot_dir, ensure_chatbot_dir_exists
 
         # Ensure directories exist
         ensure_chatbot_dir_exists()
@@ -147,7 +147,7 @@ def test_data_persistence():
     print("🧪 Testing data persistence...")
 
     try:
-        from utils import get_chatbot_dir
+        from infra_utils import get_chatbot_dir
         from backend import create_and_persist_new_chat, list_user_chat_ids
         from tests.test_utils import (
             create_test_user,
@@ -203,7 +203,7 @@ def test_docker_vs_local_paths():
     print("🧪 Testing Docker vs local paths...")
 
     try:
-        from utils import get_chatbot_dir
+        from infra_utils import get_chatbot_dir
 
         chatbot_dir = get_chatbot_dir()
 

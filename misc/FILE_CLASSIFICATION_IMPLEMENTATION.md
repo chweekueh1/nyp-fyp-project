@@ -171,7 +171,7 @@ get_uploads_dir(username: str) -> str
 2. **File Storage**
 
    ```python
-   from utils import get_chatbot_dir
+   from infra_utils import get_chatbot_dir
    uploads_dir = os.path.join(get_chatbot_dir(), 'uploads', username)
    ```
 

@@ -22,7 +22,13 @@ sys.path.insert(0, str(project_root))
 
 
 class TestSuite:
-    """Comprehensive test suite manager."""
+    """
+    Comprehensive test suite manager.
+
+    :ivar project_root: The root directory of the project.
+    :ivar tests_dir: The directory containing test files.
+    :ivar results: Dictionary to store test results.
+    """
 
     def __init__(self):
         self.project_root = project_root
@@ -32,7 +38,16 @@ class TestSuite:
     def run_test_file(
         self, test_file: Path, timeout: int = 120
     ) -> Tuple[bool, str, float]:
-        """Run a single test file and return results."""
+        """
+        Run a single test file and return results.
+
+        :param test_file: Path to the test file.
+        :type test_file: Path
+        :param timeout: Timeout in seconds for the test run.
+        :type timeout: int
+        :return: Tuple of (success, output, duration).
+        :rtype: tuple[bool, str, float]
+        """
         start_time = time.time()
 
         try:
@@ -63,7 +78,12 @@ class TestSuite:
             return False, f"Error running test: {str(e)}", duration
 
     def run_unit_tests(self) -> Dict[str, bool]:
-        """Run all unit tests."""
+        """
+        Run all unit tests.
+
+        :return: Dictionary mapping test file names to success status.
+        :rtype: dict[str, bool]
+        """
         print("\n🔬 Running Unit Tests")
         print("-" * 40)
 
@@ -103,7 +123,12 @@ class TestSuite:
         return results
 
     def run_integration_tests(self) -> Dict[str, bool]:
-        """Run all integration tests."""
+        """
+        Run all integration tests.
+
+        :return: Dictionary mapping test file names to success status.
+        :rtype: dict[str, bool]
+        """
         print("\n🔗 Running Integration Tests")
         print("-" * 40)
 
@@ -136,7 +161,12 @@ class TestSuite:
         return results
 
     def run_frontend_tests(self) -> Dict[str, bool]:
-        """Run all frontend tests."""
+        """
+        Run all frontend tests.
+
+        :return: Dictionary mapping test file names to success status.
+        :rtype: dict[str, bool]
+        """
         print("\n🎨 Running Frontend Tests")
         print("-" * 40)
 
@@ -166,7 +196,12 @@ class TestSuite:
         return results
 
     def run_performance_tests(self) -> Dict[str, bool]:
-        """Run all performance tests."""
+        """
+        Run all performance tests.
+
+        :return: Dictionary mapping test file names to success status.
+        :rtype: dict[str, bool]
+        """
         print("\n⚡ Running Performance Tests")
         print("-" * 40)
 
@@ -196,7 +231,12 @@ class TestSuite:
         return results
 
     def list_available_demos(self) -> List[Path]:
-        """List all available demo files."""
+        """
+        List all available demo files.
+
+        :return: List of demo file paths.
+        :rtype: list[Path]
+        """
         demo_files = []
 
         # Check demos directory (primary location)

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 import time
-from utils import get_chatbot_dir
+from infra_utils import get_chatbot_dir
 
 # Constants
 load_dotenv()
@@ -107,7 +107,17 @@ classify = workflow.compile(checkpointer=memory)
 config = {"configurable": {"thread_id": "Classification"}}
 
 
-def classify_text(text, config=config):
+def classify_text(text: str, config: dict = config) -> dict:
+    """
+    Classify the given text using the classification workflow.
+
+    :param text: The text to classify.
+    :type text: str
+    :param config: Configuration dictionary for the workflow.
+    :type config: dict
+    :return: The classification response.
+    :rtype: dict
+    """
     state = {"input": text, "context": "", "answer": ""}
     response = classify.invoke(state, config=config)
     return response

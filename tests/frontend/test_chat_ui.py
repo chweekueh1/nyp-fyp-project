@@ -17,7 +17,7 @@ def test_chat_interface():
     with gr.Blocks(title="Chat Interface Test") as app:
         # Initialize states
         logged_in_state = gr.State(True)  # Start logged in for testing
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         current_chat_id_state = gr.State("test_chat_id")
         chat_history_state = gr.State([])
 
@@ -122,7 +122,7 @@ def test_chatbot_interface():
     with gr.Blocks(title="Chatbot Interface Test") as app:
         # Initialize states
         gr.State(True)
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         chat_history_state = gr.State([])
         chat_id_state = gr.State("test_chat_id")
 

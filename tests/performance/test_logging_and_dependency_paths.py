@@ -7,6 +7,7 @@ import sys
 import os
 from pathlib import Path
 from llm.chatModel import initialize_llm_and_db
+from infra_utils import setup_logging, get_chatbot_dir
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -20,7 +21,6 @@ def test_logging_directory_setup():
     print("🔍 Testing Logging Directory Setup...")
 
     try:
-        from utils import setup_logging, get_chatbot_dir
         import logging
 
         # Clear any existing handlers
@@ -32,7 +32,7 @@ def test_logging_directory_setup():
         setup_logging()
 
         # Check that log file is in the correct location
-        expected_logs_dir = os.path.join(get_chatbot_dir(), "logs")
+        expected_logs_dir = get_chatbot_dir() + "/logs"
         expected_log_file = os.path.join(expected_logs_dir, "app.log")
 
         # Verify logs directory exists
@@ -76,7 +76,7 @@ def test_dependency_paths_configuration():
 
     try:
         from gradio_modules.enhanced_content_extraction import get_dependency_paths
-        from utils import get_chatbot_dir
+        from infra_utils import get_chatbot_dir
 
         # Get dependency paths
         dep_paths = get_dependency_paths()
@@ -87,7 +87,7 @@ def test_dependency_paths_configuration():
         assert "tesseract" in dep_paths, "Should include tesseract path"
 
         # Check expected directory structure
-        expected_deps_dir = os.path.join(get_chatbot_dir(), "data", "dependencies")
+        expected_deps_dir = get_chatbot_dir() + "/data/dependencies"
 
         # Check pandoc path structure
         if sys.platform == "win32":  # Windows
@@ -191,7 +191,7 @@ def test_get_chatbot_dir_consistency():
     print("🔍 Testing get_chatbot_dir() Consistency...")
 
     try:
-        from utils import get_chatbot_dir
+        from infra_utils import get_chatbot_dir
 
         # Get chatbot directory
         chatbot_dir = get_chatbot_dir()
@@ -245,7 +245,7 @@ def test_cross_platform_compatibility():
     print("🔍 Testing Cross-Platform Compatibility...")
 
     try:
-        from utils import get_chatbot_dir
+        from infra_utils import get_chatbot_dir
         import sys
 
         # Get system info

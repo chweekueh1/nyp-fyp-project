@@ -8,7 +8,7 @@ import sys
 import asyncio
 from pathlib import Path
 import gradio as gr
-from utils import setup_logging
+from infra_utils import setup_logging
 from performance_utils import (
     perf_monitor,
     get_optimized_launch_config,
@@ -220,73 +220,115 @@ def create_main_app():
                 user_info = gr.Markdown("", elem_id="user_info")
                 logout_btn = gr.Button("🚪 Logout", variant="secondary", size="sm")
 
-            # Tabbed interface for different functionalities
-            mark_startup_milestone("creating_tabbed_interface")
-            with gr.Tabs():
-                # Chat Tab
-                with gr.TabItem("💬 Chat", id="chat_tab"):
-                    try:
-                        from gradio_modules.chatbot import chatbot_ui
+            # Import and use the change password interface
+            from gradio_modules.change_password import change_password_interface
 
-                        # Create states for the chatbot interface
-                        chat_history_state = gr.State([])
-                        selected_chat_id = gr.State("")
+            change_password_btn, change_password_section, last_change_time = (
+                change_password_interface(username_state)
+            )
+            back_to_home_btn = gr.Button(
+                "Back to Home", visible=False, elem_id="back_to_home_btn"
+            )
 
-                        # Create the chatbot interface
-                        chatbot_ui(
-                            username_state,
-                            chat_history_state,
-                            selected_chat_id,
-                            setup_events=True,
-                        )
+            # Main app content (tabs) in a container for easy show/hide
+            main_content_container = gr.Column(visible=True)
+            with main_content_container:
+                mark_startup_milestone("creating_tabbed_interface")
+                with gr.Tabs():
+                    # Chat Tab
+                    with gr.TabItem("💬 Chat", id="chat_tab"):
+                        try:
+                            from gradio_modules.chatbot import chatbot_ui
 
-                    except ImportError as e:
-                        gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
-                        gr.Markdown("Using basic fallback interface.")
+                            chat_history_state = gr.State([])
+                            selected_chat_id = gr.State("")
+                            chatbot_ui(
+                                username_state,
+                                chat_history_state,
+                                selected_chat_id,
+                                setup_events=True,
+                            )
+                        except ImportError as e:
+                            gr.Markdown(f"⚠️ **Chatbot interface not available:** {e}")
+                            gr.Markdown("Using basic fallback interface.")
+                            gr.Textbox(
+                                label="Message", placeholder="Type your message here..."
+                            )
+                            gr.Button("Send", variant="primary")
+                            gr.Textbox(label="Response", interactive=False)
+                    # File Classification Tab
+                    with gr.TabItem("📄 File Classification", id="classification_tab"):
+                        try:
+                            from gradio_modules.file_classification import (
+                                file_classification_interface,
+                            )
 
-                        # Fallback basic interface
-                        gr.Textbox(
-                            label="Message", placeholder="Type your message here..."
-                        )
-                        gr.Button("Send", variant="primary")
-                        gr.Textbox(label="Response", interactive=False)
+                            file_classification_interface(username_state)
+                        except ImportError as e:
+                            gr.Markdown(
+                                f"⚠️ **File classification interface not available:** {e}"
+                            )
+                            gr.Markdown(
+                                "Please check the gradio_modules.file_classification module."
+                            )
+                    # Audio Input Tab
+                    with gr.TabItem("🎤 Audio Input", id="audio_tab"):
+                        try:
+                            from gradio_modules.audio_input import audio_interface
 
-                # File Classification Tab
-                with gr.TabItem("📄 File Classification", id="classification_tab"):
-                    try:
-                        from gradio_modules.file_classification import (
-                            file_classification_interface,
-                        )
+                            audio_interface(username_state, setup_events=True)
+                        except ImportError as e:
+                            gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
+                            gr.Markdown(
+                                "Please check the gradio_modules.audio_input module."
+                            )
+                            gr.Audio(label="Record Audio", type="filepath")
+                            gr.Button("Process Audio", variant="primary")
+                            gr.Textbox(label="Transcription", interactive=False)
 
-                        # Create the file classification interface
-                        file_classification_interface(username_state)
+            # By default, show tabbed interface and change password button, hide change password UI and back button
+            main_content_container.visible = True
+            change_password_btn.visible = True
+            change_password_section.visible = False
+            back_to_home_btn.visible = False
 
-                    except ImportError as e:
-                        gr.Markdown(
-                            f"⚠️ **File classification interface not available:** {e}"
-                        )
-                        gr.Markdown(
-                            "Please check the gradio_modules.file_classification module."
-                        )
+            # Show change password UI and hide main content and change password button when button is clicked
+            def show_change_password_ui():
+                return (
+                    gr.update(visible=False),  # main_content_container
+                    gr.update(visible=False),  # change_password_btn
+                    gr.update(visible=True),  # change_password_section
+                    gr.update(visible=True),  # back_to_home_btn
+                )
 
-                # Audio Input Tab
-                with gr.TabItem("🎤 Audio Input", id="audio_tab"):
-                    try:
-                        from gradio_modules.audio_input import audio_interface
+            change_password_btn.click(
+                fn=show_change_password_ui,
+                outputs=[
+                    main_content_container,
+                    change_password_btn,
+                    change_password_section,
+                    back_to_home_btn,
+                ],
+            )
 
-                        # Create the audio interface
-                        audio_interface(username_state, setup_events=True)
+            # Show main content and change password button, hide change password UI and back button when back is clicked
+            def back_to_home():
+                return (
+                    gr.update(visible=True),  # main_content_container
+                    gr.update(visible=True),  # change_password_btn
+                    gr.update(visible=False),  # change_password_section
+                    gr.update(visible=False),  # back_to_home_btn
+                )
 
-                    except ImportError as e:
-                        gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
-                        gr.Markdown(
-                            "Please check the gradio_modules.audio_input module."
-                        )
-
-                        # Fallback basic interface
-                        gr.Audio(label="Record Audio", type="filepath")
-                        gr.Button("Process Audio", variant="primary")
-                        gr.Textbox(label="Transcription", interactive=False)
+            back_to_home_btn.click(
+                fn=back_to_home,
+                outputs=[
+                    main_content_container,
+                    change_password_btn,
+                    change_password_section,
+                    back_to_home_btn,
+                ],
+            )
 
         # File Upload Tab removed - functionality integrated into File Classification tab
 

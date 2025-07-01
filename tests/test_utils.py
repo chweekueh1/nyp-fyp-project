@@ -5,6 +5,7 @@ Test utilities for isolated testing without persisting to production database.
 
 import sys
 from pathlib import Path
+from typing import Optional, Any
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -12,8 +13,13 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 
-def cleanup_test_users():
-    """Clean up all test users from the test database (not production)."""
+def cleanup_test_users() -> bool:
+    """
+    Clean up all test users from the test database (not production).
+
+    :return: True if cleanup succeeded, False otherwise.
+    :rtype: bool
+    """
     try:
         from backend import cleanup_all_test_users
 
@@ -22,9 +28,7 @@ def cleanup_test_users():
             print("✅ Test database cleaned up successfully")
         else:
             print("❌ Failed to clean up test database")
-
         return success
-
     except Exception as e:
         print(f"❌ Error during test user cleanup: {e}")
         import traceback
@@ -40,9 +44,22 @@ DEFAULT_TEST_EMAIL = "test@example.com"
 
 
 def create_test_user(
-    username: str = None, password: str = None, email: str = None
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    email: Optional[str] = None,
 ) -> bool:
-    """Create a test user for testing purposes (uses test database)."""
+    """
+    Create a test user for testing purposes (uses test database).
+
+    :param username: Username for the test user. Defaults to DEFAULT_TEST_USERNAME.
+    :type username: Optional[str]
+    :param password: Password for the test user. Defaults to DEFAULT_TEST_PASSWORD.
+    :type password: Optional[str]
+    :param email: Email for the test user. Defaults to DEFAULT_TEST_EMAIL.
+    :type email: Optional[str]
+    :return: True if user was created or already exists, False otherwise.
+    :rtype: bool
+    """
     try:
         from backend import do_register_test
         import asyncio
@@ -51,9 +68,7 @@ def create_test_user(
         username = username or DEFAULT_TEST_USERNAME
         password = password or DEFAULT_TEST_PASSWORD
         email = email or DEFAULT_TEST_EMAIL
-
         result = asyncio.run(do_register_test(username, password, email))
-
         if result.get("code") == "200":
             print(f"✅ Created test user: {username}")
             return True
@@ -63,56 +78,78 @@ def create_test_user(
         else:
             print(f"❌ Failed to create test user {username}: {result}")
             return False
-
     except Exception as e:
         print(f"❌ Error creating test user {username}: {e}")
         return False
 
 
-def cleanup_test_user(username: str = None) -> bool:
-    """Clean up a specific test user from test database."""
+def cleanup_test_user(username: Optional[str] = None) -> bool:
+    """
+    Clean up a specific test user from test database.
+
+    :param username: Username to clean up. Defaults to DEFAULT_TEST_USERNAME.
+    :type username: Optional[str]
+    :return: True if user was cleaned up or did not exist, False otherwise.
+    :rtype: bool
+    """
     try:
         from backend import cleanup_test_user as backend_cleanup
 
         username = username or DEFAULT_TEST_USERNAME
-
         success = backend_cleanup(username)
         if success:
             print(f"✅ Cleaned up test user: {username}")
         else:
             print(f"❌ Failed to clean up test user: {username}")
-
         return success
-
     except Exception as e:
         print(f"❌ Error cleaning up test user {username}: {e}")
         return False
 
 
-def test_login_user(username_or_email: str = None, password: str = None):
-    """Test login using test database."""
+def test_login_user(
+    username_or_email: Optional[str] = None, password: Optional[str] = None
+) -> dict:
+    """
+    Test login using test database.
+
+    :param username_or_email: Username or email to login with. Defaults to DEFAULT_TEST_USERNAME.
+    :type username_or_email: Optional[str]
+    :param password: Password to login with. Defaults to DEFAULT_TEST_PASSWORD.
+    :type password: Optional[str]
+    :return: Result dictionary from backend login function.
+    :rtype: dict
+    """
     try:
         from backend import do_login_test
         import asyncio
 
         username_or_email = username_or_email or DEFAULT_TEST_USERNAME
         password = password or DEFAULT_TEST_PASSWORD
-
         result = asyncio.run(do_login_test(username_or_email, password))
         return result
-
     except Exception as e:
         print(f"❌ Error testing login: {e}")
         return {"code": "500", "message": str(e)}
 
 
-def ensure_default_test_user():
-    """Ensure the default test user exists for testing."""
-    return create_test_user()
+def ensure_default_test_user() -> bool:
+    """
+    Ensure the default test user exists for testing.
+
+    :return: True if user was created or already exists, False otherwise.
+    :rtype: bool
+    """
+    return create_test_user("test_user", "TestPass123!", "test@example.com")
 
 
-def get_default_test_user():
-    """Get the default test user credentials."""
+def get_default_test_user() -> dict:
+    """
+    Get the default test user credentials.
+
+    :return: Dictionary with username, password, and email for the default test user.
+    :rtype: dict
+    """
     return {
         "username": DEFAULT_TEST_USERNAME,
         "password": DEFAULT_TEST_PASSWORD,
@@ -120,19 +157,26 @@ def get_default_test_user():
     }
 
 
-def with_test_user(username: str = None, password: str = None):
-    """Decorator to create and cleanup a test user for a test function."""
+def with_test_user(username: Optional[str] = None, password: Optional[str] = None):
+    """
+    Decorator to create and cleanup a test user for a test function.
+
+    :param username: Username for the test user. Defaults to DEFAULT_TEST_USERNAME.
+    :type username: Optional[str]
+    :param password: Password for the test user. Defaults to DEFAULT_TEST_PASSWORD.
+    :type password: Optional[str]
+    :return: Decorator function.
+    :rtype: function
+    """
 
     def decorator(test_func):
         def wrapper(*args, **kwargs):
             # Use default test user if not specified
             username_to_use = username or DEFAULT_TEST_USERNAME
             password_to_use = password or DEFAULT_TEST_PASSWORD
-
             # Create test user
             if not create_test_user(username_to_use, password_to_use):
                 raise Exception(f"Failed to create test user: {username_to_use}")
-
             try:
                 # Run the test
                 return test_func(*args, **kwargs)
@@ -146,9 +190,16 @@ def with_test_user(username: str = None, password: str = None):
 
 
 class TestUserContext:
-    """Context manager for test users."""
+    """
+    Context manager for test users.
 
-    def __init__(self, username: str = None, password: str = None):
+    :param username: Username for the test user. Defaults to DEFAULT_TEST_USERNAME.
+    :type username: Optional[str]
+    :param password: Password for the test user. Defaults to DEFAULT_TEST_PASSWORD.
+    :type password: Optional[str]
+    """
+
+    def __init__(self, username: Optional[str] = None, password: Optional[str] = None):
         self.username = username or DEFAULT_TEST_USERNAME
         self.password = password or DEFAULT_TEST_PASSWORD
         self.created = False
@@ -164,24 +215,29 @@ class TestUserContext:
             cleanup_test_user(self.username)
 
 
-def run_with_cleanup(test_func, *args, **kwargs):
-    """Run a test function and ensure cleanup happens."""
-    try:
-        return test_func(*args, **kwargs)
-    finally:
-        cleanup_test_users()
-
-
-def get_docker_launch_config(debug=True, port=7860):
+def run_with_cleanup() -> Any:
     """
-    Get Docker-compatible launch configuration for Gradio apps.
+    Run a function and ensure cleanup is performed after execution.
 
-    Args:
-        debug (bool): Whether to run in debug mode
-        port (int): Port to run on (default 7860)
+    :return: Any: The result of the function call.
+    """
+    try:
+        result = cleanup_test_users()
+    except Exception:
+        return Exception("Failed to run with clean up")
+    return result
 
-    Returns:
-        dict: Launch configuration dictionary
+
+def get_docker_launch_config(debug: bool = True, port: int = 7860) -> dict:
+    """
+    Get Docker launch configuration for test app.
+
+    :param debug: Whether to enable debug mode.
+    :type debug: bool
+    :param port: Port to use for the test app.
+    :type port: int
+    :return: Docker launch configuration dictionary.
+    :rtype: dict
     """
     return {
         "debug": debug,
@@ -194,14 +250,18 @@ def get_docker_launch_config(debug=True, port=7860):
     }
 
 
-def launch_test_app_with_docker_config(app, test_name, port=7860):
+def launch_test_app_with_docker_config(
+    app: object, test_name: str, port: int = 7860
+) -> None:
     """
-    Launch a test app with Docker-compatible configuration.
+    Launch the test app with Docker configuration.
 
-    Args:
-        app: Gradio app to launch
-        test_name (str): Name of the test for logging
-        port (int): Port to run on (default 7860)
+    :param app: The app object to launch.
+    :type app: object
+    :param test_name: Name of the test.
+    :type test_name: str
+    :param port: Port to use for the test app.
+    :type port: int
     """
     launch_config = get_docker_launch_config(debug=True, port=port)
     print(

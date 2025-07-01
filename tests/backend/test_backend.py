@@ -21,7 +21,6 @@ from backend import (
     sanitize_input,
     generateUniqueFilename,
     check_health,
-    do_login,
     do_register,
     get_chat_history,
     get_user_chats,
@@ -34,10 +33,11 @@ from backend import (
     init_backend,
     fuzzy_search_chats,
     render_all_chats,
+    change_password,
 )
 
 # Import utils functions
-from utils import (
+from infra_utils import (
     rel2abspath,
     create_folders,
     ensure_chatbot_dir_exists,
@@ -154,9 +154,16 @@ async def test_do_login():
     """Test login functionality."""
     print("🔍 Testing do_login function...")
     try:
+        import os
+
+        testing = os.getenv("TESTING", "").lower() == "true"
+        if testing:
+            from backend import do_login_test as do_login_backend
+        else:
+            from backend import do_login as do_login_backend
         # Test with valid credentials (mock)
         with patch("backend.verify_password", return_value=True):
-            result = await do_login("test", "testpass")
+            result = await do_login_backend("test_user", "TestPass123!")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             assert result.get("code") in ["200", "404"], (
                 f"Expected code '200' or '404', got '{result.get('code')}'"
@@ -164,14 +171,14 @@ async def test_do_login():
             print("  ✅ Valid credentials login passed")
         # Test with invalid credentials
         with patch("backend.verify_password", return_value=False):
-            result = await do_login("test", "wrongpass")
+            result = await do_login_backend("test_user", "wrongpass")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             assert result.get("code") != "200", (
                 f"Expected non-200 code, got '{result.get('code')}'"
             )
             print("  ✅ Invalid credentials login passed")
         # Test with empty credentials
-        result = await do_login("", "")
+        result = await do_login_backend("", "")
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
         assert result.get("code") != "200", (
             f"Expected non-200 code for empty credentials, got '{result.get('code')}'"
@@ -198,7 +205,7 @@ async def test_do_register():
             patch("json.dump"),
             patch("json.load", return_value={}),
         ):
-            result = await do_register("test", "newpass123!")
+            result = await do_register("test_user", "newpass123!")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             assert result.get("code") in ["200", "500"], (
                 f"Expected code '200' or '500', got '{result.get('code')}'"
@@ -208,16 +215,16 @@ async def test_do_register():
         with (
             patch("os.path.exists", return_value=True),
             patch("builtins.open", create=True),
-            patch("json.load", return_value={"users": {"test": "hash"}}),
+            patch("json.load", return_value={"users": {"test_user": "hash"}}),
         ):
-            result = await do_register("test", "newpass123!")
+            result = await do_register("test_user", "newpass123!")
             print(f"    [DEBUG] Existing user registration result: {result}")
             assert result.get("code") != "200", (
                 f"Expected non-200 code for existing user, got '{result.get('code')}'. Full result: {result}"
             )
             print("  ✅ Existing user registration passed")
         # Test with weak password
-        result = await do_register("test", "weak")
+        result = await do_register("test_user", "weak")
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
         assert result.get("code") != "200", (
             f"Expected non-200 code for weak password, got '{result.get('code')}'"
@@ -232,12 +239,80 @@ async def test_do_register():
         raise
 
 
+async def test_change_password():
+    """Test change_password functionality."""
+    print("🔍 Testing change_password function...")
+
+    # Success case
+    with (
+        patch("backend.check_rate_limit", return_value=True),
+        patch("backend.validate_username", return_value=(True, "")),
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", create=True),
+        patch(
+            "json.load",
+            return_value={"users": {"test_user": {"hashedPassword": "oldhash"}}},
+        ),
+        patch("backend.verify_password", return_value=True),
+        patch("backend.is_password_complex", return_value=(True, "")),
+        patch("backend.hash_password", return_value="newhash"),
+        patch("json.dump"),
+    ):
+        result = await change_password("test_user", "oldpass", "newpass123!")
+        assert result["code"] == "200", f"Expected 200, got {result['code']}"
+        print("  ✅ Password change success case passed")
+
+    # Wrong old password
+    with (
+        patch("backend.check_rate_limit", return_value=True),
+        patch("backend.validate_username", return_value=(True, "")),
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", create=True),
+        patch(
+            "json.load",
+            return_value={"users": {"test_user": {"hashedPassword": "oldhash"}}},
+        ),
+        patch("backend.verify_password", return_value=False),
+    ):
+        result = await change_password("test_user", "wrongpass", "newpass123!")
+        assert result["code"] == "401", f"Expected 401, got {result['code']}"
+        print("  ✅ Wrong old password case passed")
+
+    # Weak new password
+    with (
+        patch("backend.check_rate_limit", return_value=True),
+        patch("backend.validate_username", return_value=(True, "")),
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", create=True),
+        patch(
+            "json.load",
+            return_value={"users": {"test_user": {"hashedPassword": "oldhash"}}},
+        ),
+        patch("backend.verify_password", return_value=True),
+        patch("backend.is_password_complex", return_value=(False, "Too weak")),
+    ):
+        result = await change_password("test_user", "oldpass", "weak")
+        assert result["code"] == "400", f"Expected 400, got {result['code']}"
+        print("  ✅ Weak new password case passed")
+
+    # Rate limit
+    with (
+        patch("backend.check_rate_limit", return_value=False),
+        patch("backend.get_rate_limit_info", return_value={"time_window": 60}),
+    ):
+        result = await change_password("test_user", "oldpass", "newpass123!")
+        assert result["code"] == "429", f"Expected 429, got {result['code']}"
+        print("  ✅ Rate limit case passed")
+
+    print("✅ test_change_password: PASSED")
+
+
 def test_get_chat_history():
     """Test chat history retrieval."""
     print("🔍 Testing get_chat_history function...")
     try:
         # Test with non-existent chat
-        result = get_chat_history("nonexistent", "test")
+        result = get_chat_history("nonexistent", "test_user")
         assert isinstance(result, list), f"Expected list, got {type(result)}"
         print("  ✅ Non-existent chat history passed")
         # Test with empty parameters
@@ -300,7 +375,7 @@ def test_get_chat_name():
     print("🔍 Testing get_chat_name function...")
     try:
         # Test with non-existent chat
-        result = get_chat_name("nonexistent", "test")
+        result = get_chat_name("nonexistent", "test_user")
         assert isinstance(result, str), f"Expected string, got {type(result)}"
         print("  ✅ Non-existent chat name passed")
         # Test with empty parameters
@@ -321,7 +396,7 @@ def test_set_chat_name():
     print("🔍 Testing set_chat_name function...")
     try:
         # Test with non-existent chat
-        result = set_chat_name("nonexistent", "test", "New Name")
+        result = set_chat_name("nonexistent", "test_user", "New Name")
         assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         print("  ✅ Non-existent chat name setting passed")
         # Test with empty parameters
@@ -342,7 +417,7 @@ def test_rename_chat_file():
     print("🔍 Testing rename_chat_file function...")
     try:
         # Test with non-existent chat
-        result = rename_chat_file("old_chat", "new_chat", "test")
+        result = rename_chat_file("old_chat", "new_chat", "test_user")
         assert isinstance(result, bool), f"Expected bool, got {type(result)}"
         print("  ✅ Non-existent chat file renaming passed")
         # Test with empty parameters
@@ -363,7 +438,7 @@ def test_search_chat_history():
     print("🔍 Testing search_chat_history function...")
     try:
         # Test with non-existent user
-        result = search_chat_history("query", "nonexistent")
+        result = search_chat_history("test query", "test_user")
         assert isinstance(result, list), f"Expected list, got {type(result)}"
         print("  ✅ Non-existent user search passed")
         # Test with empty parameters
@@ -371,7 +446,7 @@ def test_search_chat_history():
         assert isinstance(result, list), f"Expected list, got {type(result)}"
         print("  ✅ Empty parameters search passed")
         # Test with valid parameters
-        result = search_chat_history("test query", "test")
+        result = search_chat_history("test query", "test_user")
         assert isinstance(result, list), f"Expected list, got {type(result)}"
         print("  ✅ Valid parameters search passed")
         print("✅ test_search_chat_history: PASSED")

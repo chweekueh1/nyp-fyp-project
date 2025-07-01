@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Demo script to show data storage configuration.
+Demo Data Storage Utility
+
+This module provides demo data storage utilities for testing and demonstration purposes.
+It should be located in the test suite (e.g., tests/demos/) and not in the project root.
 """
 
 import os
@@ -19,7 +22,7 @@ def show_data_storage_info():
     project_root = Path(__file__).parent
     sys.path.insert(0, str(project_root))
 
-    from utils import get_chatbot_dir, ensure_chatbot_dir_exists
+    from infra_utils import get_chatbot_dir, ensure_chatbot_dir_exists
     from backend import USER_DB_PATH, TEST_USER_DB_PATH
 
     # Ensure directories exist

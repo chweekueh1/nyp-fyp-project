@@ -8,7 +8,7 @@ Comprehensive, fully-updated testing framework for the NYP Final Year Project Ch
 
 - **Backend Tests**: Added missing functions (`set_chat_name`, `delete_test_user`)
 - **Frontend Tests**: Fixed function signatures and import issues
-- **LLM Tests**: Rewrote to use actual functions instead of non-existent service classes
+- **LLM Tests**: Rewritten to use actual functions instead of non-existent service classes
 - **Integration Tests**: Made more tolerant of initialization issues
 - **Gradio Compatibility**: Fixed deprecation warnings, updated to `type='messages'` format
 - **Error Handling**: Improved graceful failure recovery and error reporting
@@ -313,3 +313,32 @@ When adding new features:
 - **Documentation:** Review individual test file docstrings
 - **Debugging:** Use utilities in `tests/utils/` directory
 - **Performance:** Run comprehensive suite for benchmarking
+
+## 📚 Sphinx-Style Docstrings
+
+All test suite code, demos, and utilities use [Sphinx-style docstrings](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#info-field-lists) for all functions, classes, and modules. This ensures:
+
+- Consistent documentation across the codebase
+- Easy generation of API docs with Sphinx or similar tools
+- Clear parameter and return type annotations for all contributors
+
+**Example:**
+
+```python
+def example_function(param1: str, param2: int) -> bool:
+    """
+    Brief description of what the function does.
+
+    :param param1: Description of the first parameter.
+    :type param1: str
+    :param param2: Description of the second parameter.
+    :type param2: int
+    :return: Description of the return value.
+    :rtype: bool
+    """
+    # ...
+```
+
+## 🗂️ Demo Data Storage Location
+
+The `demo_data_storage.py` utility has been moved to `tests/demos/demo_data_storage.py` for better organization. All demo-related utilities should reside in the `tests/demos/` directory.

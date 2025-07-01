@@ -8,7 +8,7 @@ for the NYP FYP Chatbot application.
 
 import gradio as gr
 import asyncio
-from utils import setup_logging
+from infra_utils import setup_logging
 
 logger = setup_logging()
 
@@ -163,11 +163,19 @@ def login_interface(setup_events=True):
                 )
 
             try:
-                from backend import do_login
+                import os
+
+                testing = os.getenv("TESTING", "").lower() == "true"
+                if testing:
+                    from backend import do_login_test as do_login_backend
+                else:
+                    from backend import do_login as do_login_backend
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(do_login(username.strip(), password))
+                result = loop.run_until_complete(
+                    do_login_backend(username.strip(), password)
+                )
                 loop.close()
 
                 if result.get("code") == "200":
@@ -232,12 +240,18 @@ def login_interface(setup_events=True):
                 )
 
             try:
-                from backend import do_register
+                import os
+
+                testing = os.getenv("TESTING", "").lower() == "true"
+                if testing:
+                    from backend import do_register_test as do_register_backend
+                else:
+                    from backend import do_register as do_register_backend
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 result = loop.run_until_complete(
-                    do_register(username.strip(), password, email.strip())
+                    do_register_backend(username.strip(), password, email.strip())
                 )
                 loop.close()
 

@@ -2,6 +2,7 @@
 import gradio as gr
 import sys
 from pathlib import Path
+import os
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent.parent
@@ -9,7 +10,11 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 # Import backend functions directly
-from backend import do_login, do_register
+testing = os.getenv("TESTING", "").lower() == "true"
+if testing:
+    from backend import do_login_test as do_login, do_register_test as do_register
+else:
+    from backend import do_login, do_register
 
 
 def test_login_interface():
@@ -28,7 +33,7 @@ def test_login_interface():
         gr.Markdown("## Test Instructions")
         gr.Markdown("""
         **Test the following:**
-        1. **Login Button:** Try logging in with username: `test` and password: `test`
+        1. **Login Button:** Try logging in with username: `test_user` and password: `TestPass123!`
         2. **Register Button:** Click to switch to registration mode
         3. **Password Visibility:** Click the eye icon to toggle password visibility
         4. **Back to Login:** Click to switch back to login mode
@@ -52,7 +57,7 @@ def test_simple_login():
         """Handle login using backend function directly."""
         print(f"Login attempt: {username}, {password}")
         try:
-            # Call backend function directly
+            # Call backend function directly (test or prod)
             result = await do_login(username, password)
             print(f"Backend login result: {result}")
 
@@ -71,7 +76,7 @@ def test_simple_login():
             if password != confirm_password:
                 return "❌ Passwords do not match!"
 
-            # Call backend function directly
+            # Call backend function directly (test or prod)
             result = await do_register(username, password)
             print(f"Backend register result: {result}")
 
@@ -141,7 +146,7 @@ def test_simple_login():
         # Instructions
         gr.Markdown("""
         **Test Instructions:**
-        1. Enter username: `test` and password: `test`
+        1. Enter username: `test_user` and password: `TestPass123!`
         2. Click **Login** - should show success message
         3. Click **Toggle Password** - should show/hide password
         4. Enter different passwords in password and confirm password
@@ -149,7 +154,7 @@ def test_simple_login():
 
         **Expected Behavior:**
         - All buttons should be clickable
-        - Login should work with test/test credentials
+        - Login should work with these credentials
         - Password toggle should work
         - Register should validate password matching
         - Backend functions should be called directly

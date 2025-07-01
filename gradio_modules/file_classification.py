@@ -13,10 +13,12 @@ import shutil
 from pathlib import Path
 from typing import Tuple, Dict, Any, List
 from datetime import datetime
+
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
-# from utils import get_chatbot_dir
+# from infra_utils import get_chatbot_dir
 # from llm.dataProcessing import ExtractText  # Moved to function level
 # from llm.classificationModel import classify_text  # Moved to function level
+from infra_utils import get_chatbot_dir
 
 # Hardcoded list of allowed file extensions
 ALLOWED_EXTENSIONS = [
@@ -37,7 +39,7 @@ ALLOWED_EXTENSIONS = [
 def get_uploads_dir(username: str) -> str:
     """Get the uploads directory for a specific user."""
     import os
-    from utils import get_chatbot_dir
+    # from infra_utils import get_chatbot_dir
 
     is_test_env = os.getenv("TESTING", "").lower() == "true"
 
@@ -441,7 +443,7 @@ def file_classification_interface(username_state):
                 "",
                 "",
                 gr.update(visible=False, value=""),
-                "Please log in to view upload history.",
+                "",
                 hide_loading(),
                 refresh_file_dropdown(username),
             )

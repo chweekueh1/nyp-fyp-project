@@ -8,7 +8,7 @@ Users can record audio or upload audio files for transcription and chatbot inter
 
 import gradio as gr
 import asyncio
-from utils import setup_logging
+from infra_utils import setup_logging
 
 logger = setup_logging()
 

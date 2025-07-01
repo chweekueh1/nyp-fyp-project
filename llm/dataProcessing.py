@@ -19,8 +19,9 @@ from keybert.llm import OpenAI
 from keybert import KeyLLM
 import warnings
 import shelve
-from utils import create_folders, rel2abspath
+from infra_utils import create_folders, rel2abspath
 import logging
+from typing import Generator, Iterable
 
 warnings.filterwarnings("ignore")
 
@@ -28,9 +29,13 @@ warnings.filterwarnings("ignore")
 load_dotenv()
 
 
-# Test-aware path configuration
-def get_data_paths():
-    """Get data paths with test environment awareness."""
+def get_data_paths() -> tuple[str, str, str, str]:
+    """
+    Get data paths with test environment awareness.
+
+    :return: Tuple containing chat_data_path, classification_data_path, keywords_databank_path, and database_path.
+    :rtype: tuple[str, str, str, str]
+    """
     base_dir = os.getcwd()
 
     # Check if we're in a test environment (only explicit TESTING env var)
@@ -90,30 +95,53 @@ def get_data_paths():
     )
 
 
-# Dynamic path getters (not cached at import time)
-def get_chat_data_path():
-    """Get current chat data path."""
+def get_chat_data_path() -> str:
+    """
+    Get current chat data path.
+
+    :return: The path to the chat data directory.
+    :rtype: str
+    """
     return get_data_paths()[0]
 
 
-def get_classification_data_path():
-    """Get current classification data path."""
+def get_classification_data_path() -> str:
+    """
+    Get current classification data path.
+
+    :return: The path to the classification data directory.
+    :rtype: str
+    """
     return get_data_paths()[1]
 
 
-def get_keywords_databank_path():
-    """Get current keywords databank path."""
+def get_keywords_databank_path() -> str:
+    """
+    Get current keywords databank path.
+
+    :return: The path to the keywords databank.
+    :rtype: str
+    """
     return get_data_paths()[2]
 
 
-def get_database_path():
-    """Get current database path."""
+def get_database_path() -> str:
+    """
+    Get current database path.
+
+    :return: The path to the database directory.
+    :rtype: str
+    """
     return get_data_paths()[3]
 
 
 # Legacy global variables for backward compatibility (use dynamic getters instead)
-def _update_global_paths():
-    """Update global path variables (for backward compatibility)."""
+def _update_global_paths() -> None:
+    """
+    Update global path variables (for backward compatibility).
+
+    :return: None
+    """
     global \
         CHAT_DATA_PATH, \
         CLASSIFICATION_DATA_PATH, \
@@ -132,8 +160,13 @@ EMBEDDING_MODEL = os.getenv(
 
 
 # Expose current paths for external access
-def get_current_paths():
-    """Get current paths (updates globals and returns them)."""
+def get_current_paths() -> tuple[str, str, str, str]:
+    """
+    Get current paths (updates globals and returns them).
+
+    :return: Tuple containing current paths.
+    :rtype: tuple[str, str, str, str]
+    """
     _update_global_paths()
     return (
         CHAT_DATA_PATH,
@@ -178,8 +211,16 @@ except Exception as e:
     raise
 
 
-def dataProcessing(file, collection=chat_db):
-    """Ultra-optimized data processing with performance improvements."""
+def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
+    """
+    Ultra-optimized data processing with performance improvements.
+
+    :param file: The file to process.
+    :type file: str
+    :param collection: The Chroma collection to use for storage.
+    :type collection: Chroma
+    :raises Exception: If there is an error updating the keywords databank.
+    """
     import time
     from performance_utils import perf_monitor
 
@@ -303,7 +344,14 @@ def dataProcessing(file, collection=chat_db):
 
 # Ultra-fast text extraction with fallback options
 def ExtractText(path: str):
-    """Ultra-fast text extraction with multiple fallback methods."""
+    """
+    Ultra-fast text extraction with multiple fallback methods.
+
+    :param path: The file path to extract text from.
+    :type path: str
+    :return: List of Document objects containing extracted text and metadata.
+    :rtype: list[Document]
+    """
     from performance_utils import perf_monitor
 
     perf_monitor.start_timer("text_extraction_method")
@@ -331,8 +379,16 @@ def ExtractText(path: str):
         return result
 
 
-def FastTextExtraction(file_path: str):
-    """Lightning-fast text extraction for plain text files."""
+def FastTextExtraction(file_path: str) -> list[Document]:
+    """
+    Lightning-fast text extraction for plain text files.
+
+    :param file_path: The path to the text file.
+    :type file_path: str
+    :return: List of Document objects containing extracted text and metadata.
+    :rtype: list[Document]
+    :raises Exception: If extraction fails.
+    """
     from langchain.schema import Document
 
     try:
@@ -367,8 +423,16 @@ def FastTextExtraction(file_path: str):
         raise
 
 
-def OptimizedUnstructuredExtraction(file_path: str):
-    """Optimized UnstructuredFileLoader with performance tweaks."""
+def OptimizedUnstructuredExtraction(file_path: str) -> list[Document]:
+    """
+    Optimized UnstructuredFileLoader with performance tweaks.
+
+    :param file_path: The path to the file to extract.
+    :type file_path: str
+    :return: List of Document objects containing extracted text and metadata.
+    :rtype: list[Document]
+    :raises Exception: If extraction fails.
+    """
     try:
         # Use UnstructuredFileLoader with optimized settings
         loader = UnstructuredFileLoader(
@@ -395,7 +459,14 @@ def OptimizedUnstructuredExtraction(file_path: str):
 
 
 def StandardUnstructuredExtraction(file_path: str):
-    """Standard UnstructuredFileLoader (fallback method)."""
+    """
+    Standard UnstructuredFileLoader (fallback method).
+
+    :param file_path: The path to the file to extract.
+    :type file_path: str
+    :return: List of Document objects containing extracted text and metadata.
+    :rtype: list[Document]
+    """
     try:
         loader = UnstructuredFileLoader(file_path, encoding="utf-8")
         documents = loader.load()
@@ -427,6 +498,14 @@ def StandardUnstructuredExtraction(file_path: str):
 
 # function to create metadata keyword tags for document and chunk using OpenAI
 def OpenAIMetadataTagger(document: list[Document]):
+    """
+    Create metadata keyword tags for document and chunk using OpenAI.
+
+    :param document: List of Document objects to tag.
+    :type document: list[Document]
+    :return: List of Document objects with added metadata.
+    :rtype: list[Document]
+    """
     schema = {
         "properties": {
             "keywords": {
@@ -450,7 +529,15 @@ def OpenAIMetadataTagger(document: list[Document]):
 
 
 # function to create metadata keyword tags for document and chunk using keyBERT library
-def KeyBERTMetadataTagger(document):
+def KeyBERTMetadataTagger(document: str | list[Document]) -> list[str]:
+    """
+    Create metadata keyword tags for document and chunk using KeyBERT library.
+
+    :param document: The document or text to extract keywords from.
+    :type document: str | list[Document]
+    :return: List of extracted keywords.
+    :rtype: list[str]
+    """
     kw_model = KeyBERT()
     keywords = kw_model.extract_keywords(
         document,
@@ -464,8 +551,15 @@ def KeyBERTMetadataTagger(document):
 
 
 # Lightning-fast keyword extractor using simple text analysis (no ML models)
-def FastKeyBERTMetadataTagger(documents: list[Document]):
-    """Lightning-fast keyword extraction using simple text analysis instead of ML models."""
+def FastKeyBERTMetadataTagger(documents: list[Document]) -> list[Document]:
+    """
+    Lightning-fast keyword extraction using simple text analysis instead of ML models.
+
+    :param documents: List of Document objects to extract keywords from.
+    :type documents: list[Document]
+    :return: List of Document objects with keywords added to metadata.
+    :rtype: list[Document]
+    """
     import re
     from collections import Counter
 
@@ -618,7 +712,14 @@ def FastKeyBERTMetadataTagger(documents: list[Document]):
 
 # Optional: Keep KeyBERT version for high-quality extraction when performance is not critical
 def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
-    """High-quality KeyBERT-based metadata tagger (slower but better quality)."""
+    """
+    High-quality KeyBERT-based metadata tagger (slower but better quality).
+
+    :param documents: List of Document objects to extract keywords from.
+    :type documents: list[Document]
+    :return: List of Document objects with keywords added to metadata.
+    :rtype: list[Document]
+    """
     try:
         from functools import lru_cache
 
@@ -681,7 +782,15 @@ def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
 client = openai.OpenAI(api_key=openai.api_key)
 
 
-def KeyBERTOpenAIMetadataTagger(document):
+def KeyBERTOpenAIMetadataTagger(document: str | list[Document]) -> list[str]:
+    """
+    Create metadata keyword tags for document and chunk using KeyBERT library extended with OpenAI.
+
+    :param document: The document or text to extract keywords from.
+    :type document: str | list[Document]
+    :return: List of extracted keywords.
+    :rtype: list[str]
+    """
     # Create your LLM
     llm = OpenAI(client)
     kw_model = KeyLLM(llm)
@@ -698,6 +807,14 @@ def KeyBERTOpenAIMetadataTagger(document):
 # function to split documents into set smaller chunks for better retrieval processing
 # includes overlap to maintain context between chunks
 def recursiveChunker(documents: list[Document]):
+    """
+    Split documents into set smaller chunks for better retrieval processing, with overlap to maintain context.
+
+    :param documents: List of Document objects to chunk.
+    :type documents: list[Document]
+    :return: List of chunked Document objects.
+    :rtype: list[Document]
+    """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=400, length_function=len, add_start_index=True
     )
@@ -719,8 +836,14 @@ def recursiveChunker(documents: list[Document]):
 
 # Optimized recursive chunker with performance improvements
 def optimizedRecursiveChunker(documents: list[Document]):
-    """Optimized chunker with better performance and reduced memory usage."""
+    """
+    Optimized chunker with better performance and reduced memory usage.
 
+    :param documents: List of Document objects to chunk.
+    :type documents: list[Document]
+    :return: List of chunked Document objects.
+    :rtype: list[Document]
+    """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,  # Smaller chunks for faster processing
         chunk_overlap=200,  # Reduced overlap for speed
@@ -741,6 +864,14 @@ def optimizedRecursiveChunker(documents: list[Document]):
 
 # function to split documents into semantic smaller chunks for better retrieval processing
 def semanticChunker(documents: list[Document]):
+    """
+    Split documents into semantic smaller chunks for better retrieval processing.
+
+    :param documents: List of Document objects to chunk.
+    :type documents: list[Document]
+    :return: List of chunked Document objects.
+    :rtype: list[Document]
+    """
     text_splitter = SemanticChunker(OpenAIEmbeddings())
 
     chunks = text_splitter.split_documents(documents)
@@ -759,15 +890,37 @@ def semanticChunker(documents: list[Document]):
 
 
 # Ultra-efficient memory-conscious batching
-def batching(chunks, batch_size):
-    """Memory-efficient batching with generator pattern."""
+def batching(chunks: list, batch_size: int) -> Generator[list, None, None]:
+    """
+    Memory-efficient batching with generator pattern.
+
+    :param chunks: List of chunks to batch.
+    :type chunks: list
+    :param batch_size: Number of chunks per batch.
+    :type batch_size: int
+    :yields list: A batch of chunks.
+    :rtype: Generator[list, None, None]
+    """
     for i in range(0, len(chunks), batch_size):
         yield chunks[i : i + batch_size]
 
 
 # Advanced batching with memory optimization
-def optimized_batching(chunks, batch_size=25, max_memory_mb=100):
-    """Advanced batching with memory monitoring and optimization."""
+def optimized_batching(
+    chunks: list, batch_size: int = 25, max_memory_mb: int = 100
+) -> Generator[list, None, None]:
+    """
+    Advanced batching with memory monitoring and optimization.
+
+    :param chunks: List of chunks to batch.
+    :type chunks: list
+    :param batch_size: Number of chunks per batch.
+    :type batch_size: int
+    :param max_memory_mb: Maximum memory usage per batch in MB.
+    :type max_memory_mb: int
+    :yields list: A batch of chunks.
+    :rtype: Generator[list, None, None]
+    """
     from performance_utils import perf_monitor
 
     perf_monitor.start_timer("advanced_batching")
@@ -808,14 +961,31 @@ def optimized_batching(chunks, batch_size=25, max_memory_mb=100):
 
 
 # Adding documents to the appropriate collection
-def databaseInsertion(batches, collection: Chroma):
+def databaseInsertion(batches: Iterable[list[Document]], collection: Chroma) -> None:
+    """
+    Add documents to the appropriate collection.
+
+    :param batches: Iterable of batches of Document objects.
+    :type batches: Iterable[list[Document]]
+    :param collection: The Chroma collection to insert documents into.
+    :type collection: Chroma
+    """
     for chunk in batches:
         collection.add_documents(documents=chunk)
 
 
 # Optimized parallel database insertion
-def parallelDatabaseInsertion(batches, collection: Chroma):
-    """Optimized database insertion with error handling and performance monitoring."""
+def parallelDatabaseInsertion(
+    batches: Iterable[list[Document]], collection: Chroma
+) -> None:
+    """
+    Optimized database insertion with error handling and performance monitoring.
+
+    :param batches: Iterable of batches of Document objects.
+    :type batches: Iterable[list[Document]]
+    :param collection: The Chroma collection to insert documents into.
+    :type collection: Chroma
+    """
     import concurrent.futures
     import threading
 
@@ -861,8 +1031,14 @@ def parallelDatabaseInsertion(batches, collection: Chroma):
 
 
 # Optimized keywords databank update
-def updateKeywordsDatabank(keywords_bank):
-    """Optimized keywords databank update with the fixed file handling."""
+def updateKeywordsDatabank(keywords_bank: list[str]) -> None:
+    """
+    Optimized keywords databank update with the fixed file handling.
+
+    :param keywords_bank: List of keywords to add to the databank.
+    :type keywords_bank: list[str]
+    :raises Exception: If updating the databank fails.
+    """
     if not keywords_bank:
         return
 
@@ -943,7 +1119,11 @@ def updateKeywordsDatabank(keywords_bank):
 
 
 def initialiseDatabase():
-    """Optimized database initialization with parallel processing."""
+    """
+    Optimized database initialization with parallel processing.
+
+    :return: None
+    """
     import concurrent.futures
     from performance_utils import perf_monitor
 

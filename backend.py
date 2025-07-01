@@ -14,9 +14,10 @@ import asyncio
 from collections import deque, defaultdict
 from typing import List, Tuple, Dict, Any, Union
 
-from utils import get_chatbot_dir, setup_logging
+from infra_utils import get_chatbot_dir, setup_logging
 from performance_utils import perf_monitor, lazy_loader
 from hashing import verify_password
+from infra_utils import ensure_chatbot_dir_exists
 
 # Set up logging
 logger = setup_logging()
@@ -137,7 +138,14 @@ async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
 
 
 def get_rate_limit_info(operation_type: str = "chat") -> dict:
-    """Get rate limit information for a specific operation."""
+    """
+    Get rate limit information for a specific operation.
+
+    :param operation_type: The type of operation (e.g., 'chat', 'file_upload', 'audio', 'auth').
+    :type operation_type: str
+    :return: Dictionary containing rate limit information.
+    :rtype: dict
+    """
     if operation_type == "chat":
         return {
             "max_requests": CHAT_RATE_LIMIT_REQUESTS,
@@ -207,7 +215,12 @@ def _init_llm_functions():
 
 
 def get_data_processing():
-    """Lazy load data processing functions."""
+    """
+    Lazy load data processing functions.
+
+    :return: Dictionary of data processing functions.
+    :rtype: dict
+    """
     return lazy_loader.load_module("data_processing", lambda: _init_data_processing())
 
 
@@ -223,7 +236,12 @@ def _init_data_processing():
 
 
 def get_classification():
-    """Lazy load classification functions."""
+    """
+    Lazy load classification functions.
+
+    :return: Dictionary of classification functions.
+    :rtype: dict
+    """
     return lazy_loader.load_module("classification", lambda: _init_classification())
 
 
@@ -284,7 +302,15 @@ async def _ensure_db_and_folders_async():
 
 
 # Helper functions (asynchronous where I/O is involved)
-def sanitize_input(input_text):
+def sanitize_input(input_text: str) -> str:
+    """
+    Sanitize user input by escaping HTML and removing unwanted characters.
+
+    :param input_text: The input text to sanitize.
+    :type input_text: str
+    :return: The sanitized input text.
+    :rtype: str
+    """
     if not input_text:
         return ""
     sanitized = html.escape(input_text)
@@ -310,7 +336,15 @@ async def transcribe_audio_file_async(audio_path):
         raise
 
 
-async def detectFileType_async(file_path):
+async def detectFileType_async(file_path: str) -> str | None:
+    """
+    Detect the file type and extension of a file asynchronously.
+
+    :param file_path: The path to the file.
+    :type file_path: str
+    :return: The detected file extension (e.g., '.pdf', '.docx', etc.) or None.
+    :rtype: str or None
+    """
     mime_type = None
     file_extension = None
 
@@ -1020,13 +1054,13 @@ def create_new_chat_id(username: str) -> str:
 
 
 def generate_smart_chat_name(first_message: str) -> str:
-    """Generate a smart chat name based on the first message content.
+    """
+    Generate a smart chat name based on the first message content.
 
-    Args:
-        first_message: The first message in the chat
-
-    Returns:
-        A meaningful chat name based on the message content
+    :param first_message: The first message in the chat.
+    :type first_message: str
+    :return: A meaningful chat name based on the message content.
+    :rtype: str
     """
     try:
         if not first_message or not first_message.strip():
@@ -1361,8 +1395,6 @@ async def init_backend_async_internal():
 
         # Create directories first (fast operation)
         perf_monitor.start_timer("directory_creation")
-        from utils import ensure_chatbot_dir_exists
-
         await asyncio.to_thread(ensure_chatbot_dir_exists)
         perf_monitor.end_timer("directory_creation")
         logger.info("📁 Directories created")
@@ -1683,7 +1715,14 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
 
 
 def cleanup_test_user(username: str) -> bool:
-    """Remove a test user from the test database."""
+    """
+    Delete a test user (alias for cleanup_test_user).
+
+    :param username: The username of the test user to delete.
+    :type username: str
+    :return: True if the user was deleted, False otherwise.
+    :rtype: bool
+    """
     try:
         test_db_path = TEST_USER_DB_PATH
 
@@ -1726,5 +1765,80 @@ def cleanup_all_test_users() -> bool:
 
 
 def delete_test_user(username: str) -> bool:
-    """Delete a test user (alias for cleanup_test_user)."""
+    """
+    Delete a test user (alias for cleanup_test_user).
+
+    :param username: The username of the test user to delete.
+    :type username: str
+    :return: True if the user was deleted, False otherwise.
+    :rtype: bool
+    """
     return cleanup_test_user(username)
+
+
+# Change password functionality with rate limiting
+async def change_password(
+    username: str, old_password: str, new_password: str
+) -> dict[str, str]:
+    """
+    Change the user's password after verifying the old password and new password complexity. Follows registration logic for validation and update.
+
+    :param username: The username of the user changing password.
+    :type username: str
+    :param old_password: The user's current password.
+    :type old_password: str
+    :param new_password: The new password to set.
+    :type new_password: str
+    :return: Dictionary with result code and message.
+    :rtype: dict[str, str]
+    """
+    try:
+        # Rate limit check (reuse auth rate limit for simplicity)
+        if not await check_rate_limit(username, "change_password"):
+            rate_limit_info = get_rate_limit_info("change_password")
+            return {
+                "code": "429",
+                "message": f"Rate limit exceeded. Please wait {rate_limit_info['time_window']} seconds before trying again.",
+            }
+        from hashing import (
+            verify_password,
+            is_password_complex,
+            hash_password,
+            validate_username,
+        )
+
+        # Validate username
+        username_valid, username_msg = validate_username(username)
+        if not username_valid:
+            return {"code": "400", "message": username_msg}
+        # Check if user database exists
+        if not os.path.exists(USER_DB_PATH):
+            return {"code": "404", "message": "User database not found."}
+        with open(USER_DB_PATH, "r") as f:
+            data = json.load(f)
+        users = data.get("users", {})
+        user_data = users.get(username)
+        if not user_data:
+            return {"code": "404", "message": "User not found."}
+        stored_hash = user_data.get("hashedPassword")
+        if not stored_hash or not verify_password(old_password, stored_hash):
+            return {"code": "401", "message": "Current password is incorrect."}
+        # Prevent new password from being the same as the current password
+        if verify_password(new_password, stored_hash):
+            return {
+                "code": "400",
+                "message": "New password must be different from the current password.",
+            }
+        # Check new password complexity
+        valid, msg = is_password_complex(new_password)
+        if not valid:
+            return {"code": "400", "message": msg}
+        # Hash and update password
+        user_data["hashedPassword"] = hash_password(new_password)
+        users[username] = user_data
+        with open(USER_DB_PATH, "w") as f:
+            json.dump({"users": users}, f, indent=2)
+        return {"code": "200", "message": "Password changed successfully."}
+    except Exception as e:
+        logging.error(f"Error in change_password: {e}")
+        return {"code": "500", "message": "Internal server error."}

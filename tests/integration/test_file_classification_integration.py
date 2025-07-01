@@ -22,7 +22,7 @@ from gradio_modules.file_classification import (
     get_uploads_dir,
     ALLOWED_EXTENSIONS,
 )
-from utils import get_chatbot_dir
+from infra_utils import get_chatbot_dir
 
 
 def setup_test_environment():

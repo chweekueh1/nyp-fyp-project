@@ -8,6 +8,7 @@ import os
 import sys
 import json
 from pathlib import Path
+import pathlib
 
 # Add the parent directory to the path to import modules
 parent_dir = Path(__file__).parent.parent.parent
@@ -40,8 +41,13 @@ DUMMY_AUDIO_FILENAME = "testaudio.wav"
 DUMMY_AUDIO_CONTENT = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00D\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
 
 
-def create_dummy_files():
-    """Creates dummy files required for testing."""
+def create_dummy_files() -> None:
+    """
+    Creates dummy files required for testing.
+
+    :return: None
+    :rtype: None
+    """
     with open(DUMMY_TEXT_FILENAME, "w") as f:
         f.write(DUMMY_TEXT_CONTENT)
     print(f"Created dummy file: {DUMMY_TEXT_FILENAME}")
@@ -58,8 +64,13 @@ def create_dummy_files():
     print(f"Created dummy file: {DUMMY_AUDIO_FILENAME}")
 
 
-def cleanup_dummy_files():
-    """Removes dummy files after testing."""
+def cleanup_dummy_files() -> None:
+    """
+    Removes dummy files after testing.
+
+    :return: None
+    :rtype: None
+    """
     if os.path.exists(DUMMY_TEXT_FILENAME):
         os.remove(DUMMY_TEXT_FILENAME)
         print(f"Removed dummy file: {DUMMY_TEXT_FILENAME}")
@@ -68,15 +79,20 @@ def cleanup_dummy_files():
         print(f"Removed dummy file: {DUMMY_AUDIO_FILENAME}")
 
 
-def run_all_tests():
-    """Executes backend function tests (no Flask routes since this backend doesn't use Flask)."""
+def run_all_tests() -> None:
+    """
+    Executes backend function tests (no Flask routes since this backend doesn't use Flask).
+
+    :raises Exception: If any test fails.
+    """
     print("Starting backend function tests...")
     print("Note: This backend uses Gradio interface, not Flask routes.")
 
     # Create dummy files at the start of testing
     create_dummy_files()
 
-    test_username = "testuser_integration"
+    test_username = "test_user"
+    complex_password = "TestPass123!"
 
     try:
         # Test backend functions directly
@@ -96,7 +112,6 @@ def run_all_tests():
         from backend import do_login, do_register
 
         # Test registration with a complex password that meets requirements
-        complex_password = "TestPass123!"
         register_result = asyncio.run(
             do_register(test_username, complex_password, "admin@nyp.edu.sg")
         )
@@ -159,7 +174,19 @@ def run_all_tests():
         cleanup_dummy_files()
 
 
-def setup_user_chats(tmp_path, user, chats):
+def setup_user_chats(tmp_path: pathlib.Path, user: str, chats: dict) -> pathlib.Path:
+    """
+    Set up user chat files for testing.
+
+    :param tmp_path: Temporary path for test files.
+    :type tmp_path: pathlib.Path
+    :param user: Username for the test user.
+    :type user: str
+    :param chats: Dictionary of chat_id to messages.
+    :type chats: dict
+    :return: Path to the user's chat directory.
+    :rtype: pathlib.Path
+    """
     user_dir = tmp_path / "data" / "chat_sessions" / user
     user_dir.mkdir(parents=True, exist_ok=True)
     for chat_id, messages in chats.items():
@@ -168,12 +195,20 @@ def setup_user_chats(tmp_path, user, chats):
     return user_dir
 
 
-def test_fuzzy_search_chats(tmp_path, monkeypatch):
-    """Test fuzzy search functionality."""
+def test_fuzzy_search_chats(tmp_path: pathlib.Path, monkeypatch: object) -> None:
+    """
+    Test fuzzy search functionality.
+
+    :param tmp_path: Temporary path for test files.
+    :type tmp_path: pathlib.Path
+    :param monkeypatch: pytest monkeypatch fixture.
+    :type monkeypatch: object
+    :raises Exception: If the test fails.
+    """
     print("🔍 Testing fuzzy_search_chats function...")
     try:
         # Prepare mock data
-        user = "testuser"
+        user = "test_user"
         chats = {
             "chat1": [
                 {
@@ -233,11 +268,19 @@ def test_fuzzy_search_chats(tmp_path, monkeypatch):
         raise
 
 
-def test_render_all_chats(tmp_path, monkeypatch):
-    """Test render all chats functionality."""
+def test_render_all_chats(tmp_path: pathlib.Path, monkeypatch: object) -> None:
+    """
+    Test render all chats functionality.
+
+    :param tmp_path: Temporary path for test files.
+    :type tmp_path: pathlib.Path
+    :param monkeypatch: pytest monkeypatch fixture.
+    :type monkeypatch: object
+    :raises Exception: If the test fails.
+    """
     print("🔍 Testing render_all_chats function...")
     try:
-        user = "testuser"
+        user = "test_user"
         chats = {
             "chat1": [
                 {
@@ -302,10 +345,12 @@ def test_render_all_chats(tmp_path, monkeypatch):
 
 
 async def test_ask_question():
-    """Test the ask_question function directly."""
+    """
+    Test the ask_question function directly.
+    """
     question = "What are the common data security practices?"
     chat_id = "test_chat_ask_123"
-    username = "testuser_chat"
+    username = "test_user"
     response = await ask_question(question, chat_id, username)
     print(f"Ask Question Response: {response}")
 
@@ -322,10 +367,12 @@ async def test_ask_question():
 
 
 async def test_transcribe_audio():
-    """Test the transcribe_audio function directly."""
+    """
+    Test the transcribe_audio function directly.
+    """
     with open(DUMMY_AUDIO_FILENAME, "rb") as f:
         audio_file = f.read()
-    username = "testuser_audio"
+    username = "test_user"
     response = await transcribe_audio_async(audio_file, username)
     print(f"Transcribe Audio Response: {response}")
 
@@ -344,11 +391,13 @@ async def test_transcribe_audio():
 
 
 async def test_upload_file():
-    """Test the upload_file function directly."""
+    """
+    Test the upload_file function directly.
+    """
     with open(DUMMY_TEXT_FILENAME, "rb") as f:
         file_content = f.read()
     filename = DUMMY_TEXT_FILENAME
-    username = "testuser_upload"
+    username = "test_user"
     response = await upload_file(file_content, filename, username)
     print(f"Upload File Response: {response}")
 

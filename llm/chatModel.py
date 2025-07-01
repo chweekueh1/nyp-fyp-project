@@ -16,7 +16,10 @@ import sqlite3
 from openai.types.chat import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 from dotenv import load_dotenv
-from utils import rel2abspath, create_folders  # Ensure get_chatbot_dir is imported
+from infra_utils import (
+    rel2abspath,
+    create_folders,
+)  # Ensure get_chatbot_dir is imported
 import logging  # Added for internal logging in this file
 import pickle
 import threading
@@ -72,8 +75,12 @@ app = None  # LangGraph workflow app
 llm_init_lock = threading.Lock()
 
 
-def initialize_llm_and_db():
-    """Initialize LLM and database with performance optimizations."""
+def initialize_llm_and_db() -> None:
+    """
+    Initialize LLM and database with performance optimizations.
+
+    :return: None
+    """
     global llm, embedding, client, db, app
     with llm_init_lock:
         # Skip if already initialized
@@ -171,8 +178,12 @@ def initialize_llm_and_db():
             logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
 
 
-def _initialize_langgraph_workflow():
-    """Initialize the LangGraph workflow for conversational AI."""
+def _initialize_langgraph_workflow() -> None:
+    """
+    Initialize the LangGraph workflow for conversational AI.
+
+    :return: None
+    """
     global app
 
     # Import required modules
@@ -236,6 +247,10 @@ contextualize_q_prompt = ChatPromptTemplate.from_messages(
 )
 
 system_prompt = (
+    "You are the NYP FYP CNC Chatbot, a Gradio-based Python application designed to help staff identify and use the correct sensitivity labels in their communications. "
+    "The application supports user authentication, real-time chat, search, file upload and classification, audio input, persistent chat history, OCR, and document processing. "
+    "It is used by NYP staff and students to ensure data security and proper information handling. "
+    "\n\n"
     "You are an assistant for question-answering tasks. "
     "Use ONLY the following pieces of retrieved context to answer the questions. "
     "Answer the following question and avoid giving any harmful, inappropriate, or biased content. "
@@ -244,7 +259,6 @@ system_prompt = (
     "Use your best judgment to answer the question if you feel the question is still related to NYP CNC and data security. "
     "Otherwise, reject the question nicely."
     "Keep the answer concise."
-    "When asked about the software, talk about NYP CNC and its role in providing a friendly interface for classifying sensitivity labels."
     "\n\n"
     "{context}"
 )

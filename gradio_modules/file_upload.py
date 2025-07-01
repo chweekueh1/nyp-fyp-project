@@ -76,29 +76,3 @@ def file_upload_ui(
         outputs=[chat_history_state, file_debug_md, chat_history_state],
     )
     return file_upload, file_btn, file_debug_md
-
-
-def test_file_upload_ui():
-    """Test the file upload UI components."""
-    try:
-        # Create test states
-        username = gr.State("test_user")
-        chat_history = gr.State([])
-        chat_id = gr.State("test_chat_id")
-
-        # Test UI creation
-        file_upload, file_btn, file_debug_md = file_upload_ui(
-            username, chat_history, chat_id
-        )
-        assert file_upload is not None, "File upload component should be created"
-        assert file_btn is not None, "File button should be created"
-        assert file_debug_md is not None, "Debug markdown should be created"
-
-        print("test_file_upload_ui: PASSED")
-    except Exception as e:
-        print(f"test_file_upload_ui: FAILED - {e}")
-        raise
-
-
-if __name__ == "__main__":
-    test_file_upload_ui()

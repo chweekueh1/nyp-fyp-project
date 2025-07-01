@@ -59,7 +59,7 @@ def create_enhanced_demo():
         with gr.Row():
             username_input = gr.Textbox(
                 label="Username (Demo)",
-                value="test",
+                value="test_user",
                 placeholder="Enter username for demo",
             )
             login_btn = gr.Button("Start Demo", variant="primary")

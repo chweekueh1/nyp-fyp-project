@@ -13,7 +13,7 @@ def test_all_interfaces():
     with gr.Blocks(title="All Interfaces Test") as app:
         # States
         logged_in_state = gr.State(True)
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         current_chat_id_state = gr.State("test_chat_id")
         chat_history_state = gr.State([])
         gr.State(False)

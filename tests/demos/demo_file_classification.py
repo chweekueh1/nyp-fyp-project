@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 import gradio as gr
 from gradio_modules.file_classification import file_classification_interface
+from infra_utils import get_chatbot_dir
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -91,7 +92,7 @@ def create_demo():
             with gr.Column(scale=2):
                 demo_username = gr.Textbox(
                     label="Demo Username",
-                    value="test",
+                    value="test_user",
                     placeholder="Enter username for demo",
                 )
             with gr.Column(scale=1):
@@ -163,8 +164,6 @@ def main():
 
     # Check if backend is available
     try:
-        from utils import get_chatbot_dir
-
         print(f"✅ Backend available - uploads will be saved to: {get_chatbot_dir()}")
     except Exception as e:
         print(f"⚠️ Backend warning: {e}")

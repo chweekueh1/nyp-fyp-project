@@ -43,7 +43,7 @@ def test_search_interface():
     with gr.Blocks(title="Search Interface Test") as app:
         # Initialize states
         gr.State(True)  # Start logged in for testing
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         gr.State("test_chat_id")
         gr.State([])
 
@@ -141,7 +141,7 @@ def test_chat_history_interface():
     with gr.Blocks(title="Chat History Interface Test") as app:
         # Initialize states
         gr.State(True)
-        username_state = gr.State("test")
+        username_state = gr.State("test_user")
         gr.State("test_chat_id")
         gr.State([])
 

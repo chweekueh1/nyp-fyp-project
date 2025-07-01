@@ -222,7 +222,7 @@ def test_backward_compatibility():
         ):
             from llm.chatModel import get_convo_hist_answer
 
-            result = get_convo_hist_answer("Test question", "test")
+            result = get_convo_hist_answer("Test question", "test_user")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             print("  ✅ Chat model backward compatibility passed")
 
