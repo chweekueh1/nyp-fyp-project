@@ -349,19 +349,45 @@ def run_change_password_tests():
     try:
         # Test backend functionality
         import asyncio
-        from backend import change_password
+        from backend import change_password_test
+        from tests.test_utils import ensure_default_test_user, cleanup_test_user
 
         async def test_backend_functionality():
-            # Test successful password change
-            result = await change_password("test_user", "TestPass123!", "NewPass456!")
-            if result.get("code") == "200":
-                print("✅ Backend change password functionality works")
-                # Change it back for future tests
-                await change_password("test_user", "NewPass456!", "TestPass123!")
-                return True
-            else:
-                print(f"⚠️ Backend change password returned: {result}")
+            # Ensure test user exists first
+            user_created = ensure_default_test_user()
+            print(f"[DEBUG] ensure_default_test_user() returned: {user_created}")
+            if not user_created:
+                print(
+                    "❌ Failed to create test user for backend test. Aborting password change test."
+                )
                 return False
+
+            # Removed get_user_by_username check because it does not exist in backend.py
+            # After ensure_default_test_user(), proceed directly to password change test
+
+            try:
+                # Test successful password change
+                result = await change_password_test(
+                    "test_user", "TestPass123!", "NewPass456!"
+                )
+                if result.get("code") == "200":
+                    print("✅ Backend change password functionality works")
+                    # Change it back for future tests
+                    reset_result = await change_password_test(
+                        "test_user", "NewPass456!", "TestPass123!"
+                    )
+                    if reset_result.get("code") == "200":
+                        print("✅ Password reset to original for future tests")
+                        return True
+                    else:
+                        print(f"⚠️ Password reset failed: {reset_result}")
+                        return False
+                else:
+                    print(f"⚠️ Backend change password returned: {result}")
+                    return False
+            finally:
+                # Clean up test user
+                cleanup_test_user("test_user")
 
         backend_success = asyncio.run(test_backend_functionality())
         results["backend_functionality"] = backend_success

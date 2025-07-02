@@ -64,11 +64,25 @@ def create_test_user(
         from backend import do_register_test
         import asyncio
 
-        # Use defaults if not provided
         username = username or DEFAULT_TEST_USERNAME
         password = password or DEFAULT_TEST_PASSWORD
         email = email or DEFAULT_TEST_EMAIL
-        result = asyncio.run(do_register_test(username, password, email))
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # If already in an event loop, create a task and run it
+            import nest_asyncio
+
+            nest_asyncio.apply()
+            coro = do_register_test(username, password, email)
+            result = loop.run_until_complete(coro)
+        else:
+            result = asyncio.run(do_register_test(username, password, email))
+
         if result.get("code") == "200":
             print(f"✅ Created test user: {username}")
             return True
@@ -126,7 +140,20 @@ def test_login_user(
 
         username_or_email = username_or_email or DEFAULT_TEST_USERNAME
         password = password or DEFAULT_TEST_PASSWORD
-        result = asyncio.run(do_login_test(username_or_email, password))
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import nest_asyncio
+
+            nest_asyncio.apply()
+            coro = do_login_test(username_or_email, password)
+            result = loop.run_until_complete(coro)
+        else:
+            result = asyncio.run(do_login_test(username_or_email, password))
         return result
     except Exception as e:
         print(f"❌ Error testing login: {e}")

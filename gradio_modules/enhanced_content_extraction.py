@@ -7,9 +7,59 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
+import shutil
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+
+def find_tool(tool_name: str) -> Optional[str]:
+    # Prefer system PATH in Docker
+    if os.getenv("IN_DOCKER", "false").lower() in ("1", "true"):
+        path = shutil.which(tool_name)
+        if path:
+            return path
+    # Optionally, check local dependencies for non-Docker
+    home = os.path.expanduser("~")
+    local_path = os.path.join(
+        home, ".nypai-chatbot", "data", "dependencies", tool_name, "bin", tool_name
+    )
+    if os.path.exists(local_path):
+        return local_path
+    # Fallback to PATH
+    return shutil.which(tool_name)
+
+
+def strip_yaml_front_matter(md_path: str) -> str:
+    """Remove YAML front matter from a markdown file and return the path to a temp file without it.
+    Strips the first YAML block (--- ... ---) found within the first 50 lines, even if not at the very top.
+    """
+    with open(md_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    new_lines = []
+    in_yaml = False
+    yaml_found = False
+    for i, line in enumerate(lines):
+        if not yaml_found and line.strip() == "---":
+            in_yaml = True
+            yaml_found = True
+            continue
+        if in_yaml and line.strip() == "---":
+            in_yaml = False
+            continue
+        if not in_yaml:
+            new_lines.append(line)
+        # Only look for YAML in the first 50 lines
+        if i > 50 and not yaml_found:
+            new_lines = lines  # fallback: don't strip if not found early
+            break
+    content_no_yaml = "".join(new_lines)
+    # Write to a temp file
+    with tempfile.NamedTemporaryFile(
+        delete=False, suffix=".md", mode="w", encoding="utf-8"
+    ) as tmp:
+        tmp.write(content_no_yaml)
+        return tmp.name
 
 
 def extract_with_pandoc(file_path: str) -> Optional[str]:
@@ -21,6 +71,10 @@ def extract_with_pandoc(file_path: str) -> Optional[str]:
     :rtype: Optional[str]
     """
     try:
+        pandoc_path = find_tool("pandoc")
+        if not pandoc_path:
+            logger.warning("Pandoc is not installed or not in PATH.")
+            return None
         file_ext = Path(file_path).suffix.lower()
 
         # Pandoc supported formats
@@ -41,10 +95,33 @@ def extract_with_pandoc(file_path: str) -> Optional[str]:
 
         input_format = pandoc_formats[file_ext]
 
+        # For markdown, strip YAML front matter to avoid pandoc YAML parse errors
+        temp_path = None
+        if file_ext in {".md", ".markdown"}:
+            temp_path = strip_yaml_front_matter(file_path)
+            file_to_use = temp_path
+        else:
+            file_to_use = file_path
+
         # Use pandoc to convert to plain text
-        cmd = ["pandoc", "-f", input_format, "-t", "plain", "--wrap=none", file_path]
+        cmd = [
+            pandoc_path,
+            "-f",
+            input_format,
+            "-t",
+            "plain",
+            "--wrap=none",
+            file_to_use,
+        ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        # Clean up temp file if used
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
 
         if result.returncode == 0:
             content = result.stdout.strip()
@@ -55,9 +132,21 @@ def extract_with_pandoc(file_path: str) -> Optional[str]:
                 return content
         else:
             logger.warning(f"Pandoc extraction failed for {file_path}: {result.stderr}")
+            # Fallback for markdown: try plain text extraction
+            if file_ext in {".md", ".markdown"}:
+                logger.info(
+                    f"Falling back to plain text extraction for markdown file: {file_path}"
+                )
+                return extract_text_file_content(file_path)
 
     except Exception as e:
         logger.error(f"Error in pandoc extraction for {file_path}: {e}")
+        # Fallback for markdown: try plain text extraction
+        if Path(file_path).suffix.lower() in {".md", ".markdown"}:
+            logger.info(
+                f"Falling back to plain text extraction for markdown file: {file_path}"
+            )
+            return extract_text_file_content(file_path)
 
     return None
 
@@ -71,6 +160,10 @@ def extract_with_tesseract(file_path: str) -> Optional[str]:
     :rtype: Optional[str]
     """
     try:
+        tesseract_path = find_tool("tesseract")
+        if not tesseract_path:
+            logger.warning("Tesseract is not installed or not in PATH.")
+            return None
         file_ext = Path(file_path).suffix.lower()
 
         # Image formats supported by tesseract
@@ -98,7 +191,7 @@ def extract_with_tesseract(file_path: str) -> Optional[str]:
             # Remove the .txt extension as tesseract adds it automatically
             output_base = output_path[:-4]
 
-            cmd = ["tesseract", file_path, output_base, "-l", "eng"]
+            cmd = [tesseract_path, file_path, output_base, "-l", "eng"]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
@@ -311,5 +404,16 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
         result["error"] = (
             result["error"] or "No content could be extracted from the file"
         )
+
+    # After all extraction attempts, if a required tool was missing, set error
+    if not result["content"]:
+        if result["method"] == "pandoc" and shutil.which("pandoc") is None:
+            result["error"] = (
+                "Pandoc is not installed or not in PATH. Please install pandoc for document conversion."
+            )
+        elif result["method"] == "tesseract_ocr" and shutil.which("tesseract") is None:
+            result["error"] = (
+                "Tesseract is not installed or not in PATH. Please install tesseract-ocr for OCR."
+            )
 
     return result

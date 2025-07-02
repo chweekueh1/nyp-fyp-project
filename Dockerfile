@@ -12,7 +12,7 @@ ENV PRODUCTION="true"
 
 WORKDIR /app
 
-# Install only essential system dependencies for Python packages
+# Install system dependencies including document processing tools
 RUN apt-get update && apt-get install -y \
     build-essential \
     libffi-dev \
@@ -23,6 +23,14 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     cmake \
     pkg-config \
+    # Document processing dependencies
+    pandoc \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    # Additional dependencies for better OCR and document processing
+    libtesseract-dev \
+    libpoppler-cpp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies with optimizations

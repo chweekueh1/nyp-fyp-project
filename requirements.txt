@@ -16,14 +16,19 @@ gradio==5.34.0
 gradio_client==1.10.3
 
 # LangChain core (minimal)
-langchain==0.3.23
+langchain>=0.3.24,<1.0.0
 langchain-chroma==0.2.2
-langchain-core==0.3.51
+langchain-community==0.3.23
+langchain-core>=0.3.56,<1.0.0
 langchain-openai==0.3.12
+
+# LangChain experimental
+langchain_experimental
 
 # LangGraph for conversation flow
 langgraph==0.3.30
 langgraph-checkpoint-sqlite==2.0.7
+nest_asyncio==1.6.0
 
 # Data handling (minimal)
 numpy==1.26.4

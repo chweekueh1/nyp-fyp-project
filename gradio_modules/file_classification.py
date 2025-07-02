@@ -12,6 +12,8 @@ import shutil
 from pathlib import Path
 from typing import Tuple, Dict, Any, List
 from datetime import datetime
+import hashlib
+from performance_utils import perf_monitor, cache_manager
 
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
 # from infra_utils import get_chatbot_dir
@@ -33,6 +35,9 @@ ALLOWED_EXTENSIONS = [
     ".rtf",
     ".csv",
 ]
+
+# Use a per-user request counter
+classification_request_counts = {}
 
 
 def get_uploads_dir(username: str) -> str:
@@ -236,40 +241,48 @@ def extract_file_content(file_path: str) -> Dict[str, Any]:
             }
 
 
-def classify_file_content(content: str) -> Dict[str, Any]:
-    """Classify the extracted file content with enhanced error handling.
+def classify_file_content(content: str, username: str = None) -> Dict[str, Any]:
+    """Classify the extracted file content with enhanced error handling and per-user request counting/caching."""
+    if not content or not content.strip():
+        return {
+            "classification": "Unknown",
+            "sensitivity": "Unknown",
+            "reasoning": "No content available for classification",
+            "confidence": 0.0,
+        }
 
-    :param content: The text content to classify
-    :type content: str
-    :return: Dictionary containing classification results
-    :rtype: Dict[str, Any]
-    """
+    # Hash the content for caching
+    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    cache = cache_manager.get_cache("classification_results")
+    if content_hash in cache:
+        result = cache[content_hash]
+        result = result.copy()  # Avoid mutating cached result
+        result["cached"] = True
+        return result
+
+    # Per-user request counting
+    user_key = username or "__global__"
+    if user_key not in classification_request_counts:
+        classification_request_counts[user_key] = 0
+    classification_request_counts[user_key] += 1
+    print(
+        f"[INFO] File classification requests for '{user_key}': {classification_request_counts[user_key]}"
+    )
+
     try:
-        if not content or not content.strip():
-            return {
-                "classification": "Unknown",
-                "sensitivity": "Unknown",
-                "reasoning": "No content available for classification",
-                "confidence": 0.0,
-            }
-
-        # Lazy import to avoid early ChromaDB initialization
+        perf_monitor.start_timer("classification_llm_call")
         from llm.classificationModel import classify_text
 
-        # Use the classification model
         result = classify_text(content)
+        perf_monitor.end_timer("classification_llm_call")
 
         # Extract the answer which should be JSON
         answer = result.get("answer", "{}")
-
-        # Try to parse JSON response
         try:
             if isinstance(answer, str):
                 classification_result = json.loads(answer)
             else:
                 classification_result = answer
-
-            # Ensure required fields exist
             if "classification" not in classification_result:
                 classification_result["classification"] = "Official(Open)"
             if "sensitivity" not in classification_result:
@@ -279,19 +292,17 @@ def classify_file_content(content: str) -> Dict[str, Any]:
                     "Classification completed successfully"
                 )
             if "confidence" not in classification_result:
-                classification_result["confidence"] = 0.8  # Default confidence
-
+                classification_result["confidence"] = 0.8
         except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
             classification_result = {
                 "classification": "Official(Open)",
                 "sensitivity": "Non-Sensitive",
                 "reasoning": f"Classification completed. Raw response: {answer}",
                 "confidence": 0.5,
             }
-
+        # Cache the result
+        cache[content_hash] = classification_result.copy()
         return classification_result
-
     except Exception as e:
         return {
             "classification": "Error",
@@ -492,15 +503,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
 
     # Event handlers - simplified for better compatibility
     def handle_upload_click(file_obj: Any, username: str) -> tuple:
-        """Simplified upload handler with loading indicator.
-
-        :param file_obj: The uploaded file object
-        :type file_obj: Any
-        :param username: The username uploading the file
-        :type username: str
-        :return: Tuple of updates for all interface components
-        :rtype: tuple
-        """
+        perf_monitor.start_timer("file_classification_total")
         if not username:
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
@@ -534,12 +537,14 @@ def file_classification_interface(username_state: gr.State) -> tuple:
         try:
             # Save the uploaded file
             saved_path, original_filename = save_uploaded_file(file_obj, username)
-
-            # Extract and classify content
+            perf_monitor.start_timer("extraction")
             extraction_result = extract_file_content(saved_path)
+            perf_monitor.end_timer("extraction")
             content_text = extraction_result.get("content", "")
-            classification = classify_file_content(content_text)
-
+            perf_monitor.start_timer("classification")
+            classification = classify_file_content(content_text, username)
+            perf_monitor.end_timer("classification")
+            perf_monitor.start_timer("formatting")
             # Format results using enhanced formatter
             try:
                 from gradio_modules.classification_formatter import (
@@ -560,6 +565,8 @@ def file_classification_interface(username_state: gr.State) -> tuple:
                     f"✅ **Success:** {original_filename} uploaded and classified!"
                 )
 
+                perf_monitor.end_timer("formatting")
+                perf_monitor.end_timer("file_classification_total")
                 return (
                     gr.update(visible=True, value=success_msg),
                     gr.update(visible=True),
@@ -581,6 +588,8 @@ def file_classification_interface(username_state: gr.State) -> tuple:
                     f"✅ **Success:** {original_filename} uploaded and classified!"
                 )
 
+                perf_monitor.end_timer("formatting")
+                perf_monitor.end_timer("file_classification_total")
                 return (
                     gr.update(visible=True, value=success_msg),
                     gr.update(visible=True),
@@ -598,6 +607,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
 
         except Exception as e:
             error_msg = f"❌ **Error:** {str(e)}"
+            perf_monitor.end_timer("file_classification_total")
             return (
                 gr.update(visible=True, value=error_msg),
                 gr.update(visible=False),
@@ -612,16 +622,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
             )
 
     def handle_classify_existing(selected_file: str, username: str) -> tuple:
-        """Handle classification of existing uploaded file.
-
-        :param selected_file: The filename to classify
-        :type selected_file: str
-        :param username: The username who owns the file
-        :type username: str
-        :return: Tuple of updates for all interface components
-        :rtype: tuple
-        :raises Exception: When file not found or classification fails
-        """
+        perf_monitor.start_timer("file_classification_total")
         if not username:
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
@@ -655,12 +656,14 @@ def file_classification_interface(username_state: gr.State) -> tuple:
             file_path = get_file_path(username, selected_file)
             if not file_path:
                 raise Exception(f"File not found: {selected_file}")
-
-            # Extract and classify content
+            perf_monitor.start_timer("extraction")
             extraction_result = extract_file_content(file_path)
+            perf_monitor.end_timer("extraction")
             content_text = extraction_result.get("content", "")
-            classification = classify_file_content(content_text)
-
+            perf_monitor.start_timer("classification")
+            classification = classify_file_content(content_text, username)
+            perf_monitor.end_timer("classification")
+            perf_monitor.start_timer("formatting")
             # Format results using enhanced formatter
             try:
                 from gradio_modules.classification_formatter import (
@@ -679,6 +682,8 @@ def file_classification_interface(username_state: gr.State) -> tuple:
 
                 success_msg = f"✅ **Success:** {selected_file} classified!"
 
+                perf_monitor.end_timer("formatting")
+                perf_monitor.end_timer("file_classification_total")
                 return (
                     gr.update(visible=True, value=success_msg),
                     gr.update(visible=True),
@@ -697,6 +702,8 @@ def file_classification_interface(username_state: gr.State) -> tuple:
                 file_info_text = f"**Filename:** {selected_file}\n**Size:** {file_size:,} bytes\n**Path:** {os.path.basename(file_path)}"
                 success_msg = f"✅ **Success:** {selected_file} classified!"
 
+                perf_monitor.end_timer("formatting")
+                perf_monitor.end_timer("file_classification_total")
                 return (
                     gr.update(visible=True, value=success_msg),
                     gr.update(visible=True),
@@ -713,6 +720,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
 
         except Exception as e:
             error_msg = f"❌ **Error:** {str(e)}"
+            perf_monitor.end_timer("file_classification_total")
             return (
                 gr.update(visible=True, value=error_msg),
                 gr.update(visible=False),

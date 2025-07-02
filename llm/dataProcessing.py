@@ -22,6 +22,10 @@ import shelve
 from infra_utils import create_folders, rel2abspath
 import logging
 from typing import Generator, Iterable
+from performance_utils import perf_monitor, cache_manager
+import concurrent.futures
+import re
+import tempfile
 
 warnings.filterwarnings("ignore")
 
@@ -211,18 +215,21 @@ except Exception as e:
     raise
 
 
+# Add environment-configurable batch/thread settings
+BATCH_SIZE = int(os.getenv("LLM_BATCH_SIZE", "20"))
+MAX_MEMORY_MB = int(os.getenv("LLM_MAX_MEMORY_MB", "50"))
+MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "4"))
+
+
 def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
     """
     Ultra-optimized data processing with performance improvements.
-
-    :param file: The file to process.
-    :type file: str
-    :param collection: The Chroma collection to use for storage.
-    :type collection: Chroma
-    :raises Exception: If there is an error updating the keywords databank.
+    - Uses thread pool for parallel keyword extraction and chunking if many documents.
+    - Caches embedding and keyword extraction results for repeated content.
+    - All major steps are performance monitored.
+    - Batch size and thread pool are configurable via env vars.
     """
     import time
-    from performance_utils import perf_monitor
 
     perf_monitor.start_timer("file_processing")
     keywords_bank = []
@@ -232,9 +239,24 @@ def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
     document = ExtractText(file)
     perf_monitor.end_timer("text_extraction")
 
-    # Step 2: Fast keyword extraction (no API calls)
+    # Step 2: Fast keyword extraction (parallel if many docs)
     perf_monitor.start_timer("keyword_extraction")
-    document = FastKeyBERTMetadataTagger(document)
+    cache = cache_manager.get_cache("keyword_extraction")
+
+    def extract_keywords(doc):
+        doc_hash = hash(doc.page_content)
+        if doc_hash in cache:
+            doc.metadata["keywords"] = cache[doc_hash]
+        else:
+            doc = FastKeyBERTMetadataTagger([doc])[0]
+            cache[doc_hash] = doc.metadata.get("keywords", [])
+        return doc
+
+    if len(document) > 8:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            document = list(executor.map(extract_keywords, document))
+    else:
+        document = [extract_keywords(doc) for doc in document]
     perf_monitor.end_timer("keyword_extraction")
 
     # Process keywords
@@ -245,14 +267,32 @@ def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
                 doc.metadata[f"keyword{i}"] = doc.metadata["keywords"][i]
             doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
 
-    # Step 3: Fast chunking (no API calls)
+    # Step 3: Fast chunking (parallel if many docs)
     perf_monitor.start_timer("chunking")
-    chunks = optimizedRecursiveChunker(list(document))
+    chunk_cache = cache_manager.get_cache("chunking")
+    doc_hash = hash(tuple(d.page_content for d in document))
+    if doc_hash in chunk_cache:
+        chunks = chunk_cache[doc_hash]
+    else:
+        if len(document) > 8:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=MAX_WORKERS
+            ) as executor:
+                # Split docs in parallel, then flatten
+                chunk_lists = list(
+                    executor.map(lambda d: optimizedRecursiveChunker([d]), document)
+                )
+                chunks = [c for sublist in chunk_lists for c in sublist]
+        else:
+            chunks = optimizedRecursiveChunker(list(document))
+        chunk_cache[doc_hash] = chunks
     perf_monitor.end_timer("chunking")
 
     # Step 4: Advanced memory-conscious batching
     perf_monitor.start_timer("batching")
-    batches = list(optimized_batching(chunks, batch_size=20, max_memory_mb=50))
+    batches = list(
+        optimized_batching(chunks, batch_size=BATCH_SIZE, max_memory_mb=MAX_MEMORY_MB)
+    )
     perf_monitor.end_timer("batching")
 
     # Step 5: Parallel database insertion
@@ -342,15 +382,25 @@ def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
                     logging.warning(f"Failed to clean up {temp_file}: {cleanup_e}")
 
 
-# Ultra-fast text extraction with fallback options
+def strip_yaml_front_matter(md_path: str) -> str:
+    """Remove YAML front matter from a markdown file and return the path to a temp file without it."""
+    with open(md_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    # Regex to match YAML front matter
+    yaml_regex = r"^---\s*\n.*?\n---\s*\n"
+    content_no_yaml = re.sub(yaml_regex, "", content, flags=re.DOTALL)
+    # Write to a temp file
+    with tempfile.NamedTemporaryFile(
+        delete=False, suffix=".md", mode="w", encoding="utf-8"
+    ) as tmp:
+        tmp.write(content_no_yaml)
+        return tmp.name
+
+
 def ExtractText(path: str):
     """
     Ultra-fast text extraction with multiple fallback methods.
-
-    :param path: The file path to extract text from.
-    :type path: str
-    :return: List of Document objects containing extracted text and metadata.
-    :rtype: list[Document]
+    If the file is markdown, strip YAML front matter before passing to pandoc or other processors.
     """
     from performance_utils import perf_monitor
 
@@ -362,7 +412,13 @@ def ExtractText(path: str):
         if path.lower().endswith(
             (".txt", ".md", ".py", ".js", ".html", ".css", ".json")
         ):
-            result = FastTextExtraction(path)
+            # For markdown, strip YAML before further processing
+            if path.lower().endswith((".md", ".markdown")):
+                temp_path = strip_yaml_front_matter(path)
+                result = FastTextExtraction(temp_path)
+                os.unlink(temp_path)
+            else:
+                result = FastTextExtraction(path)
             perf_monitor.end_timer("text_extraction_method")
             return result
 

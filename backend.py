@@ -1782,15 +1782,7 @@ async def change_password(
 ) -> dict[str, str]:
     """
     Change the user's password after verifying the old password and new password complexity. Follows registration logic for validation and update.
-
-    :param username: The username of the user changing password.
-    :type username: str
-    :param old_password: The user's current password.
-    :type old_password: str
-    :param new_password: The new password to set.
-    :type new_password: str
-    :return: Dictionary with result code and message.
-    :rtype: dict[str, str]
+    Uses test DB if TESTING=true.
     """
     try:
         # Rate limit check (reuse auth rate limit for simplicity)
@@ -1811,10 +1803,15 @@ async def change_password(
         username_valid, username_msg = validate_username(username)
         if not username_valid:
             return {"code": "400", "message": username_msg}
+        # Use test DB if TESTING=true
+        import os
+
+        testing = os.getenv("TESTING", "").lower() == "true"
+        db_path = TEST_USER_DB_PATH if testing else USER_DB_PATH
         # Check if user database exists
-        if not os.path.exists(USER_DB_PATH):
+        if not os.path.exists(db_path):
             return {"code": "404", "message": "User database not found."}
-        with open(USER_DB_PATH, "r") as f:
+        with open(db_path, "r") as f:
             data = json.load(f)
         users = data.get("users", {})
         user_data = users.get(username)
@@ -1836,9 +1833,57 @@ async def change_password(
         # Hash and update password
         user_data["hashedPassword"] = hash_password(new_password)
         users[username] = user_data
-        with open(USER_DB_PATH, "w") as f:
+        with open(db_path, "w") as f:
             json.dump({"users": users}, f, indent=2)
         return {"code": "200", "message": "Password changed successfully."}
     except Exception as e:
         logging.error(f"Error in change_password: {e}")
+        return {"code": "500", "message": "Internal server error."}
+
+
+# Explicit test-only version for use in tests
+async def change_password_test(
+    username: str, old_password: str, new_password: str
+) -> dict[str, str]:
+    """
+    Change the user's password in the test user database only (for test code).
+    """
+    try:
+        from hashing import (
+            verify_password,
+            is_password_complex,
+            hash_password,
+            validate_username,
+        )
+
+        username_valid, username_msg = validate_username(username)
+        if not username_valid:
+            return {"code": "400", "message": username_msg}
+        db_path = TEST_USER_DB_PATH
+        if not os.path.exists(db_path):
+            return {"code": "404", "message": "Test user database not found."}
+        with open(db_path, "r") as f:
+            data = json.load(f)
+        users = data.get("users", {})
+        user_data = users.get(username)
+        if not user_data:
+            return {"code": "404", "message": "User not found."}
+        stored_hash = user_data.get("hashedPassword")
+        if not stored_hash or not verify_password(old_password, stored_hash):
+            return {"code": "401", "message": "Current password is incorrect."}
+        if verify_password(new_password, stored_hash):
+            return {
+                "code": "400",
+                "message": "New password must be different from the current password.",
+            }
+        valid, msg = is_password_complex(new_password)
+        if not valid:
+            return {"code": "400", "message": msg}
+        user_data["hashedPassword"] = hash_password(new_password)
+        users[username] = user_data
+        with open(db_path, "w") as f:
+            json.dump({"users": users}, f, indent=2)
+        return {"code": "200", "message": "Password changed successfully."}
+    except Exception as e:
+        logging.error(f"Error in change_password_test: {e}")
         return {"code": "500", "message": "Internal server error."}
