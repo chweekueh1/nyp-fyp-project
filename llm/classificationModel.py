@@ -80,7 +80,7 @@ system_prompt = (
     "- Do not classify inappropriate or harmful content\n"
     "## Output Format\n"
     "Provide your classification in JSON format with the following structure:\n"
-    '{"classification": "security_level", "sensitivity": "sensitivity_level", "reasoning": "detailed_explanation"}\n'
+    '{{"classification": "security_level", "sensitivity": "sensitivity_level", "reasoning": "detailed_explanation"}}\n'
     "Keep the classification concise but thorough.\n\n"
     "{context}"
 )

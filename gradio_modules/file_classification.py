@@ -7,13 +7,15 @@ classification results using the backend classification system.
 
 import gradio as gr
 import os
-import json
 import shutil
 from pathlib import Path
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Any, List
 from datetime import datetime
-import hashlib
-from performance_utils import perf_monitor, cache_manager
+from performance_utils import perf_monitor
+from gradio_modules.enhanced_content_extraction import (
+    enhanced_extract_file_content,
+    classify_file_content,
+)
 
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
 # from infra_utils import get_chatbot_dir
@@ -182,134 +184,6 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
                     shutil.copyfileobj(src, f)
 
     return saved_path, original_filename
-
-
-def extract_file_content(file_path: str) -> Dict[str, Any]:
-    """Enhanced file content extraction with multiple methods.
-
-    :param file_path: Path to the file to extract content from
-    :type file_path: str
-    :return: Dictionary containing extracted content and metadata
-    :rtype: Dict[str, Any]
-    """
-    try:
-        # Use enhanced extraction
-        from gradio_modules.enhanced_content_extraction import (
-            enhanced_extract_file_content,
-        )
-
-        return enhanced_extract_file_content(file_path)
-    except ImportError:
-        # Fallback to original method
-        try:
-            from llm.dataProcessing import ExtractText
-
-            documents = ExtractText(file_path)
-            if documents:
-                content = "\n\n".join([doc.page_content for doc in documents])
-                return {
-                    "content": content,
-                    "method": "fallback_original",
-                    "error": None,
-                    "file_size": os.path.getsize(file_path)
-                    if os.path.exists(file_path)
-                    else 0,
-                    "file_type": Path(file_path).suffix.lower(),
-                    "extraction_methods_tried": ["fallback_original"],
-                }
-            else:
-                return {
-                    "content": "",
-                    "method": "error",
-                    "error": "No content could be extracted from the file",
-                    "file_size": os.path.getsize(file_path)
-                    if os.path.exists(file_path)
-                    else 0,
-                    "file_type": Path(file_path).suffix.lower(),
-                    "extraction_methods_tried": ["fallback_original"],
-                }
-        except Exception as e:
-            return {
-                "content": "",
-                "method": "error",
-                "error": f"Error extracting content: {str(e)}",
-                "file_size": os.path.getsize(file_path)
-                if os.path.exists(file_path)
-                else 0,
-                "file_type": Path(file_path).suffix.lower(),
-                "extraction_methods_tried": ["fallback_original"],
-            }
-
-
-def classify_file_content(content: str, username: str = None) -> Dict[str, Any]:
-    """Classify the extracted file content with enhanced error handling and per-user request counting/caching."""
-    if not content or not content.strip():
-        return {
-            "classification": "Unknown",
-            "sensitivity": "Unknown",
-            "reasoning": "No content available for classification",
-            "confidence": 0.0,
-        }
-
-    # Hash the content for caching
-    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    cache = cache_manager.get_cache("classification_results")
-    if content_hash in cache:
-        result = cache[content_hash]
-        result = result.copy()  # Avoid mutating cached result
-        result["cached"] = True
-        return result
-
-    # Per-user request counting
-    user_key = username or "__global__"
-    if user_key not in classification_request_counts:
-        classification_request_counts[user_key] = 0
-    classification_request_counts[user_key] += 1
-    print(
-        f"[INFO] File classification requests for '{user_key}': {classification_request_counts[user_key]}"
-    )
-
-    try:
-        perf_monitor.start_timer("classification_llm_call")
-        from llm.classificationModel import classify_text
-
-        result = classify_text(content)
-        perf_monitor.end_timer("classification_llm_call")
-
-        # Extract the answer which should be JSON
-        answer = result.get("answer", "{}")
-        try:
-            if isinstance(answer, str):
-                classification_result = json.loads(answer)
-            else:
-                classification_result = answer
-            if "classification" not in classification_result:
-                classification_result["classification"] = "Official(Open)"
-            if "sensitivity" not in classification_result:
-                classification_result["sensitivity"] = "Non-Sensitive"
-            if "reasoning" not in classification_result:
-                classification_result["reasoning"] = (
-                    "Classification completed successfully"
-                )
-            if "confidence" not in classification_result:
-                classification_result["confidence"] = 0.8
-        except json.JSONDecodeError:
-            classification_result = {
-                "classification": "Official(Open)",
-                "sensitivity": "Non-Sensitive",
-                "reasoning": f"Classification completed. Raw response: {answer}",
-                "confidence": 0.5,
-            }
-        # Cache the result
-        cache[content_hash] = classification_result.copy()
-        return classification_result
-    except Exception as e:
-        return {
-            "classification": "Error",
-            "sensitivity": "Error",
-            "reasoning": f"Classification failed: {str(e)}",
-            "confidence": 0.0,
-        }
 
 
 def file_classification_interface(username_state: gr.State) -> tuple:
@@ -538,7 +412,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
             # Save the uploaded file
             saved_path, original_filename = save_uploaded_file(file_obj, username)
             perf_monitor.start_timer("extraction")
-            extraction_result = extract_file_content(saved_path)
+            extraction_result = enhanced_extract_file_content(saved_path)
             perf_monitor.end_timer("extraction")
             content_text = extraction_result.get("content", "")
             perf_monitor.start_timer("classification")
@@ -657,7 +531,7 @@ def file_classification_interface(username_state: gr.State) -> tuple:
             if not file_path:
                 raise Exception(f"File not found: {selected_file}")
             perf_monitor.start_timer("extraction")
-            extraction_result = extract_file_content(file_path)
+            extraction_result = enhanced_extract_file_content(file_path)
             perf_monitor.end_timer("extraction")
             content_text = extraction_result.get("content", "")
             perf_monitor.start_timer("classification")

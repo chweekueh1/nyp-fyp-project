@@ -14,6 +14,7 @@ filetype==1.2.0
 # Core web framework and dependencies
 gradio==5.34.0
 gradio_client==1.10.3
+keybert
 
 # LangChain core (minimal)
 langchain>=0.3.24,<1.0.0
@@ -36,6 +37,7 @@ numpy==1.26.4
 # OpenAI and AI core
 openai==1.72.0
 pandas==2.2.3
+pdftotext
 pillow==11.1.0
 pydantic==2.11.2
 pydantic-settings==2.8.1
