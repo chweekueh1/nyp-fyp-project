@@ -6,14 +6,34 @@ This module provides the audio input interface for the NYP FYP Chatbot applicati
 Users can record audio or upload audio files for transcription and chatbot interaction.
 """
 
-import gradio as gr
 import asyncio
+import time
+import uuid
+from typing import List, Dict, Any, Tuple, Optional
+
+import gradio as gr
+
+from backend import transcribe_audio, ask_question
 from infra_utils import setup_logging
 
 logger = setup_logging()
 
 
-def audio_interface(username_state, setup_events=True):
+def audio_interface(
+    username_state: gr.State, setup_events: bool = True
+) -> Tuple[
+    gr.Audio,
+    gr.Button,
+    gr.Textbox,
+    gr.Textbox,
+    gr.Markdown,
+    gr.Textbox,
+    gr.Button,
+    gr.Button,
+    gr.Markdown,
+    gr.Button,
+    gr.State,
+]:
     """
     Create audio input interface.
 
@@ -22,7 +42,18 @@ def audio_interface(username_state, setup_events=True):
         setup_events: Whether to set up event handlers (default: True)
 
     Returns:
-        Tuple of Gradio components for the interface
+        Tuple of Gradio components for the interface:
+        - audio_input: Audio input component
+        - process_audio_btn: Process audio button
+        - transcription_output: Transcription textbox
+        - response_output: Response textbox
+        - status_message: Status message component
+        - edit_transcription: Edit transcription textbox
+        - edit_btn: Edit button
+        - send_edited_btn: Send edited button
+        - history_output: History display
+        - clear_history_btn: Clear history button
+        - audio_history: Audio history state
     """
 
     with gr.Column(elem_classes=["audio-interface-container"]):
@@ -117,8 +148,32 @@ def audio_interface(username_state, setup_events=True):
             audio_history,
         )
 
-    def process_audio_file(audio_file, username, history):
-        """Process audio file and get chatbot response."""
+    def process_audio_file(
+        audio_file: Optional[str],
+        username: Optional[str],
+        history: List[Dict[str, Any]],
+    ) -> Tuple[
+        str, str, gr.update, gr.update, gr.update, gr.update, List[Dict[str, Any]], str
+    ]:
+        """
+        Process audio file and get chatbot response.
+
+        Args:
+            audio_file: Path to the audio file to process
+            username: Current username for authentication
+            history: List of previous audio processing history
+
+        Returns:
+            Tuple containing:
+            - transcription: Transcribed text from audio
+            - response: Chatbot response
+            - status_update: Status message update
+            - edit_update: Edit transcription visibility update
+            - edit_btn_update: Edit button visibility update
+            - send_edited_update: Send edited button visibility update
+            - updated_history: Updated history list
+            - formatted_history: Formatted history for display
+        """
         if not audio_file:
             return (
                 "",
@@ -162,8 +217,6 @@ def audio_interface(username_state, setup_events=True):
             )
 
             # Step 1: Transcribe audio using the simple transcribe_audio function
-            from backend import transcribe_audio
-
             transcription = transcribe_audio(audio_file)
 
             # Check if transcription failed
@@ -198,9 +251,6 @@ def audio_interface(username_state, setup_events=True):
             )
 
             # Step 2: Get chatbot response using ask_question
-            from backend import ask_question
-            import uuid
-
             # Generate a unique chat ID for audio sessions
             chat_id = f"audio_session_{uuid.uuid4().hex[:8]}"
 
@@ -223,8 +273,6 @@ def audio_interface(username_state, setup_events=True):
                 response = f"Error: {response_result.get('error', 'Unknown error')}"
 
             # Add to history
-            import time
-
             history.append(
                 {
                     "transcription": transcription,
@@ -263,8 +311,24 @@ def audio_interface(username_state, setup_events=True):
                 format_history(history),
             )
 
-    def send_edited_transcription(edited_text, username, history):
-        """Send edited transcription to chatbot."""
+    def send_edited_transcription(
+        edited_text: str, username: Optional[str], history: List[Dict[str, Any]]
+    ) -> Tuple[str, gr.update, List[Dict[str, Any]], str]:
+        """
+        Send edited transcription to chatbot.
+
+        Args:
+            edited_text: The edited transcription text
+            username: Current username for authentication
+            history: List of previous audio processing history
+
+        Returns:
+            Tuple containing:
+            - response: Chatbot response
+            - status_update: Status message update
+            - updated_history: Updated history list
+            - formatted_history: Formatted history for display
+        """
         if not edited_text or not edited_text.strip():
             return (
                 "",
@@ -284,9 +348,6 @@ def audio_interface(username_state, setup_events=True):
             )
 
         try:
-            from backend import ask_question
-            import uuid
-
             # Generate a unique chat ID for edited audio sessions
             chat_id = f"audio_edited_{uuid.uuid4().hex[:8]}"
 
@@ -309,8 +370,6 @@ def audio_interface(username_state, setup_events=True):
                 response = f"Error: {response_result.get('error', 'Unknown error')}"
 
             # Add to history
-            import time
-
             history.append(
                 {
                     "transcription": edited_text.strip() + " (edited)",
@@ -337,29 +396,51 @@ def audio_interface(username_state, setup_events=True):
                 format_history(history),
             )
 
-    def toggle_edit_mode():
-        """Toggle edit mode for transcription."""
+    def toggle_edit_mode() -> Tuple[gr.update, gr.update, gr.update]:
+        """
+        Toggle edit mode for transcription.
+
+        Returns:
+            Tuple containing visibility updates for edit components
+        """
         return (
             gr.update(visible=True),
             gr.update(visible=False),
             gr.update(visible=True),
         )
 
-    def clear_audio_history():
-        """Clear the audio session history."""
+    def clear_audio_history() -> Tuple[List[Dict[str, Any]], str]:
+        """
+        Clear the audio session history.
+
+        Returns:
+            Tuple containing empty history list and success message
+        """
         return [], "Audio history cleared."
 
-    def format_history(history):
-        """Format history for display."""
+    def format_history(history: List[Dict[str, Any]]) -> str:
+        """
+        Format history for display.
+
+        Args:
+            history: List of audio processing history items
+
+        Returns:
+            Formatted string representation of history
+        """
         if not history:
             return "No audio processed yet in this session."
 
         formatted = []
         for i, item in enumerate(history[-5:], 1):  # Show last 5 items
+            transcription = item.get("transcription", "")
+            response = item.get("response", "")
+            timestamp = item.get("timestamp", "Unknown time")
+
             formatted.append(f"""
-**Session {i}** _{item.get("timestamp", "Unknown time")}_
-- **Input:** {item.get("transcription", "N/A")[:100]}{"..." if len(item.get("transcription", "")) > 100 else ""}
-- **Response:** {item.get("response", "N/A")[:100]}{"..." if len(item.get("response", "")) > 100 else ""}
+**Session {i}** _{timestamp}_
+- **Input:** {transcription[:100]}{"..." if len(transcription) > 100 else ""}
+- **Response:** {response[:100]}{"..." if len(response) > 100 else ""}
 """)
 
         return "\n".join(formatted)

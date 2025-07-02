@@ -13,6 +13,7 @@ This test suite organizes and runs all tests and demos in a structured way:
 import sys
 import time
 import subprocess
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -193,6 +194,33 @@ class TestSuite:
                 print(f"    ⚠️ SKIP {test_file.name} (not found)")
                 results[test_file.name] = None
 
+        # Run change password tests separately (non-blocking)
+        try:
+            print("    🧪 Running change password tests...")
+            from tests.frontend.test_change_password_functionality import (
+                run_change_password_tests,
+            )
+
+            change_password_results = run_change_password_tests()
+            all_passed = all(change_password_results.values())
+
+            status = "✅ PASS" if all_passed else "❌ FAIL"
+            print(f"    {status} test_change_password_functionality.py")
+
+            if not all_passed:
+                failed_tests = [
+                    name
+                    for name, success in change_password_results.items()
+                    if not success
+                ]
+                print(f"      Failed tests: {', '.join(failed_tests)}")
+
+            results["test_change_password_functionality.py"] = all_passed
+        except Exception as e:
+            print("    ❌ FAIL test_change_password_functionality.py")
+            print(f"      Error: {str(e)[:200]}...")
+            results["test_change_password_functionality.py"] = False
+
         return results
 
     def run_performance_tests(self) -> Dict[str, bool]:
@@ -296,6 +324,8 @@ class TestSuite:
         print("=" * 60)
         print(f"Project Root: {self.project_root}")
         print(f"Python Version: {sys.version}")
+        print(f"Docker Environment: {os.getenv('IN_DOCKER', 'false')}")
+        print(f"Test Environment: {os.getenv('TESTING', 'false')}")
         print("=" * 60)
 
         all_results = {}
@@ -363,12 +393,25 @@ def show_help():
     print("  --demos        List available demos")
     print("  --quick        Run only essential tests")
     print("  --performance  Run only performance tests")
+    print("  --suite <name> Run specific test suite")
+    print("\nTest Suites:")
+    print("  frontend       - Frontend UI tests")
+    print("  backend        - Backend API tests")
+    print("  integration    - Integration tests")
+    print("  unit           - Unit tests only")
+    print("  performance    - Performance and optimization tests")
+    print("  demo           - Demo verification and organization")
+    print("  all            - Run all available tests")
+    print("  comprehensive  - All tests organized by category")
     print("\nTest Categories:")
     print("  🔬 Unit Tests      - Individual component testing")
     print("  🔗 Integration     - Component interaction testing")
     print("  🎨 Frontend        - UI and interface testing")
     print("  ⚡ Performance     - Speed and reliability testing")
     print("  🎭 Demo Verification - Demo organization and structure")
+    print("\nEnvironment:")
+    print("  🐳 Docker Ready    - Python 3.12 Alpine with optimized dependencies")
+    print("  🧪 Test Isolation  - Separate test database and environment")
     print("\nDemo Usage:")
     print("  python tests/demos/demo_final_working_chatbot.py")
     print("  python tests/demos/demo_enhanced_classification.py")
@@ -377,6 +420,48 @@ def show_help():
 
 def main():
     """Run the comprehensive test suite."""
+    # Add debugging to see what's happening
+    print(f"🔍 Debug: sys.argv = {sys.argv}")
+    print(f"🔍 Debug: TEST_TARGET environment variable = {os.getenv('TEST_TARGET')}")
+    print("🔍 Debug: All TEST_* environment variables:")
+    for key, value in os.environ.items():
+        if key.startswith("TEST"):
+            print(f"  {key} = {value}")
+
+    # Check for TEST_TARGET environment variable first
+    test_target = os.getenv("TEST_TARGET")
+
+    if test_target:
+        print(f"🎯 Running specific test target: {test_target}")
+        print("=" * 60)
+
+        # Check if it's a file path (starts with "tests/" and ends with ".py")
+        if test_target.startswith("tests/") and test_target.endswith(".py"):
+            # Run the specific test file
+            try:
+                subprocess.run(
+                    [sys.executable, test_target],
+                    check=True,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                )
+                print(f"✅ Test target {test_target} completed successfully.")
+                return 0
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Test target {test_target} failed: {e}")
+                return 1
+            except Exception as e:
+                print(
+                    f"❌ An unexpected error occurred during test target {test_target}: {e}"
+                )
+                return 1
+        else:
+            # It's a suite name, handle it in the main logic below
+            print(
+                f"ℹ️ Test target '{test_target}' appears to be a suite name, processing..."
+            )
+            # Continue to the main logic below
+
     # Simple argument handling without argparse to avoid conflicts
     args = sys.argv[1:] if len(sys.argv) > 1 else []
 
@@ -401,7 +486,71 @@ def main():
 
     suite = TestSuite()
 
-    if "--performance" in args:
+    # Handle --suite parameter for specific test suites
+    if "--suite" in args:
+        try:
+            suite_index = args.index("--suite")
+            if suite_index + 1 < len(args):
+                suite_name = args[suite_index + 1]
+                print(f"🎯 Running specific test suite: {suite_name}")
+                print("=" * 40)
+
+                if suite_name == "frontend":
+                    results = {"frontend_tests": suite.run_frontend_tests()}
+                elif suite_name == "backend":
+                    results = {"unit_tests": suite.run_unit_tests()}
+                elif suite_name == "integration":
+                    results = {"integration_tests": suite.run_integration_tests()}
+                elif suite_name == "unit":
+                    results = {"unit_tests": suite.run_unit_tests()}
+                elif suite_name == "performance":
+                    results = {"performance_tests": suite.run_performance_tests()}
+                elif suite_name == "demo":
+                    results = {"demo_verification": suite.run_demo_verification()}
+                elif suite_name == "all":
+                    results = suite.run_comprehensive_suite()
+                elif suite_name == "comprehensive":
+                    results = suite.run_comprehensive_suite()
+                else:
+                    print(f"❌ Unknown test suite: {suite_name}")
+                    print(
+                        "Available suites: frontend, backend, integration, unit, performance, demo, all, comprehensive"
+                    )
+                    return 1
+            else:
+                print("❌ --suite parameter requires a suite name")
+                return 1
+        except ValueError:
+            print("❌ Invalid --suite parameter usage")
+            return 1
+    # Handle TEST_TARGET environment variable when it's a suite name
+    elif test_target:
+        print(f"🎯 Running test suite from environment variable: {test_target}")
+        print("=" * 40)
+
+        if test_target == "frontend":
+            results = {"frontend_tests": suite.run_frontend_tests()}
+        elif test_target == "backend":
+            results = {"unit_tests": suite.run_unit_tests()}
+        elif test_target == "integration":
+            results = {"integration_tests": suite.run_integration_tests()}
+        elif test_target == "unit":
+            results = {"unit_tests": suite.run_unit_tests()}
+        elif test_target == "performance":
+            results = {"performance_tests": suite.run_performance_tests()}
+        elif test_target == "demo":
+            results = {"demo_verification": suite.run_demo_verification()}
+        elif test_target == "all":
+            results = suite.run_comprehensive_suite()
+        elif test_target == "comprehensive":
+            results = suite.run_comprehensive_suite()
+        else:
+            print(f"❌ Unknown test suite: {test_target}")
+            print(
+                "Available suites: frontend, backend, integration, unit, performance, demo, all, comprehensive"
+            )
+            return 1
+    elif "--performance" in args:
         print("⚡ Running Performance Tests Only")
         print("=" * 40)
         results = {"performance_tests": suite.run_performance_tests()}

@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
+"""
+Chatbot Interface Module
+
+This module provides the main chatbot interface for the NYP FYP Chatbot application.
+Users can send messages, manage chat sessions, search history, and rename chats.
+"""
+
 from typing import Tuple, Any, List, Dict
+
 import gradio as gr
+
 # Backend import moved to function level to avoid early ChromaDB initialization
 
 
@@ -31,7 +40,16 @@ def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
 
 
 def handle_search(username: str, query: str) -> str:
-    """Handle search query and return formatted results."""
+    """
+    Handle search query and return formatted results.
+
+    Args:
+        username: The username to search for
+        query: The search query string
+
+    Returns:
+        Formatted string containing search results
+    """
     if not username or not query.strip():
         return "Please enter a search query."
 
@@ -171,7 +189,16 @@ def chatbot_ui(
         debug_md = gr.Markdown(visible=True)
 
     def load_chat_history(username: str, chat_id: str) -> List[Dict[str, str]]:
-        """Load chat history for a specific chat ID."""
+        """
+        Load chat history for a specific chat ID.
+
+        Args:
+            username: The username to load history for
+            chat_id: The chat ID to load history for
+
+        Returns:
+            List of message dictionaries in chat format
+        """
         if not username or not chat_id:
             return []
         try:
@@ -191,7 +218,16 @@ def chatbot_ui(
     def on_chat_select(
         username: str, selected_chat_id: str
     ) -> Tuple[List[Dict[str, str]], str]:
-        """Handle chat selection from dropdown."""
+        """
+        Handle chat selection from dropdown.
+
+        Args:
+            username: The username
+            selected_chat_id: The selected chat ID
+
+        Returns:
+            Tuple containing chat history and selected chat ID
+        """
         if not username or not selected_chat_id:
             return [], ""
         history = load_chat_history(username, selected_chat_id)
@@ -200,7 +236,15 @@ def chatbot_ui(
     def create_new_chat(
         username: str,
     ) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
-        """Create a new chat session."""
+        """
+        Create a new chat session.
+
+        Args:
+            username: The username to create chat for
+
+        Returns:
+            Tuple containing dropdown update, new chat ID, and empty chat history
+        """
         if not username:
             return gr.update(), "", []
 
@@ -300,7 +344,15 @@ def chatbot_ui(
     def initialize_chats(
         username: str,
     ) -> Tuple[Dict[str, Any], str, List[Dict[str, str]]]:
-        """Initialize chat selector with user's existing chats."""
+        """
+        Initialize chat selector with user's existing chats.
+
+        Args:
+            username: The username to initialize chats for
+
+        Returns:
+            Tuple containing dropdown update, selected chat ID, and chat history
+        """
         if not username:
             return gr.update(choices=[], value=None), "", []
 
@@ -327,7 +379,17 @@ def chatbot_ui(
     def handle_rename(
         username: str, current_chat_id: str, new_name: str
     ) -> Tuple[str, Dict[str, Any], str]:
-        """Handle chat renaming and return updated UI state."""
+        """
+        Handle chat renaming and return updated UI state.
+
+        Args:
+            username: The username
+            current_chat_id: The current chat ID
+            new_name: The new name for the chat
+
+        Returns:
+            Tuple containing status message, dropdown update, and new chat ID
+        """
         if not username or not current_chat_id or not new_name.strip():
             return "Please enter a new name for the chat.", gr.update(), current_chat_id
 

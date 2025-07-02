@@ -7,7 +7,7 @@ import gradio as gr
 from gradio_modules.file_upload import file_upload_ui
 
 
-def test_file_upload_ui():
+def test_file_upload_ui() -> None:
     """
     Test the file upload UI components.
 
@@ -23,9 +23,9 @@ def test_file_upload_ui():
         file_upload, file_btn, file_debug_md = file_upload_ui(
             username, chat_history, chat_id
         )
-    assert file_upload is not None, "File upload component should be created"
-    assert file_btn is not None, "File button should be created"
-    assert file_debug_md is not None, "Debug markdown should be created"
+        assert file_upload is not None, "File upload component should be created"
+        assert file_btn is not None, "File button should be created"
+        assert file_debug_md is not None, "File debug markdown should be created"
     print("test_file_upload_ui: PASSED")
 
 

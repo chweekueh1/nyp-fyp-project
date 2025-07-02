@@ -1,23 +1,63 @@
 # Ignore Python cache and venv
 __pycache__/
 .venv/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
 
 # Ignore git and local dev files
 .git/
 .gitignore
+.gitattributes
 
-# Ignore test files (allow tests/ for Docker builds)
-# /tests/
-# tests/
+# Ignore test files (only for production and dev builds)
+# tests/ is included in Dockerfile.test
 
-# Ignore local environment files (optional, unless you want to copy .env)
+# Ignore local environment files
 .env
 .env.*
 
 # Ignore OS files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # Ignore large local files not needed in image
 *.log
 *.tmp
+*.tar
+*.gz
+*.zip
+
+# Ignore documentation and misc files
+README.md
+LICENSE
+misc/
+*.md
+
+# Ignore development tools
+.pre-commit-config.yaml
+.markdownlint.yaml
+.ruff_cache/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Ignore Docker files (except the one being built)
+Dockerfile*
+.dockerignore
+
+# Ignore setup and build files (except setup.py which is needed)
+# setup.py is included in dev and test builds
+
+# Ignore performance and monitoring files
+# Note: performance_utils.py is needed and copied explicitly in Dockerfiles
+
+# Ignore logs directory (created at runtime)
+logs/

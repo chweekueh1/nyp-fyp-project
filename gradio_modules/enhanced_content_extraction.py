@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Enhanced content extraction using pandoc and tesseract OCR for better file processing.
-"""
+"""Enhanced content extraction using pandoc and tesseract OCR for better file processing."""
 
 import os
 import subprocess
@@ -15,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 def extract_with_pandoc(file_path: str) -> Optional[str]:
-    """Extract text content using pandoc."""
+    """Extract text content using pandoc.
+
+    :param file_path: Path to the file to extract content from
+    :type file_path: str
+    :return: Extracted text content or None if extraction failed
+    :rtype: Optional[str]
+    """
     try:
         file_ext = Path(file_path).suffix.lower()
 
@@ -59,7 +63,13 @@ def extract_with_pandoc(file_path: str) -> Optional[str]:
 
 
 def extract_with_tesseract(file_path: str) -> Optional[str]:
-    """Extract text from images using tesseract OCR."""
+    """Extract text from images using tesseract OCR.
+
+    :param file_path: Path to the image file to extract text from
+    :type file_path: str
+    :return: Extracted text content or None if extraction failed
+    :rtype: Optional[str]
+    """
     try:
         file_ext = Path(file_path).suffix.lower()
 
@@ -118,7 +128,13 @@ def extract_with_tesseract(file_path: str) -> Optional[str]:
 
 
 def extract_pdf_content(file_path: str) -> Optional[str]:
-    """Extract content from PDF files using multiple methods."""
+    """Extract content from PDF files using multiple methods.
+
+    :param file_path: Path to the PDF file to extract content from
+    :type file_path: str
+    :return: Extracted text content or None if extraction failed
+    :rtype: Optional[str]
+    """
     try:
         # Try pandoc first for PDF
         content = extract_with_pandoc(file_path)
@@ -147,7 +163,13 @@ def extract_pdf_content(file_path: str) -> Optional[str]:
 
 
 def extract_text_file_content(file_path: str) -> Optional[str]:
-    """Extract content from plain text files."""
+    """Extract content from plain text files.
+
+    :param file_path: Path to the text file to extract content from
+    :type file_path: str
+    :return: Extracted text content or None if extraction failed
+    :rtype: Optional[str]
+    """
     try:
         file_ext = Path(file_path).suffix.lower()
         text_formats = {".txt", ".csv", ".log", ".md", ".markdown"}
@@ -181,11 +203,12 @@ def extract_text_file_content(file_path: str) -> Optional[str]:
 
 
 def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
-    """
-    Enhanced file content extraction with multiple methods and detailed results.
+    """Enhanced file content extraction with multiple methods and detailed results.
 
-    Returns:
-        Dict containing extracted content, method used, and metadata
+    :param file_path: Path to the file to extract content from
+    :type file_path: str
+    :return: Dictionary containing extracted content, method used, and metadata
+    :rtype: Dict[str, Any]
     """
     if not os.path.exists(file_path):
         return {

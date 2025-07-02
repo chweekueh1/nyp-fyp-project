@@ -299,6 +299,40 @@ def run_component_tests():
         return False
 
 
+def run_change_password_tests():
+    """Run change password interface tests."""
+    print("🔐 Running Change Password Interface Tests...")
+    try:
+        from tests.frontend.test_change_password_functionality import (
+            run_change_password_tests,
+        )
+
+        # Run all change password tests
+        results = run_change_password_tests()
+
+        # Check if all tests passed
+        all_passed = all(results.values())
+
+        if all_passed:
+            print("✅ All change password tests passed")
+        else:
+            failed_tests = [name for name, success in results.items() if not success]
+            print(f"❌ Some change password tests failed: {', '.join(failed_tests)}")
+
+        return all_passed
+    except ImportError as e:
+        print(f"❌ Change password tests failed: Import error - {e}")
+        print("   This usually means the change password UI modules are not available")
+        return False
+    except Exception as e:
+        print(f"❌ Change password tests failed: {e}")
+        print("   Full traceback:")
+        import traceback
+
+        traceback.print_exc()
+        return False
+
+
 def run_all_tests():
     """Run all frontend tests."""
     print("🚀 Running All Frontend Tests...")
@@ -310,6 +344,7 @@ def run_all_tests():
         "UI State": run_ui_state_interaction_tests(),
         "Theme Styles": run_theme_styles_tests(),
         "Component": run_component_tests(),
+        "Change Password": run_change_password_tests(),
     }
     print("\n📊 Test Results Summary")
     print("-" * 30)
@@ -387,6 +422,24 @@ def launch_test_app(test_name):
 
         test_theme_styles()
         return True
+    elif test_name == "change-password":
+        from tests.frontend.test_change_password_functionality import (
+            test_simple_change_password,
+        )
+
+        app = test_simple_change_password()
+    elif test_name == "change-password-interface":
+        from tests.frontend.test_change_password_functionality import (
+            test_change_password_interface,
+        )
+
+        app = test_change_password_interface()
+    elif test_name == "change-password-validation":
+        from tests.frontend.test_change_password_functionality import (
+            test_change_password_validation,
+        )
+
+        app = test_change_password_validation()
     else:
         print(f"❌ Unknown test: {test_name}")
         return False
@@ -410,62 +463,98 @@ def launch_test_app(test_name):
 
 def main():
     """Main function to handle command line arguments."""
-    parser = argparse.ArgumentParser(description="Frontend Test Suite Runner")
-    parser.add_argument(
-        "action",
-        choices=["test", "launch"],
-        help="Action to perform: 'test' to run tests, 'launch' to launch a test app",
+    parser = argparse.ArgumentParser(
+        description="Frontend Test Suite Runner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run all frontend tests
+  python run_frontend_tests.py
+
+  # Run specific test category
+  python run_frontend_tests.py --category login
+  python run_frontend_tests.py --category chat
+  python run_frontend_tests.py --category ui-state
+
+  # Launch test interface
+  python run_frontend_tests.py --launch login
+  python run_frontend_tests.py --launch chat
+
+Available test categories:
+  login          - Login interface tests
+  chat           - Chat interface tests
+  search         - Search interface tests
+  file-upload    - File upload tests
+  ui-state       - UI state interaction tests
+  theme-styles   - Theme and styles tests
+  change-password - Change password interface tests
+  all            - All frontend tests (default)
+        """,
     )
-    parser.add_argument(
-        "--test",
+
+    # Mutually exclusive group for test vs launch
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--category",
         choices=[
             "login",
-            "simple-login",
             "chat",
-            "chatbot",
             "search",
-            "chat-history",
             "file-upload",
-            "audio",
             "ui-state",
             "theme-styles",
+            "change-password",
             "all",
         ],
-        help="Specific test to run or launch",
+        default="all",
+        help="Specific test category to run (default: all)",
+    )
+    group.add_argument(
+        "--launch",
+        choices=[
+            "login",
+            "chat",
+            "search",
+            "file-upload",
+            "audio",
+            "change-password",
+            "change-password-interface",
+            "change-password-validation",
+            "all",
+        ],
+        help="Launch a specific test interface",
     )
 
     args = parser.parse_args()
 
-    if args.action == "test":
-        if args.test:
-            # Run specific test
-            if args.test == "login":
-                success = run_login_tests()
-            elif args.test == "chat":
-                success = run_chat_tests()
-            elif args.test == "search":
-                success = run_search_tests()
-            elif args.test == "file-upload":
-                success = run_file_audio_tests()
-            elif args.test == "ui-state":
-                success = run_ui_state_interaction_tests()
-            elif args.test == "theme-styles":
-                success = run_theme_styles_tests()
-            else:
-                print(f"❌ Unknown test: {args.test}")
-                return 1
-        else:
-            # Run all tests
-            success = run_all_tests()
-
+    if args.launch:
+        # Launch mode
+        print(f"🚀 Launching {args.launch} test interface...")
+        success = launch_test_app(args.launch)
         return 0 if success else 1
-
-    elif args.action == "launch":
-        if not args.test:
-            print("❌ Please specify a test to launch with --test")
+    else:
+        # Test mode
+        if args.category == "all":
+            print("🚀 Running all frontend tests...")
+            success = run_all_tests()
+        elif args.category == "login":
+            success = run_login_tests()
+        elif args.category == "chat":
+            success = run_chat_tests()
+        elif args.category == "search":
+            success = run_search_tests()
+        elif args.category == "file-upload":
+            success = run_file_audio_tests()
+        elif args.category == "ui-state":
+            success = run_ui_state_interaction_tests()
+        elif args.category == "theme-styles":
+            success = run_theme_styles_tests()
+        elif args.category == "change-password":
+            success = run_change_password_tests()
+        else:
+            print(f"❌ Unknown test category: {args.category}")
             return 1
 
-        success = launch_test_app(args.test)
         return 0 if success else 1
 
 

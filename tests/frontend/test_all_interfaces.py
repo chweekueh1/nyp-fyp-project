@@ -2,6 +2,7 @@
 import gradio as gr
 from pathlib import Path
 import sys
+import os
 
 parent_dir = Path(__file__).parent.parent.parent
 if str(parent_dir) not in sys.path:
@@ -12,30 +13,35 @@ def test_all_interfaces():
     """Test all frontend interfaces in one comprehensive app."""
     with gr.Blocks(title="All Interfaces Test") as app:
         # States
-        logged_in_state = gr.State(True)
-        username_state = gr.State("test_user")
         current_chat_id_state = gr.State("test_chat_id")
         chat_history_state = gr.State([])
-        gr.State(False)
 
         gr.Markdown("# All Interfaces Test")
 
-        # Login interface (hidden, but included for completeness)
-        with gr.Column(visible=True) as login_container:
-            error_message = gr.Markdown(visible=False)
-        with gr.Column(visible=False) as main_container:
-            gr.Markdown(visible=False)
-            gr.Button("Logout", visible=False)
-
         from gradio_modules.login_and_register import login_interface
 
-        login_interface(
-            logged_in_state=logged_in_state,
-            username_state=username_state,
-            main_container=main_container,
-            login_container=login_container,
-            error_message=error_message,
-        )
+        # Get login interface components
+        (
+            logged_in_state,
+            username_state,
+            is_register_mode,
+            main_container,
+            error_message,
+            username_input,
+            email_input,
+            password_input,
+            confirm_password_input,
+            primary_btn,
+            secondary_btn,
+            show_password_btn,
+            show_confirm_btn,
+            password_visible,
+            confirm_password_visible,
+            header_subtitle,
+            header_instruction,
+            email_info,
+            password_requirements,
+        ) = login_interface(setup_events=False)
 
         with gr.Tab("💬 Chat"):
             from gradio_modules.chat_interface import chat_interface
@@ -75,12 +81,11 @@ def test_all_interfaces():
             )
 
         with gr.Tab("🎤 Audio Input"):
-            from gradio_modules.audio_input import audio_input_ui
+            from gradio_modules.audio_input import audio_interface
 
-            audio_input_ui(
+            audio_interface(
                 username_state=username_state,
-                chat_history_state=chat_history_state,
-                chat_id_state=current_chat_id_state,
+                setup_events=False,
             )
 
         gr.Markdown(
@@ -91,18 +96,21 @@ def test_all_interfaces():
 
 
 if __name__ == "__main__":
-    app = test_all_interfaces()
-    # Use Docker-compatible launch configuration
-    launch_config = {
-        "debug": True,
-        "share": False,
-        "inbrowser": False,
-        "quiet": False,
-        "show_error": True,
-        "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
-        "server_port": 7860,  # Use the same port as main app
-    }
-    print(
-        f"🌐 Launching test app on {launch_config['server_name']}:{launch_config['server_port']}"
-    )
-    app.launch(**launch_config)
+    # Only launch if INTERACTIVE=1 is set in the environment
+    if os.environ.get("INTERACTIVE") == "1":
+        app = test_all_interfaces()
+        launch_config = {
+            "debug": True,
+            "share": False,
+            "inbrowser": False,
+            "quiet": False,
+            "show_error": True,
+            "server_name": "0.0.0.0",  # Listen on all interfaces for Docker
+            "server_port": 7860,  # Use the same port as main app
+        }
+        print(
+            f"🌐 Launching test app on {launch_config['server_name']}:{launch_config['server_port']}"
+        )
+        app.launch(**launch_config)
+    else:
+        print("Skipping Gradio launch in automated test mode.")

@@ -7,7 +7,7 @@ import gradio as gr
 from gradio_modules.chat_history import chat_history_ui
 
 
-def test_chat_history_ui():
+def test_chat_history_ui() -> None:
     """
     Test the chat history UI components.
 
@@ -23,9 +23,9 @@ def test_chat_history_ui():
         search_box, search_btn, results_md = chat_history_ui(
             username, chat_id, chat_history
         )
-    assert search_box is not None, "Search box component should be created"
-    assert search_btn is not None, "Search button should be created"
-    assert results_md is not None, "Results markdown should be created"
+        assert search_box is not None, "Search box should be created"
+        assert search_btn is not None, "Search button should be created"
+        assert results_md is not None, "Results markdown should be created"
     print("test_chat_history_ui: PASSED")
 
 

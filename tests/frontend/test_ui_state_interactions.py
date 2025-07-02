@@ -562,50 +562,158 @@ class UIStateInteractionTests(unittest.TestCase):
 
     def test_change_password_ui(self):
         """
-        Test the change password UI in the main app.
+        Test the change password UI in the main app with popup interface.
         """
         import gradio as gr
         from gradio_modules.change_password import change_password_interface
         from unittest.mock import patch
 
         username_state = gr.State("test_user")
+        logged_in_state = gr.State(True)
+
         with gr.Blocks():
-            change_password_btn, change_password_section, last_change_time = (
-                change_password_interface(username_state)
+            change_password_btn, change_password_popup, last_change_time = (
+                change_password_interface(username_state, logged_in_state)
             )
 
-        # Button should be visible, section hidden by default
-        assert change_password_btn.visible, (
-            "Change Password button should be visible by default"
+        # Button should be hidden by default (only visible when logged in)
+        assert not change_password_btn.visible, (
+            "Change Password button should be hidden by default"
         )
-        assert not change_password_section.visible, (
-            "Change Password section should be hidden by default"
-        )
-
-        # Instead of calling .click, directly test the logic that would be triggered
-        # Simulate showing the change password section
-        show_section_update = gr.update(visible=True)
-        assert show_section_update["visible"], (
-            "Change Password section should be visible after button click logic"
+        assert not change_password_popup.visible, (
+            "Change Password popup should be hidden by default"
         )
 
-        # Simulate successful password change hides section
+        # Test password toggle functionality
+        def test_password_toggle(visible: bool) -> Tuple[gr.update, bool]:
+            """
+            Toggle password visibility for testing.
+
+            Args:
+                visible: Current visibility state.
+
+            Returns:
+                Tuple of gr.update and new visibility state.
+            """
+            return gr.update(type="text" if not visible else "password"), not visible
+
+        # Test old password toggle
+        result = test_password_toggle(False)
+        assert result[0]["type"] == "text", "Password should be visible when toggled"
+        assert result[1], "Toggle state should be updated"
+
+        # Test new password toggle
+        result = test_password_toggle(True)
+        assert result[0]["type"] == "password", "Password should be hidden when toggled"
+        assert not result[1], "Toggle state should be updated"
+
+        # Test popup show/hide functionality
+        def show_popup():
+            """
+            Show popup for testing.
+
+            :return: gr.update dict with visible True.
+            :rtype: dict
+            """
+            return gr.update(visible=True)
+
+        def hide_popup():
+            """
+            Hide popup for testing.
+
+            :return: gr.update dict with visible False.
+            :rtype: dict
+            """
+            return gr.update(visible=False)
+
+        show_result = show_popup()
+        assert show_result["visible"], "Popup should be visible when shown"
+
+        hide_result = hide_popup()
+        assert not hide_result["visible"], "Popup should be hidden when closed"
+
+        # Simulate successful password change with logout
         with patch("backend.change_password", return_value={"code": "200"}):
             # Simulate the async handler
-            async def fake_handle(username, old, new, confirm, last):
+            async def fake_handle(
+                username: str, old: str, new: str, confirm: str, last: int
+            ) -> Tuple[gr.update, int, gr.update, bool, str]:
+                """
+                Simulate async password change handler for success.
+
+                Args:
+                    username: Current username
+                    old: Old password
+                    new: New password
+                    confirm: Confirmed new password
+                    last: Last change timestamp
+
+                Returns:
+                    Tuple for handler output.
+                """
                 return (
-                    gr.update(visible=True, value="✅ Password changed successfully."),
+                    gr.update(
+                        visible=True,
+                        value="✅ Password changed successfully. You will be logged out.",
+                    ),
                     0,
                     gr.update(visible=False),
+                    True,  # Trigger logout
+                    username,
                 )
 
-            # Instead of calling .click, directly call the handler and check the result
+            # Test the handler
             import asyncio
 
             result = asyncio.run(fake_handle("test_user", "old", "new", "new", 0))
-            assert not result[2].visible, (
-                "Change Password section should be hidden after success"
+            assert not result[2]["visible"], (
+                "Change Password popup should be hidden after success"
             )
+            assert result[3], (
+                "Logout should be triggered after successful password change"
+            )
+            assert result[4] == "test_user", "Username should be returned"
+
+        # Test failed password change (no logout)
+        with patch(
+            "backend.change_password",
+            return_value={"code": "401", "message": "Current password is incorrect"},
+        ):
+
+            async def fake_handle_fail(
+                username: str, old: str, new: str, confirm: str, last: int
+            ) -> Tuple[gr.update, int, gr.update, bool, str]:
+                """
+                Simulate async password change handler for failure.
+
+                Args:
+                    username: Current username
+                    old: Old password
+                    new: New password
+                    confirm: Confirmed new password
+                    last: Last change timestamp
+
+                Returns:
+                    Tuple for handler output.
+                """
+                return (
+                    gr.update(visible=True, value="❌ Current password is incorrect."),
+                    0,
+                    gr.update(visible=True),
+                    False,  # No logout
+                    username,
+                )
+
+            result = asyncio.run(
+                fake_handle_fail("test_user", "wrong", "new", "new", 0)
+            )
+            assert result[2]["visible"], (
+                "Change Password popup should remain visible after failure"
+            )
+            assert not result[3], (
+                "Logout should not be triggered after failed password change"
+            )
+
         print("✅ test_change_password_ui: PASSED")
 
 

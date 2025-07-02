@@ -86,3 +86,79 @@
     border-radius: 4px !important;
     margin: 10px 0 !important;
 }
+
+/* Change password button styling */
+#main_change_password_btn {
+    background-color: var(--flexcyon-secondary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+}
+
+#main_change_password_btn:hover {
+    background-color: var(--flexcyon-primary) !important;
+    border-color: var(--flexcyon-primary) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Change password popup styling */
+#change_password_popup {
+    background-color: var(--base-02) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    margin: 10px 0 !important;
+}
+
+#change_password_popup .popup-header {
+    background-color: var(--base-03) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--base-03) !important;
+}
+
+#change_password_popup .popup-body {
+    background-color: var(--base-02) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Password toggle buttons in change password popup */
+#old_password_toggle,
+#new_password_toggle,
+#confirm_password_toggle {
+    background-color: var(--base-03) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 4px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+}
+
+#old_password_toggle:hover,
+#new_password_toggle:hover,
+#confirm_password_toggle:hover {
+    background-color: var(--flexcyon-secondary) !important;
+    border-color: var(--flexcyon-secondary) !important;
+}
+
+/* Password requirements styling */
+#password_requirements_info {
+    background-color: rgba(78, 205, 196, 0.1) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    margin: 16px 0 !important;
+    color: var(--text-secondary) !important;
+    font-size: 14px !important;
+}

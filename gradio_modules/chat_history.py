@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-import gradio as gr
+"""
+Chat History Interface Module
+
+This module provides the chat history interface for the NYP FYP Chatbot application.
+Users can search through their chat history and view previous conversations.
+"""
+
+import json
 import logging
 import os
 import sys
-import json
-from pathlib import Path
-from typing import Tuple, Dict, Any
 from difflib import get_close_matches
+from pathlib import Path
+from typing import Dict, Any, Tuple
+
+import gradio as gr
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -91,7 +99,16 @@ def chat_history_ui(
 
 
 def fuzzy_find_chats(user: str, query: str) -> str:
-    """Fuzzy search through all chats for a user."""
+    """
+    Fuzzy search through all chats for a user.
+
+    Args:
+        user: The username to search chats for
+        query: The search query string
+
+    Returns:
+        Formatted string containing matching chat results
+    """
     if not user or not query:
         return "Please login and enter a search query."
     chat_dir = os.path.join(os.getcwd(), "data", "chat_sessions", user)

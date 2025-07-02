@@ -4,6 +4,16 @@ Comprehensive, fully-updated testing framework for the NYP Final Year Project Ch
 
 ## 🔧 Recent Updates (Latest)
 
+**✅ Multi-Container Docker Architecture:**
+
+- **Separate Test Container**: Dedicated `nyp-fyp-chatbot-test` container for optimized testing
+- **Environment Verification**: New `test_docker_environment.py` script for Docker environment validation
+- **Individual Test Suite Support**: Run specific test suites (frontend, backend, integration, comprehensive)
+- **Individual Test File Support**: Run specific test files directly
+- **Test-Specific Environment**: `TESTING=true` environment variable for test optimization
+- **Isolated Test Data**: Test data separate from production data
+- **Python 3.11 Alpine**: Updated to Python 3.11 for better package compatibility
+
 **✅ All Test Runners Fixed and Updated:**
 
 - **Backend Tests**: Added missing functions (`set_chat_name`, `delete_test_user`)
@@ -14,56 +24,57 @@ Comprehensive, fully-updated testing framework for the NYP Final Year Project Ch
 - **Error Handling**: Improved graceful failure recovery and error reporting
 - **Test Runners**: Updated all runners to handle errors more gracefully
 
-## 📁 Directory Structure
-
-```
-tests/
-├── README.md                     # This file
-├── comprehensive_test_suite.py   # Main test runner
-├── test_utils.py                 # Shared testing utilities
-├── run_all_tests.py             # Legacy test runner
-├── run_tests.py                 # Alternative test runner
-│
-├── backend/                     # Backend component tests ✅ FIXED
-│   ├── test_backend.py         # Core backend functionality
-│   └── test_backend_fixes_and_rename.py  # Backend fixes & chat renaming
-│
-├── frontend/                    # Frontend/UI component tests ✅ FIXED
-│   ├── test_ui_fixes.py        # UI bug fixes validation
-│   ├── test_login_ui.py        # Login interface testing
-│   ├── test_chat_ui.py         # Chat interface testing (import issues fixed)
-│   ├── test_all_interfaces.py  # Complete UI integration
-│   ├── test_ui_state_interactions.py  # UI state management
-│   ├── test_theme_styles.py    # Theme and styling tests
-│   └── run_frontend_tests.py   # Frontend test runner
-│
-├── integration/                 # Integration & feature tests ✅ FIXED
-│   ├── test_integration.py     # Core integration tests (error handling improved)
-│   ├── test_enhanced_chatbot_features.py  # Enhanced features
-│   ├── test_improved_app.py    # App improvements validation
-│   ├── test_chatbot_integration.py  # Chatbot integration
-│   ├── test_main_app_integration.py  # Main app integration
-│   └── test_main_app_launch.py # App launch testing
-│
-├── llm/                        # LLM component tests ✅ COMPLETELY REWRITTEN
-│   └── test_llm.py            # Language model testing (all 11 tests passing)
-│
-├── demos/                      # Interactive demonstrations
-│   ├── README.md              # Demo documentation
-│   ├── demo_final_working_chatbot.py  # Complete feature demo
-│   ├── demo_enhanced_chatbot.py       # Enhanced features demo
-│   ├── demo_chatbot_with_history.py  # Chat history demo
-│   └── demo_integrated_main_app.py   # Full app demo
-│
-└── utils/                      # Testing utilities & diagnostics
-    ├── debug_chatbot_ui.py     # UI debugging tools
-    ├── diagnose_chatbot_issue.py  # Issue diagnosis
-    └── minimal_chatbot_test.py # Minimal testing setup
-```
-
 ## 🚀 Quick Start
 
-### Run All Tests
+> **Prerequisites**: Docker must be installed. See the [main README](../README.md#installing-docker) for Docker installation instructions.
+
+### Using Docker Test Container (Recommended)
+
+**Build the test container first:**
+
+```bash
+python setup.py --docker-build-test
+```
+
+**Run environment verification:**
+
+```bash
+python setup.py --docker-test
+```
+
+**Run specific test suites:**
+
+```bash
+# Frontend tests only
+python setup.py --docker-test-suite frontend
+
+# Backend tests only
+python setup.py --docker-test-suite backend
+
+# Integration tests only
+python setup.py --docker-test-suite integration
+
+# Comprehensive test suite
+python setup.py --docker-test-suite comprehensive
+```
+
+**Run individual test files:**
+
+```bash
+python setup.py --docker-test-file tests/frontend/test_login_ui.py
+python setup.py --docker-test-file tests/backend/test_backend.py
+python setup.py --docker-test-file tests/integration/test_integration.py
+```
+
+### Benefits of Docker Test Container
+
+- ✅ **Optimized Performance**: Container specifically configured for fast test execution
+- ✅ **Consistent Environment**: Same test environment across all systems
+- ✅ **Isolated Testing**: Test data separate from production data
+- ✅ **Simplified Commands**: No complex environment variable setup
+- ✅ **Comprehensive Coverage**: All test categories included
+
+### Direct Test Execution (Alternative)
 
 ```bash
 # Comprehensive test suite (recommended)
@@ -81,8 +92,11 @@ python tests/run_tests.py      # ✅ All issues fixed
 python tests/backend/test_backend.py
 python tests/backend/test_backend_fixes_and_rename.py
 
-# Frontend tests only ✅ FIXED
-python tests/frontend/run_frontend_tests.py test --test all
+# Frontend tests only ✅ FIXED (New Simplified Interface)
+python tests/frontend/run_frontend_tests.py                    # All frontend tests
+python tests/frontend/run_frontend_tests.py --category login   # Login tests only
+python tests/frontend/run_frontend_tests.py --category chat    # Chat tests only
+python tests/frontend/run_frontend_tests.py --category ui-state # UI state tests only
 
 # LLM tests only ✅ COMPLETELY REWRITTEN
 python tests/llm/test_llm.py
@@ -90,6 +104,15 @@ python tests/llm/test_llm.py
 # Integration tests only ✅ IMPROVED ERROR HANDLING
 python tests/integration/test_integration.py
 python tests/integration/test_enhanced_chatbot_features.py
+```
+
+### Launch Test Interfaces
+
+```bash
+# Launch specific test interfaces
+python tests/frontend/run_frontend_tests.py --launch login
+python tests/frontend/run_frontend_tests.py --launch chat
+python tests/frontend/run_frontend_tests.py --launch all
 ```
 
 ### Run Interactive Demos
@@ -101,6 +124,73 @@ python tests/demos/demo_final_working_chatbot.py
 # Enhanced features demo
 python tests/demos/demo_enhanced_chatbot.py
 ```
+
+## 🐳 Docker Container Architecture
+
+> **Note**: For Docker installation instructions, see the [main README](../README.md#installing-docker).
+
+The project now uses separate Docker containers for different purposes:
+
+### **Test Container** (`nyp-fyp-chatbot-test`)
+
+**Purpose**: Dedicated container for running tests efficiently and consistently.
+
+**Features**:
+
+- **Dockerfile**: `Dockerfile.test`
+- **Default Command**: `python tests/test_docker_environment.py`
+- **Environment**: `TESTING=true`, `IN_DOCKER=1`
+- **Optimized**: Configured specifically for fast test execution
+- **Isolated**: Test data separate from production data
+- **Python 3.11 Alpine**: Better package compatibility
+
+**Usage**:
+
+```bash
+# Build test container
+python setup.py --docker-build-test
+
+# Run environment verification
+python setup.py --docker-test
+
+# Run specific test suites
+python setup.py --docker-test-suite frontend
+python setup.py --docker-test-suite backend
+python setup.py --docker-test-suite integration
+
+# Run individual test files
+python setup.py --docker-test-file tests/frontend/test_login_ui.py
+```
+
+### **Development Container** (`nyp-fyp-chatbot-dev`)
+
+**Purpose**: Running the main application for development.
+
+**Features**:
+
+- **Dockerfile**: `Dockerfile.dev`
+- **Default Command**: `python app.py`
+- **Environment**: Full development environment
+- **Interactive**: Shell access and debugging capabilities
+
+### **Production Container** (`nyp-fyp-chatbot-prod`)
+
+**Purpose**: Production deployment.
+
+**Features**:
+
+- **Dockerfile**: `Dockerfile`
+- **Default Command**: `python app.py`
+- **Environment**: `PRODUCTION=true`
+- **Optimized**: Security-focused configuration
+
+### **Benefits of Multi-Container Architecture**
+
+- **Separation of Concerns**: Each container has a specific purpose
+- **Optimized Performance**: Test container optimized for testing without affecting development
+- **Simplified Commands**: No complex environment variable passing for tests
+- **Better Maintenance**: Each container can be updated independently
+- **Resource Efficiency**: Only build and run what you need
 
 ## 🧪 Test Categories
 
@@ -136,6 +226,53 @@ Diagnostic and debugging tools:
 - **Performance Testing:** Speed and reliability validation
 - **Debug Tools:** Development and troubleshooting utilities
 
+## 📁 Directory Structure
+
+```
+tests/
+├── README.md                     # This file
+├── comprehensive_test_suite.py   # Main test runner
+├── test_utils.py                 # Shared testing utilities
+├── run_all_tests.py             # Legacy test runner
+├── run_tests.py                 # Alternative test runner
+│
+├── backend/                     # Backend component tests ✅ FIXED
+│   ├── test_backend.py         # Core backend functionality
+│   └── test_backend_fixes_and_rename.py  # Backend fixes & chat renaming
+│
+├── frontend/                    # Frontend/UI component tests ✅ FIXED
+│   ├── test_ui_fixes.py        # UI bug fixes validation
+│   ├── test_login_ui.py        # Login interface testing
+│   ├── test_chat_ui.py         # Chat interface testing (import issues fixed)
+│   ├── test_all_interfaces.py  # Complete UI integration
+│   ├── test_ui_state_interactions.py  # UI state management
+│   ├── test_theme_styles.py    # Theme and styling tests
+│   └── run_frontend_tests.py   # Frontend test runner (✅ Simplified Interface)
+│
+├── integration/                 # Integration & feature tests ✅ FIXED
+│   ├── test_integration.py     # Core integration tests (error handling improved)
+│   ├── test_enhanced_chatbot_features.py  # Enhanced features
+│   ├── test_improved_app.py    # App improvements validation
+│   ├── test_chatbot_integration.py  # Chatbot integration
+│   ├── test_main_app_integration.py  # Main app integration
+│   └── test_main_app_launch.py # App launch testing
+│
+├── llm/                        # LLM component tests ✅ COMPLETELY REWRITTEN
+│   └── test_llm.py            # Language model testing (all 11 tests passing)
+│
+├── demos/                      # Interactive demonstrations
+│   ├── README.md              # Demo documentation
+│   ├── demo_final_working_chatbot.py  # Complete feature demo
+│   ├── demo_enhanced_chatbot.py       # Enhanced features demo
+│   ├── demo_chatbot_with_history.py  # Chat history demo
+│   └── demo_integrated_main_app.py   # Full app demo
+│
+└── utils/                      # Testing utilities & diagnostics
+    ├── debug_chatbot_ui.py     # UI debugging tools
+    ├── diagnose_chatbot_issue.py  # Issue diagnosis
+    └── minimal_chatbot_test.py # Minimal testing setup
+```
+
 ## 🔧 Detailed Fix Summary
 
 ### Backend Test Fixes ✅
@@ -150,6 +287,7 @@ Diagnostic and debugging tools:
 - **Updated function calls**: Corrected parameter signatures for `login_interface()`, `audio_interface()`
 - **Gradio compatibility**: Updated Chatbot components to use `type='messages'`
 - **Fallback mechanisms**: Added graceful fallbacks for import failures
+- **Simplified interface**: New `--category` and `--launch` options for easier usage
 
 ### LLM Test Fixes ✅ (Complete Rewrite)
 
@@ -171,6 +309,13 @@ Diagnostic and debugging tools:
 - **Updated Chatbot components**: Changed from deprecated 'tuples' to 'messages' format
 - **Message format conversion**: All chat history now uses OpenAI-style dictionaries
 - **Backward compatibility**: Maintains compatibility with existing chat data
+
+### Setup.py Integration ✅
+
+- **Added `--docker-test-suite` option**: Run specific test suites in Docker (frontend, backend, integration, comprehensive)
+- **Added `--docker-test-file` option**: Run individual test files in Docker
+- **Simplified frontend interface**: No more confusing action arguments
+- **Better error handling**: Clear error messages for missing files or invalid options
 
 ## 📊 Test Results
 
@@ -205,6 +350,27 @@ The comprehensive test suite provides detailed reporting:
 
 🎉 All tests passed! The chatbot is ready for use.
 ```
+
+## 🎯 Frontend Test Categories
+
+Available frontend test categories when using `--category`:
+
+- **login**: Login interface tests
+- **chat**: Chat interface tests
+- **search**: Search interface tests
+- **file-upload**: File upload tests
+- **ui-state**: UI state interaction tests
+- **theme-styles**: Theme and styles tests
+- **all**: All frontend tests (default)
+
+Available launch options when using `--launch`:
+
+- **login**: Launch login test interface
+- **chat**: Launch chat test interface
+- **search**: Launch search test interface
+- **file-upload**: Launch file upload test interface
+- **audio**: Launch audio input test interface
+- **all**: Launch all interfaces test
 
 ## 🔧 Test Configuration
 

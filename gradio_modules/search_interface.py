@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Search interface module for chat history search functionality."""
+
 from typing import Dict, Any, List
 import gradio as gr
 import logging
@@ -24,8 +26,7 @@ def search_interface(
     current_chat_id_state: gr.State,
     chat_history_state: gr.State,
 ) -> None:
-    """
-    Create the search interface components.
+    """Create the search interface components.
 
     This function creates the search UI components including:
     - Search input
@@ -33,11 +34,14 @@ def search_interface(
     - Search results dropdown
     - Search container
 
-    Args:
-        logged_in_state (gr.State): State for tracking login status
-        username_state (gr.State): State for storing current username
-        current_chat_id_state (gr.State): State for storing current chat ID
-        chat_history_state (gr.State): State for storing chat history
+    :param logged_in_state: State for tracking login status
+    :type logged_in_state: gr.State
+    :param username_state: State for storing current username
+    :type username_state: gr.State
+    :param current_chat_id_state: State for storing current chat ID
+    :type current_chat_id_state: gr.State
+    :param chat_history_state: State for storing chat history
+    :type chat_history_state: gr.State
     """
     with gr.Column(visible=False):
         with gr.Row():
@@ -68,15 +72,14 @@ def search_interface(
 
 
 def _handle_search(query: str, username: str) -> Dict[str, Any]:
-    """
-    Handle search query and return matching results.
+    """Handle search query and return matching results.
 
-    Args:
-        query (str): The search query.
-        username (str): Current username.
-
-    Returns:
-        Dict[str, Any]: Updated search results dropdown.
+    :param query: The search query
+    :type query: str
+    :param username: Current username
+    :type username: str
+    :return: Updated search results dropdown
+    :rtype: Dict[str, Any]
     """
     if not query:
         return {"choices": [], "value": None}
@@ -93,15 +96,14 @@ def _handle_search(query: str, username: str) -> Dict[str, Any]:
 
 
 def _handle_search_result(selected: str, username: str) -> List[List[str]]:
-    """
-    Handle search result selection and return the corresponding chat history.
+    """Handle search result selection and return the corresponding chat history.
 
-    Args:
-        selected (str): The selected search result.
-        username (str): Current username.
-
-    Returns:
-        List[List[str]]: Chat history for the selected result.
+    :param selected: The selected search result
+    :type selected: str
+    :param username: Current username
+    :type username: str
+    :return: Chat history for the selected result
+    :rtype: List[List[str]]
     """
     if not selected:
         return []

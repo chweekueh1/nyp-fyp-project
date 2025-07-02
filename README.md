@@ -16,7 +16,7 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
 ### Prerequisites
 
-* **Python 3.12.0 or higher**: Ensure you have a compatible Python version installed.
+* **Python 3.11.0 or higher**: Ensure you have a compatible Python version installed.
 * **Git**: Required for cloning the repository.
 * **OpenAI API key**: Necessary for AI functionalities.
 * **Compiler Tools**:
@@ -32,10 +32,10 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
     cd nyp-fyp-project
     ```
 
-2. **Install Python Version 3.12.0 (if you don't have it)**
+2. **Install Python Version 3.11.0 (if you don't have it)**
 
-      * **Windows**: You can download it from [Python.org](https://www.python.org/downloads/release/python-31210/). During installation, make sure to **check the box "Add python.exe to PATH"**.
-      * **Linux**: It's recommended to install Python via your distribution's package manager (e.g., `sudo apt install python3.12` on Debian/Ubuntu, `sudo pacman -S python` on Arch Linux) or using a version manager like `pyenv`.
+      * **Windows**: You can download it from [Python.org](https://www.python.org/downloads/release/python-3119/). During installation, make sure to **check the box "Add python.exe to PATH"**.
+      * **Linux**: It's recommended to install Python via your distribution's package manager (e.g., `sudo apt install python3.11` on Debian/Ubuntu, `sudo pacman -S python` on Arch Linux) or using a version manager like `pyenv`.
 
 3. **Install Compiler Tools (if prompted or encountering errors)**
 
@@ -73,6 +73,35 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
 ---
 
+## 🐳 Docker Multi-Container Architecture
+
+The project uses separate Docker containers for different purposes. For detailed information about the multi-container setup, testing procedures, and container-specific features, see the [Tests README](tests/README.md#docker-container-architecture).
+
+### Quick Commands
+
+```bash
+# Build containers (Python 3.11 Alpine)
+python setup.py --docker-build        # Development
+python setup.py --docker-build-test   # Testing
+python setup.py --docker-build-prod   # Production
+
+# Run application
+python setup.py --docker-run
+
+# Run tests (see tests/README.md for detailed options)
+python setup.py --list-tests                                     # List all available tests
+python setup.py --docker-test                                    # Environment verification
+python setup.py --docker-test-suite frontend                     # Frontend test suite
+python setup.py --docker-test-suite backend                      # Backend test suite
+python setup.py --docker-test-suite integration                  # Integration test suite
+python setup.py --docker-test-suite performance                  # Performance test suite
+python setup.py --docker-test-suite comprehensive                # Comprehensive test suite
+python setup.py --docker-test-suite all                          # All test suites
+python setup.py --docker-test-file tests/backend/test_backend_fixes_and_rename.py
+```
+
+---
+
 ## 🐳 Installing Docker
 
 Docker is required to build and run the application in a containerized environment. Follow the instructions for your platform:
@@ -86,7 +115,7 @@ Docker is required to build and run the application in a containerized environme
   ```bash
   sudo apt-get update
   sudo apt-get install -y ca-certificates curl gnupg
-  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo install -m 0755 -d /etc/apt/keyringos
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   echo \
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
@@ -110,55 +139,6 @@ Docker is required to build and run the application in a containerized environme
 * After installation, start Docker Desktop from the Start menu.
 
 > For more details, see the [official Docker documentation](https://docs.docker.com/get-docker/).
-
----
-
-## 🐳 Docker Shortcuts via setup.py
-
-You can use the `setup.py` script to run common Docker commands with simple flags, instead of typing out long Docker commands:
-
-* **Build the Docker image:**
-
-  ```bash
-  python setup.py --docker-build
-  sudo python3 setup.py --docker-build
-  ```
-
-* **Run the Docker container:**
-
-  ```bash
-  python setup.py --docker-run
-  sudo python3 setup.py --docker-run
-  ```
-
-* **Run the test suite in Docker:**
-
-  ```bash
-  python setup.py --docker-test
-  sudo python3 setup.py --docker-test
-  ```
-
-* **Run a specific test file in Docker:**
-
-  ```bash
-  python setup.py --docker-test-file tests/frontend/test_login_ui.py
-  sudo python3 setup.py --docker-test-file tests/frontend/test_login_ui.py
-  ```
-
-* **Open a shell in the Docker container:**
-
-  ```bash
-  python setup.py --docker-shell
-  sudo python3 setup.py --docker-shell
-  ```
-
-These commands will:
-
-* Use your `.env` file for environment variables
-* Mount your local `~/.nypai-chatbot` directory for persistent data
-* Expose the application on port 7860
-
-> You can still use the raw Docker commands if you prefer, but the above shortcuts are recommended for convenience.
 
 ---
 
@@ -215,86 +195,30 @@ python tests/test_data_storage.py
 
 ---
 
-## 🧪 Testing in Docker
+## 🧪 Testing
 
-The test suite is fully integrated into the Docker container and includes:
+For comprehensive testing information, including Docker test containers, test categories, and detailed testing procedures, see the [Tests README](tests/README.md).
 
-### **Frontend Tests**
-
-* Login interface tests
-* Chat interface tests
-* Search interface tests
-* File upload and audio input tests
-
-### **Backend Tests**
-
-* API endpoint tests
-* Database integration tests
-* File processing tests
-
-### **Integration Tests**
-
-* End-to-end workflow tests
-* Chatbot functionality tests
-* File classification tests
-
-### **Running Tests**
-
-**Run all tests:**
+### Quick Test Commands
 
 ```bash
+# List all available tests and suites
+python setup.py --list-tests
+
+# Run environment verification
 python setup.py --docker-test
+
+# Run specific test suites
+python setup.py --docker-test-suite frontend      # Frontend UI tests
+python setup.py --docker-test-suite backend       # Backend API tests
+python setup.py --docker-test-suite integration   # Integration tests
+python setup.py --docker-test-suite performance   # Performance tests
+python setup.py --docker-test-suite comprehensive # All tests organized by category
+python setup.py --docker-test-suite all           # Run all available tests
+
+# Run individual test files
+python setup.py --docker-test-file tests/backend/test_backend_fixes_and_rename.py
 ```
-
-**Run specific test categories:**
-
-```bash
-# Frontend tests only
-python setup.py --docker-test-file tests/frontend/run_frontend_tests.py
-
-# Backend tests only
-python setup.py --docker-test-file tests/backend/test_backend.py
-
-# Integration tests only
-python setup.py --docker-test-file tests/integration/test_integration.py
-```
-
-**Run individual test files:**
-
-```bash
-# Login UI tests
-python setup.py --docker-test-file tests/frontend/test_login_ui.py
-
-# Chat UI tests
-python setup.py --docker-test-file tests/frontend/test_chat_ui.py
-
-# File classification tests
-python setup.py --docker-test-file tests/frontend/test_file_classification.py
-```
-
-The test suite will:
-
-* Create test Gradio applications to validate UI components
-* Test backend API functionality
-* Verify file upload and processing capabilities
-* Check chat and search functionality
-* Validate login and authentication systems
-
-> **Note:** Tests run in a clean Docker environment with all dependencies pre-installed, ensuring consistent test results across different systems.
-
----
-
-## 🧪 Running Individual Test Files
-
-You can run any individual test file directly using the setup script:
-
-```bash
-python setup.py --test-file tests/frontend/test_login_ui.py
-```
-
-Replace the path with any test file you want to run. This will execute the test file using your current Python environment and print the results to the console.
-
----
 
 ## 🔧 Code Quality with Pre-commit
 
@@ -371,33 +295,41 @@ If pre-commit hooks fail:
 
 ## 🐳 Docker Usage (Recommended)
 
-The application is designed to run seamlessly in Docker with all dependencies (Python 3.12, Tesseract, Pandoc, Poppler, etc.) pre-installed. All Python packages are installed directly from requirements.txt for a clean, reproducible build.
+The application is designed to run seamlessly in Docker with all dependencies (Python 3.11, Tesseract, Pandoc, Poppler, etc.) pre-installed. All Python packages are installed directly from requirements.txt for a clean, reproducible build.
 
-### 1. Prepare your environment variables
-
-Copy the following template to a file named `.env` in the project root:
-
-```
-# .env (example)
-OPENAI_API_KEY=your_openai_api_key
-# Add other required variables as needed
-```
-
-Refer to the "Required Environment Variables" section above for all necessary variables.
-
-### 2. Build the Docker image
+### Quick Start
 
 ```bash
-docker build -t nyp-fyp-chatbot .
-```
-
-### 3. Run the Docker container
-
-```bash
-docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
+# Build and run the development container
+python setup.py --docker-build
+python setup.py --docker-run
 ```
 
 The application will be available at <http://localhost:7860>.
+
+### Manual Docker Commands (Advanced)
+
+If you prefer to use Docker commands directly:
+
+1. **Prepare your environment variables**
+
+   ```bash
+   # Copy the template
+   cp .env.dev .env
+   # Edit .env and add your OpenAI API key
+   ```
+
+2. **Build the Docker image**
+
+   ```bash
+   docker build -t nyp-fyp-chatbot .
+   ```
+
+3. **Run the Docker container**
+
+   ```bash
+   docker run --env-file .env -v ~/.nypai-chatbot:/root/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
+   ```
 
 ---
 
@@ -501,48 +433,16 @@ sudo systemctl start firewalld
 
 ---
 
-## 🧪 Running Tests
-
-You can run all or individual test files in Docker using the setup.py CLI flags:
-
-**Run all tests in Docker:**
-
-```bash
-python3 setup.py --docker-test
-```
-
-Or, for full unittest discovery:
-
-```bash
-docker run --env-file .env -v /path/on/host/.nypai-chatbot:/root/.nypai-chatbot -it nyp-fyp-chatbot python -m unittest discover tests
-```
-
-### Locally
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-python tests/run_all_tests.py
-```
-
-Or:
-
-```bash
-python -m unittest discover tests
-```
-
----
-
 ## 📁 Project Structure
 
 ```
 nyp-fyp-project/
-├── app.py           # Main application entry point
-├── backend.py       # Backend API and business logic
-├── utils.py         # Utility functions
-├── gradio_modules/  # UI components
+├── app.py                    # Main application entry point
+├── backend.py                # Backend API and business logic
+├── setup.py                  # Build and deployment scripts
+├── requirements.txt          # Python dependencies
+├── Dockerfile*               # Multi-container Docker setup
+├── gradio_modules/           # UI components
 │   ├── login_and_register.py # Authentication interface
 │   ├── chatbot.py            # Enhanced chatbot interface
 │   ├── file_classification.py # File upload & classification
@@ -551,11 +451,23 @@ nyp-fyp-project/
 │   ├── search_interface.py   # Legacy (tests only)
 │   ├── chat_history.py       # Legacy (tests only)
 │   └── file_upload.py        # Legacy (tests only)
-├── llm/             # Language model services
-├── styles/          # CSS and theming
-├── scripts/         # JavaScript and client-side code
-├── tests/           # Test suite
+├── llm/                      # Language model services
+│   ├── chatModel.py          # Chat functionality
+│   ├── classificationModel.py # Document classification
+│   └── dataProcessing.py     # Data processing utilities
+├── styles/                   # CSS and theming
+├── scripts/                  # JavaScript and client-side code
+├── tests/                    # Comprehensive test suite
+│   ├── frontend/             # UI component tests
+│   ├── backend/              # Backend functionality tests
+│   ├── integration/          # End-to-end tests
+│   ├── llm/                  # Language model tests
+│   ├── demos/                # Interactive demonstrations
+│   └── utils/                # Testing utilities
+└── misc/                     # Documentation and utilities
 ```
+
+For detailed test structure, see [tests/README.md](tests/README.md#directory-structure).
 
 ---
 

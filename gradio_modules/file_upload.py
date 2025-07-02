@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""File upload interface module for handling file uploads in the chatbot."""
+
 import gradio as gr
 import backend
 from typing import Tuple, Any, List, Dict
@@ -7,21 +9,21 @@ from typing import Tuple, Any, List, Dict
 def file_upload_ui(
     username_state: gr.State, chat_history_state: gr.State, chat_id_state: gr.State
 ) -> Tuple[gr.File, gr.Button, gr.Markdown]:
-    """
-    Create the file upload interface components.
+    """Create the file upload interface components.
 
     This function creates the file upload UI components including:
     - File upload input
     - Send button
     - Debug markdown for status messages
 
-    Args:
-        username_state (gr.State): State component for the current username.
-        chat_history_state (gr.State): State component for the chat history.
-        chat_id_state (gr.State): State component for the current chat ID.
-
-    Returns:
-        Tuple[gr.File, gr.Button, gr.Markdown]: File upload, send button, and debug markdown.
+    :param username_state: State component for the current username
+    :type username_state: gr.State
+    :param chat_history_state: State component for the chat history
+    :type chat_history_state: gr.State
+    :param chat_id_state: State component for the current chat ID
+    :type chat_id_state: gr.State
+    :return: File upload, send button, and debug markdown
+    :rtype: Tuple[gr.File, gr.Button, gr.Markdown]
     """
     file_upload = gr.File(label="Upload a file for the chatbot")
     file_btn = gr.Button("Send File")
@@ -30,17 +32,18 @@ def file_upload_ui(
     def send_file(
         user: str, file_obj: Any, history: List[List[str]], chat_id: str
     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        """
-        Handle sending a file and updating the chat history.
+        """Handle sending a file and updating the chat history.
 
-        Args:
-            user (str): Current username.
-            file_obj (Any): The uploaded file object.
-            history (List[List[str]]): Current chat history.
-            chat_id (str): Current chat ID.
-
-        Returns:
-            Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]: Updated chat history, debug message, and chat history state.
+        :param user: Current username
+        :type user: str
+        :param file_obj: The uploaded file object
+        :type file_obj: Any
+        :param history: Current chat history
+        :type history: List[List[str]]
+        :param chat_id: Current chat ID
+        :type chat_id: str
+        :return: Updated chat history, debug message, and chat history state
+        :rtype: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]
         """
         if not user:
             return (

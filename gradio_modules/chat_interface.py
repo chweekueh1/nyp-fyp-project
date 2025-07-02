@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
+"""
+Chat Interface Module
+
+This module provides the main chat interface for the NYP FYP Chatbot application.
+Users can send messages, view chat history, and manage multiple chat sessions.
+"""
+
+import asyncio
+import sys
+from pathlib import Path
+from typing import Dict, List, Tuple, Any
+
 import gradio as gr
+
 from backend import (
     list_user_chat_ids,
     get_chat_history,
     ask_question,
     create_and_persist_new_chat,
 )
-import asyncio
-import sys
-from pathlib import Path
 from infra_utils import setup_logging
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
-
-# Now import from parent directory
 
 # Set up logging
 logger = setup_logging()
@@ -25,25 +33,26 @@ logger = setup_logging()
 # Module-level function for testing
 async def _handle_chat_message(
     message: str,
-    chat_history: list,
+    chat_history: List[List[str]],
     username: str,
     chat_id: str,
-) -> tuple[str, list, dict, str]:
+) -> Tuple[str, List[List[str]], Dict[str, Any], str]:
     """
     Handle chat message processing - module level function for testing.
 
-    :param message: The message to process.
-    :type message: str
-    :param chat_history: The current chat history.
-    :type chat_history: list
-    :param username: The username of the user.
-    :type username: str
-    :param chat_id: The chat ID.
-    :type chat_id: str
-    :return: Tuple containing updated message, chat history, error dict, and chat ID.
-    :rtype: tuple[str, list, dict, str]
+    Args:
+        message: The message to process
+        chat_history: The current chat history
+        username: The username of the user
+        chat_id: The chat ID
+
+    Returns:
+        Tuple containing:
+        - updated_message: Empty string after processing
+        - updated_chat_history: Updated chat history with new message/response
+        - error_dict: Error information if any
+        - updated_chat_id: Updated chat ID
     """
-    from backend import ask_question, create_and_persist_new_chat
 
     if not message.strip():
         return (
@@ -81,15 +90,11 @@ def chat_interface(
     """
     Create the chat interface components.
 
-    :param logged_in_state: State for tracking login status.
-    :type logged_in_state: gr.State
-    :param username_state: State for storing current username.
-    :type username_state: gr.State
-    :param current_chat_id_state: State for storing current chat ID.
-    :type current_chat_id_state: gr.State
-    :param chat_history_state: State for storing chat history.
-    :type chat_history_state: gr.State
-    :return: None
+    Args:
+        logged_in_state: State for tracking login status
+        username_state: State for storing current username
+        current_chat_id_state: State for storing current chat ID
+        chat_history_state: State for storing chat history
     """
     with gr.Row():
         chat_selector = gr.Dropdown(choices=[], label="Select Chat")
@@ -104,7 +109,16 @@ def chat_interface(
         )
         search_results = gr.Markdown()
 
-    def load_all_chats(username):
+    def load_all_chats(username: str) -> Dict[str, List[Dict[str, str]]]:
+        """
+        Load all chat histories for a user.
+
+        Args:
+            username: The username to load chats for
+
+        Returns:
+            Dictionary mapping chat IDs to their message histories
+        """
         chat_ids = list_user_chat_ids(username)
         all_histories = {}
         for cid in chat_ids:
@@ -126,7 +140,18 @@ def chat_interface(
                 ]
         return all_histories
 
-    def on_start(username):
+    def on_start(
+        username: str,
+    ) -> Tuple[gr.update, str, Dict[str, List[Dict[str, str]]], List[Dict[str, str]]]:
+        """
+        Initialize chat interface on startup.
+
+        Args:
+            username: The username to initialize for
+
+        Returns:
+            Tuple containing dropdown update, selected chat ID, all histories, and selected chat history
+        """
         all_histories = load_all_chats(username)
         chat_ids = list(all_histories.keys())
         selected = chat_ids[0] if chat_ids else ""
@@ -137,7 +162,19 @@ def chat_interface(
             all_histories[selected] if selected else [],
         )
 
-    def start_new_chat(all_histories, username):
+    def start_new_chat(
+        all_histories: Dict[str, List[Dict[str, str]]], username: str
+    ) -> Tuple[gr.update, str, Dict[str, List[Dict[str, str]]], List[Dict[str, str]]]:
+        """
+        Start a new chat session.
+
+        Args:
+            all_histories: Current chat histories
+            username: The username to create chat for
+
+        Returns:
+            Tuple containing dropdown update, new chat ID, updated histories, and empty chat history
+        """
         new_id = create_and_persist_new_chat(username)
         all_histories[new_id] = []
         return (
@@ -153,7 +190,19 @@ def chat_interface(
         outputs=[chat_selector, current_chat_id_state, chat_history_state, chatbot],
     )
 
-    def switch_chat(chat_id, all_histories):
+    def switch_chat(
+        chat_id: str, all_histories: Dict[str, List[Dict[str, str]]]
+    ) -> Tuple[str, List[Dict[str, str]]]:
+        """
+        Switch to a different chat.
+
+        Args:
+            chat_id: The chat ID to switch to
+            all_histories: All chat histories
+
+        Returns:
+            Tuple containing chat ID and selected chat history
+        """
         return chat_id, all_histories.get(chat_id, [])
 
     chat_selector.change(
@@ -162,7 +211,24 @@ def chat_interface(
         outputs=[current_chat_id_state, chatbot],
     )
 
-    def send_message_to_chat(message, chat_id, all_histories, username):
+    def send_message_to_chat(
+        message: str,
+        chat_id: str,
+        all_histories: Dict[str, List[Dict[str, str]]],
+        username: str,
+    ) -> Tuple[str, Dict[str, List[Dict[str, str]]], str, List[Dict[str, str]]]:
+        """
+        Send a message to the current chat.
+
+        Args:
+            message: The message to send
+            chat_id: Current chat ID
+            all_histories: All chat histories
+            username: Current username
+
+        Returns:
+            Tuple containing empty message, updated histories, chat ID, and updated chat history
+        """
         if not message.strip():
             return (
                 "",
@@ -205,7 +271,19 @@ def chat_interface(
         outputs=[msg, chat_history_state, current_chat_id_state, chatbot],
     )
 
-    def fuzzy_find_chats(query, all_histories):
+    def fuzzy_find_chats(
+        query: str, all_histories: Dict[str, List[Dict[str, str]]]
+    ) -> str:
+        """
+        Perform fuzzy search through chat histories.
+
+        Args:
+            query: The search query
+            all_histories: All chat histories to search through
+
+        Returns:
+            Formatted string containing matching chat results
+        """
         from difflib import get_close_matches
 
         results = []

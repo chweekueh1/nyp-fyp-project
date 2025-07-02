@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Login and Registration Interface Module
+"""Login and Registration Interface Module.
 
 This module provides the login and registration interface components
 for the NYP FYP Chatbot application.
@@ -13,9 +12,8 @@ from infra_utils import setup_logging
 logger = setup_logging()
 
 
-def login_interface(setup_events=True):
-    """
-    Create the login and registration interface with dynamic form switching.
+def login_interface(setup_events: bool = True) -> tuple:
+    """Create the login and registration interface with dynamic form switching.
 
     This version shows only one form at a time for better performance and UX.
     Features:
@@ -25,11 +23,10 @@ def login_interface(setup_events=True):
     - Password requirements
     - Proper state management
 
-    Args:
-        setup_events: Whether to set up event handlers (default: True)
-
-    Returns:
-        Tuple of components and state variables
+    :param setup_events: Whether to set up event handlers, defaults to True
+    :type setup_events: bool
+    :return: Tuple of components and state variables
+    :rtype: tuple
     """
 
     # State variables
@@ -145,7 +142,16 @@ def login_interface(setup_events=True):
     # Event handlers (only when setup_events=True)
     if setup_events:
 
-        def handle_login(username, password):
+        def handle_login(username: str, password: str) -> tuple:
+            """Handle login attempt.
+
+            :param username: Username or email for login
+            :type username: str
+            :param password: Password for login
+            :type password: str
+            :return: Tuple of (login_success, username, error_message)
+            :rtype: tuple
+            """
             logger.info(f"Login attempt for user: {username}")
 
             # Input validation
@@ -200,7 +206,22 @@ def login_interface(setup_events=True):
                     gr.update(visible=True, value=f"❌ **System error:** {str(e)}"),
                 )
 
-        def handle_register(username, email, password, confirm):
+        def handle_register(
+            username: str, email: str, password: str, confirm: str
+        ) -> tuple:
+            """Handle registration attempt.
+
+            :param username: Username for registration
+            :type username: str
+            :param email: Email address for registration
+            :type email: str
+            :param password: Password for registration
+            :type password: str
+            :param confirm: Password confirmation
+            :type confirm: str
+            :return: Tuple of (registration_success, username, error_message)
+            :rtype: tuple
+            """
             logger.info(f"Registration attempt for user: {username}")
 
             # Input validation
@@ -288,21 +309,39 @@ def login_interface(setup_events=True):
                 )
 
         # Password toggle handlers
-        def toggle_password(is_visible):
+        def toggle_password(is_visible: bool) -> tuple:
+            """Toggle password visibility.
+
+            :param is_visible: Current visibility state
+            :type is_visible: bool
+            :return: Tuple of (password_input_update, button_text, new_visibility)
+            :rtype: tuple
+            """
             if is_visible:
                 return gr.update(type="password"), "👁️", False
             else:
                 return gr.update(type="text"), "🙈", True
 
-        def toggle_confirm_password(is_visible):
+        def toggle_confirm_password(is_visible: bool) -> tuple:
+            """Toggle confirm password visibility.
+
+            :param is_visible: Current visibility state
+            :type is_visible: bool
+            :return: Tuple of (confirm_password_input_update, button_text, new_visibility)
+            :rtype: tuple
+            """
             if is_visible:
                 return gr.update(type="password"), "👁️", False
             else:
                 return gr.update(type="text"), "🙈", True
 
         # Form switching handlers
-        def switch_to_register():
-            """Switch to register mode - show register fields and update labels."""
+        def switch_to_register() -> tuple:
+            """Switch to register mode - show register fields and update labels.
+
+            :return: Tuple of updates for all form components
+            :rtype: tuple
+            """
             return (
                 True,  # is_register_mode = True
                 gr.update(value="## 📝 Register"),  # header_subtitle
@@ -326,8 +365,12 @@ def login_interface(setup_events=True):
                 gr.update(visible=False),  # error_message
             )
 
-        def switch_to_login():
-            """Switch to login mode - hide register fields and update labels."""
+        def switch_to_login() -> tuple:
+            """Switch to login mode - hide register fields and update labels.
+
+            :return: Tuple of updates for all form components
+            :rtype: tuple
+            """
             return (
                 False,  # is_register_mode = False
                 gr.update(value="## 🔐 Login"),  # header_subtitle
@@ -369,8 +412,14 @@ def login_interface(setup_events=True):
         )
 
         # Wire up form switching events
-        def handle_secondary_btn_click(is_register_mode):
-            """Handle secondary button click - switches between login/register modes."""
+        def handle_secondary_btn_click(is_register_mode: bool) -> tuple:
+            """Handle secondary button click - switches between login/register modes.
+
+            :param is_register_mode: Current mode state
+            :type is_register_mode: bool
+            :return: Tuple of updates for all form components
+            :rtype: tuple
+            """
             if is_register_mode:
                 # Currently in register mode, switch to login
                 return switch_to_login()
@@ -400,9 +449,27 @@ def login_interface(setup_events=True):
 
         # Wire up primary button (login or register based on mode)
         def handle_primary_btn_click(
-            is_register_mode, username, email, password, confirm_password
-        ):
-            """Handle primary button click - login or register based on current mode."""
+            is_register_mode: bool,
+            username: str,
+            email: str,
+            password: str,
+            confirm_password: str,
+        ) -> tuple:
+            """Handle primary button click - login or register based on current mode.
+
+            :param is_register_mode: Current mode state
+            :type is_register_mode: bool
+            :param username: Username input
+            :type username: str
+            :param email: Email input
+            :type email: str
+            :param password: Password input
+            :type password: str
+            :param confirm_password: Confirm password input
+            :type confirm_password: str
+            :return: Tuple of (success, username, error_message)
+            :rtype: tuple
+            """
             if is_register_mode:
                 # Register mode
                 return handle_register(username, email, password, confirm_password)

@@ -12,6 +12,7 @@ import json
 import tempfile
 import shutil
 from pathlib import Path
+import asyncio
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -88,13 +89,15 @@ def test_chatbot_response():
         test_user = get_default_test_user()
 
         # Test chatbot response
-        response_dict = backend.get_chatbot_response(
-            {
-                "username": test_user["username"],
-                "message": "Hello, this is a test message",
-                "history": [],
-                "chat_id": "test_chat",
-            }
+        response_dict = asyncio.run(
+            backend.get_chatbot_response(
+                {
+                    "username": test_user["username"],
+                    "message": "Hello, this is a test message",
+                    "history": [],
+                    "chat_id": "test_chat",
+                }
+            )
         )
 
         response = response_dict.get("response", "")

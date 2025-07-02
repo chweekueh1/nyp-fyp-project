@@ -236,17 +236,6 @@ contextualize_q_system_prompt = (
     "formulate a standalone question which can be understood "
     "without the chat history. Do NOT answer the question, "
     "just reformulate it if needed and otherwise return it as is."
-)
-
-contextualize_q_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", contextualize_q_system_prompt),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-    ]
-)
-
-system_prompt = (
     "You are the NYP FYP CNC Chatbot, a Gradio-based Python application designed to help staff identify and use the correct sensitivity labels in their communications. "
     "The application supports user authentication, real-time chat, search, file upload and classification, audio input, persistent chat history, OCR, and document processing. "
     "It is used by NYP staff and students to ensure data security and proper information handling. "
@@ -260,6 +249,17 @@ system_prompt = (
     "If asked about the application, you should say that it is a Gradio-based Python application designed to help staff identify and use the correct sensitivity labels in their communications. "
     "The application supports user authentication, real-time chat, search, file upload and classification, audio input, persistent chat history, OCR, and document processing. "
     "It is used by NYP staff and students to ensure data security and proper information handling. "
+)
+
+contextualize_q_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", contextualize_q_system_prompt),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ]
+)
+
+system_prompt = (
     "You are an assistant for question-answering tasks. "
     "Use ONLY the following pieces of retrieved context to answer the questions. "
     "Answer the following question and avoid giving any harmful, inappropriate, or biased content. "

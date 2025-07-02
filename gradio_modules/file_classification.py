@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-File Upload and Classification Interface
+"""File Upload and Classification Interface.
 
 This module provides a dedicated interface for uploading files and getting
 classification results using the backend classification system.
@@ -37,7 +36,13 @@ ALLOWED_EXTENSIONS = [
 
 
 def get_uploads_dir(username: str) -> str:
-    """Get the uploads directory for a specific user."""
+    """Get the uploads directory for a specific user.
+
+    :param username: The username to get uploads directory for
+    :type username: str
+    :return: Path to the user's uploads directory
+    :rtype: str
+    """
     import os
     # from infra_utils import get_chatbot_dir
 
@@ -57,7 +62,13 @@ def get_uploads_dir(username: str) -> str:
 
 
 def get_uploaded_files(username: str) -> List[str]:
-    """Get list of uploaded files for the user."""
+    """Get list of uploaded files for the user.
+
+    :param username: The username to get files for
+    :type username: str
+    :return: List of uploaded filenames
+    :rtype: List[str]
+    """
     if not username:
         return []
 
@@ -78,7 +89,15 @@ def get_uploaded_files(username: str) -> List[str]:
 
 
 def get_file_path(username: str, filename: str) -> str:
-    """Get full path to an uploaded file."""
+    """Get full path to an uploaded file.
+
+    :param username: The username who owns the file
+    :type username: str
+    :param filename: The filename to get path for
+    :type filename: str
+    :return: Full path to the file if it exists, empty string otherwise
+    :rtype: str
+    """
     if not username or not filename:
         return ""
 
@@ -91,19 +110,29 @@ def get_file_path(username: str, filename: str) -> str:
 
 
 def is_file_allowed(filename: str) -> bool:
-    """Check if the file extension is allowed."""
+    """Check if the file extension is allowed.
+
+    :param filename: The filename to check
+    :type filename: str
+    :return: True if file extension is allowed, False otherwise
+    :rtype: bool
+    """
     if not filename:
         return False
     file_ext = Path(filename).suffix.lower()
     return file_ext in ALLOWED_EXTENSIONS
 
 
-def save_uploaded_file(file_obj, username: str) -> Tuple[str, str]:
-    """
-    Save uploaded file to user's uploads directory.
+def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
+    """Save uploaded file to user's uploads directory.
 
-    Returns:
-        Tuple[str, str]: (saved_file_path, original_filename)
+    :param file_obj: The file object to save
+    :type file_obj: Any
+    :param username: The username to save the file for
+    :type username: str
+    :return: Tuple of (saved_file_path, original_filename)
+    :rtype: Tuple[str, str]
+    :raises ValueError: If file object or username is missing, or file type not allowed
     """
     if not file_obj or not username:
         raise ValueError("File object and username are required")
@@ -151,7 +180,13 @@ def save_uploaded_file(file_obj, username: str) -> Tuple[str, str]:
 
 
 def extract_file_content(file_path: str) -> Dict[str, Any]:
-    """Enhanced file content extraction with multiple methods."""
+    """Enhanced file content extraction with multiple methods.
+
+    :param file_path: Path to the file to extract content from
+    :type file_path: str
+    :return: Dictionary containing extracted content and metadata
+    :rtype: Dict[str, Any]
+    """
     try:
         # Use enhanced extraction
         from gradio_modules.enhanced_content_extraction import (
@@ -202,7 +237,13 @@ def extract_file_content(file_path: str) -> Dict[str, Any]:
 
 
 def classify_file_content(content: str) -> Dict[str, Any]:
-    """Classify the extracted file content with enhanced error handling."""
+    """Classify the extracted file content with enhanced error handling.
+
+    :param content: The text content to classify
+    :type content: str
+    :return: Dictionary containing classification results
+    :rtype: Dict[str, Any]
+    """
     try:
         if not content or not content.strip():
             return {
@@ -260,15 +301,13 @@ def classify_file_content(content: str) -> Dict[str, Any]:
         }
 
 
-def file_classification_interface(username_state):
-    """
-    Create the file upload and classification interface.
+def file_classification_interface(username_state: gr.State) -> tuple:
+    """Create the file upload and classification interface.
 
-    Args:
-        username_state: Gradio state containing the current username
-
-    Returns:
-        Tuple of Gradio components for the interface
+    :param username_state: Gradio state containing the current username
+    :type username_state: gr.State
+    :return: Tuple of Gradio components for the interface
+    :rtype: tuple
     """
 
     with gr.Column(elem_classes=["file-classification-container"]):
@@ -369,8 +408,14 @@ def file_classification_interface(username_state):
             history_md = gr.Markdown("No files uploaded yet.")
             refresh_history_btn = gr.Button("Refresh History", variant="secondary")
 
-    def get_upload_history(username):
-        """Get the upload history for the user."""
+    def get_upload_history(username: str) -> str:
+        """Get the upload history for the user.
+
+        :param username: The username to get history for
+        :type username: str
+        :return: Formatted upload history string
+        :rtype: str
+        """
         if not username:
             return "Please log in to view upload history."
 
@@ -401,16 +446,26 @@ def file_classification_interface(username_state):
             return f"Error loading history: {str(e)}"
 
     # Helper functions for file operations
-    def refresh_file_dropdown(username):
-        """Refresh the file dropdown with uploaded files."""
+    def refresh_file_dropdown(username: str) -> gr.update:
+        """Refresh the file dropdown with uploaded files.
+
+        :param username: The username to get files for
+        :type username: str
+        :return: Updated dropdown choices
+        :rtype: gr.update
+        """
         if not username:
             return gr.update(choices=[], value=None)
 
         files = get_uploaded_files(username)
         return gr.update(choices=files, value=None)
 
-    def show_loading():
-        """Show loading indicator."""
+    def show_loading() -> gr.update:
+        """Show loading indicator.
+
+        :return: Loading indicator update
+        :rtype: gr.update
+        """
         return gr.update(
             visible=True,
             value="""
@@ -427,13 +482,25 @@ def file_classification_interface(username_state):
             """,
         )
 
-    def hide_loading():
-        """Hide loading indicator."""
+    def hide_loading() -> gr.update:
+        """Hide loading indicator.
+
+        :return: Loading indicator update
+        :rtype: gr.update
+        """
         return gr.update(visible=False, value="")
 
     # Event handlers - simplified for better compatibility
-    def handle_upload_click(file_obj, username):
-        """Simplified upload handler with loading indicator."""
+    def handle_upload_click(file_obj: Any, username: str) -> tuple:
+        """Simplified upload handler with loading indicator.
+
+        :param file_obj: The uploaded file object
+        :type file_obj: Any
+        :param username: The username uploading the file
+        :type username: str
+        :return: Tuple of updates for all interface components
+        :rtype: tuple
+        """
         if not username:
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
@@ -544,8 +611,17 @@ def file_classification_interface(username_state):
                 refresh_file_dropdown(username),
             )
 
-    def handle_classify_existing(selected_file, username):
-        """Handle classification of existing uploaded file."""
+    def handle_classify_existing(selected_file: str, username: str) -> tuple:
+        """Handle classification of existing uploaded file.
+
+        :param selected_file: The filename to classify
+        :type selected_file: str
+        :param username: The username who owns the file
+        :type username: str
+        :return: Tuple of updates for all interface components
+        :rtype: tuple
+        :raises Exception: When file not found or classification fails
+        """
         if not username:
             return (
                 gr.update(visible=True, value="❌ **Error:** Please log in first"),
@@ -692,8 +768,14 @@ def file_classification_interface(username_state):
     )
 
     # Initialize file dropdown on interface load
-    def initialize_interface(username):
-        """Initialize the interface with user's uploaded files."""
+    def initialize_interface(username: str) -> gr.update:
+        """Initialize the interface with user's uploaded files.
+
+        :param username: The username to initialize for
+        :type username: str
+        :return: Updated dropdown choices
+        :rtype: gr.update
+        """
         return refresh_file_dropdown(username)
 
     # Set up initial state

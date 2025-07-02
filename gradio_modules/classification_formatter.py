@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Enhanced classification response formatting for better user experience.
-"""
+"""Enhanced classification response formatting for better user experience."""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -12,16 +10,16 @@ def format_classification_response(
     extraction_info: Dict[str, Any],
     file_info: Dict[str, str],
 ) -> Dict[str, str]:
-    """
-    Format classification response with enhanced presentation.
+    """Format classification response with enhanced presentation.
 
-    Args:
-        classification: Classification results from the model
-        extraction_info: Information about content extraction
-        file_info: Basic file information
-
-    Returns:
-        Dict with formatted strings for display
+    :param classification: Classification results from the model
+    :type classification: Dict[str, Any]
+    :param extraction_info: Information about content extraction
+    :type extraction_info: Dict[str, Any]
+    :param file_info: Basic file information
+    :type file_info: Dict[str, str]
+    :return: Dictionary with formatted strings for display
+    :rtype: Dict[str, str]
     """
 
     # Get classification details
@@ -57,7 +55,13 @@ def format_classification_response(
 
 
 def format_security_classification(classification: str) -> str:
-    """Format security classification with appropriate styling."""
+    """Format security classification with appropriate styling.
+
+    :param classification: The security classification string
+    :type classification: str
+    :return: Formatted classification with emoji and styling
+    :rtype: str
+    """
 
     # Classification mapping with emojis and colors
     class_mapping = {
@@ -91,7 +95,13 @@ def format_security_classification(classification: str) -> str:
 
 
 def format_sensitivity_level(sensitivity: str) -> str:
-    """Format sensitivity level with appropriate styling."""
+    """Format sensitivity level with appropriate styling.
+
+    :param sensitivity: The sensitivity level string
+    :type sensitivity: str
+    :return: Formatted sensitivity with emoji and styling
+    :rtype: str
+    """
 
     # Sensitivity mapping with emojis
     sensitivity_mapping = {
@@ -113,7 +123,15 @@ def format_sensitivity_level(sensitivity: str) -> str:
 def format_file_information(
     file_info: Dict[str, str], extraction_info: Dict[str, Any]
 ) -> str:
-    """Format file information with extraction details."""
+    """Format file information with extraction details.
+
+    :param file_info: Basic file information dictionary
+    :type file_info: Dict[str, str]
+    :param extraction_info: Information about content extraction
+    :type extraction_info: Dict[str, Any]
+    :return: Formatted file information string
+    :rtype: str
+    """
 
     lines = []
 
@@ -161,7 +179,13 @@ def format_file_information(
 
 
 def format_extraction_method(method: str) -> str:
-    """Format extraction method with descriptive text."""
+    """Format extraction method with descriptive text.
+
+    :param method: The extraction method name
+    :type method: str
+    :return: Formatted method description with emoji
+    :rtype: str
+    """
 
     method_descriptions = {
         "pandoc": "📚 Pandoc (Document Conversion)",
@@ -178,7 +202,13 @@ def format_extraction_method(method: str) -> str:
 
 
 def format_file_size(size_bytes: int) -> str:
-    """Format file size in human-readable format."""
+    """Format file size in human-readable format.
+
+    :param size_bytes: File size in bytes
+    :type size_bytes: int
+    :return: Human-readable file size string
+    :rtype: str
+    """
 
     if size_bytes < 1024:
         return f"{size_bytes} bytes"
@@ -191,7 +221,15 @@ def format_file_size(size_bytes: int) -> str:
 
 
 def format_reasoning(reasoning: str, confidence: Optional[float] = None) -> str:
-    """Format classification reasoning with better structure."""
+    """Format classification reasoning with better structure.
+
+    :param reasoning: The reasoning text from classification
+    :type reasoning: str
+    :param confidence: Confidence score (0.0 to 1.0)
+    :type confidence: Optional[float]
+    :return: Formatted reasoning with confidence and structure
+    :rtype: str
+    """
 
     lines = []
 
@@ -241,7 +279,19 @@ def format_classification_summary(
     confidence: Optional[float] = None,
     extraction_info: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Create a formatted summary of the classification."""
+    """Create a formatted summary of the classification.
+
+    :param security_class: The security classification
+    :type security_class: str
+    :param sensitivity: The sensitivity level
+    :type sensitivity: str
+    :param confidence: Confidence score (0.0 to 1.0)
+    :type confidence: Optional[float]
+    :param extraction_info: Information about content extraction
+    :type extraction_info: Optional[Dict[str, Any]]
+    :return: Formatted summary markdown
+    :rtype: str
+    """
 
     lines = []
     lines.append("## 📋 Classification Summary")
@@ -284,7 +334,15 @@ def format_classification_summary(
 
 
 def get_handling_recommendations(security_class: str, sensitivity: str) -> List[str]:
-    """Get handling recommendations based on classification."""
+    """Get handling recommendations based on classification.
+
+    :param security_class: The security classification
+    :type security_class: str
+    :param sensitivity: The sensitivity level
+    :type sensitivity: str
+    :return: List of handling recommendations
+    :rtype: List[str]
+    """
 
     recommendations = []
 

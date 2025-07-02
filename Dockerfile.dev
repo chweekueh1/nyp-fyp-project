@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Production Dockerfile for NYP FYP Chatbot
+# Development Dockerfile for NYP FYP Chatbot
 FROM python:3.11-slim
 
 # Set environment variables
@@ -8,7 +8,6 @@ ENV PYTHONUNBUFFERED=1
 ENV GRADIO_SERVER_NAME="0.0.0.0"
 ENV GRADIO_SERVER_PORT="7860"
 ENV IN_DOCKER="1"
-ENV PRODUCTION="true"
 
 WORKDIR /app
 
@@ -49,6 +48,9 @@ COPY llm/ ./llm/
 # Copy static assets
 COPY styles/ ./styles/
 COPY scripts/ ./scripts/
+
+# Copy setup script for development
+COPY setup.py ./
 
 # Create necessary directories
 RUN mkdir -p logs

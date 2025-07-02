@@ -223,11 +223,8 @@ def create_main_app():
             # Import and use the change password interface
             from gradio_modules.change_password import change_password_interface
 
-            change_password_btn, change_password_section, last_change_time = (
-                change_password_interface(username_state)
-            )
-            back_to_home_btn = gr.Button(
-                "Back to Home", visible=False, elem_id="back_to_home_btn"
+            change_password_btn, change_password_popup, last_change_time = (
+                change_password_interface(username_state, logged_in_state)
             )
 
             # Main app content (tabs) in a container for easy show/hide
@@ -286,49 +283,9 @@ def create_main_app():
                             gr.Button("Process Audio", variant="primary")
                             gr.Textbox(label="Transcription", interactive=False)
 
-            # By default, show tabbed interface and change password button, hide change password UI and back button
+            # By default, show tabbed interface, hide change password button initially
             main_content_container.visible = True
-            change_password_btn.visible = True
-            change_password_section.visible = False
-            back_to_home_btn.visible = False
-
-            # Show change password UI and hide main content and change password button when button is clicked
-            def show_change_password_ui():
-                return (
-                    gr.update(visible=False),  # main_content_container
-                    gr.update(visible=False),  # change_password_btn
-                    gr.update(visible=True),  # change_password_section
-                    gr.update(visible=True),  # back_to_home_btn
-                )
-
-            change_password_btn.click(
-                fn=show_change_password_ui,
-                outputs=[
-                    main_content_container,
-                    change_password_btn,
-                    change_password_section,
-                    back_to_home_btn,
-                ],
-            )
-
-            # Show main content and change password button, hide change password UI and back button when back is clicked
-            def back_to_home():
-                return (
-                    gr.update(visible=True),  # main_content_container
-                    gr.update(visible=True),  # change_password_btn
-                    gr.update(visible=False),  # change_password_section
-                    gr.update(visible=False),  # back_to_home_btn
-                )
-
-            back_to_home_btn.click(
-                fn=back_to_home,
-                outputs=[
-                    main_content_container,
-                    change_password_btn,
-                    change_password_section,
-                    back_to_home_btn,
-                ],
-            )
+            change_password_btn.visible = False
 
         # File Upload Tab removed - functionality integrated into File Classification tab
 
@@ -362,6 +319,7 @@ def create_main_app():
                     f"**Logged in as:** {username}",  # Update user info
                     gr.update(visible=True, value=status_msg),  # Show backend status
                     gr.update(visible=True),  # Show refresh button
+                    gr.update(visible=True),  # Show change password button
                 )
             else:
                 return (
@@ -370,6 +328,7 @@ def create_main_app():
                     "",  # Clear user info
                     gr.update(visible=False),  # Hide backend status
                     gr.update(visible=False),  # Hide refresh button
+                    gr.update(visible=False),  # Hide change password button
                 )
 
         def handle_logout():
@@ -384,6 +343,7 @@ def create_main_app():
                 "",  # Clear user info
                 gr.update(visible=False),  # Hide backend status
                 gr.update(visible=False),  # Hide refresh button
+                gr.update(visible=False),  # Hide change password button
                 "",  # Clear username input
                 "",  # Clear email input
                 "",  # Clear password input
@@ -415,6 +375,7 @@ def create_main_app():
                 user_info,
                 backend_status,
                 refresh_status_btn,  # UI updates
+                change_password_btn,  # Hide change password button
                 username_input,
                 email_input,
                 password_input,
@@ -431,6 +392,67 @@ def create_main_app():
             ],
         )
 
+        # Handle logout triggered by password change
+        def handle_password_change_logout(logged_in, username):
+            """Handle logout triggered by successful password change."""
+            if not logged_in:  # Password change was successful and logged out
+                return handle_logout()
+            # If still logged in, return current state (no changes)
+            return (
+                logged_in,  # Keep current logged_in_state
+                username,  # Keep current username_state
+                False,  # Keep is_register_mode as False
+                gr.update(),  # No change to login_section
+                gr.update(),  # No change to main_section
+                gr.update(),  # No change to user_info
+                gr.update(),  # No change to backend_status
+                gr.update(),  # No change to refresh_status_btn
+                gr.update(),  # No change to change_password_btn
+                gr.update(),  # No change to username_input
+                gr.update(),  # No change to email_input
+                gr.update(),  # No change to password_input
+                gr.update(),  # No change to confirm_password_input
+                gr.update(),  # No change to error_message
+                gr.update(),  # No change to header_subtitle
+                gr.update(),  # No change to header_instruction
+                gr.update(),  # No change to email_info
+                gr.update(),  # No change to password_requirements
+                gr.update(),  # No change to confirm_password_input
+                gr.update(),  # No change to show_confirm_btn
+                gr.update(),  # No change to primary_btn
+                gr.update(),  # No change to secondary_btn
+            )
+
+        # Monitor logged_in_state for password change logout
+        logged_in_state.change(
+            fn=handle_password_change_logout,
+            inputs=[logged_in_state, username_state],
+            outputs=[
+                logged_in_state,
+                username_state,
+                is_register_mode,
+                login_section,
+                main_section,
+                user_info,
+                backend_status,
+                refresh_status_btn,
+                change_password_btn,
+                username_input,
+                email_input,
+                password_input,
+                confirm_password_input,
+                error_message,
+                header_subtitle,
+                header_instruction,
+                email_info,
+                password_requirements,
+                confirm_password_input,
+                show_confirm_btn,
+                primary_btn,
+                secondary_btn,
+            ],
+        )
+
         # Monitor login state changes
         logged_in_state.change(
             fn=handle_login_success,
@@ -441,6 +463,7 @@ def create_main_app():
                 user_info,
                 backend_status,
                 refresh_status_btn,
+                change_password_btn,
             ],
         )
 
