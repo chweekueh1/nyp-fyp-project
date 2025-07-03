@@ -747,6 +747,26 @@ async def run_backend_tests():
         test_setup_logging,
     ]
 
+    # Add special character tests if the module is available
+    try:
+        from tests.backend.test_special_characters import (
+            test_escape_special_characters,
+            test_text_based_file_extraction,
+            test_pdf_files_not_cleaned,
+        )
+
+        test_functions.extend(
+            [
+                test_escape_special_characters,
+                test_text_based_file_extraction,
+                test_pdf_files_not_cleaned,
+            ]
+        )
+        print("✅ Special character tests added to backend test suite")
+    except ImportError as e:
+        print(f"⚠️ Warning: Could not import special character tests: {e}")
+        print("   Special character tests will be skipped")
+
     results = []
     failed_tests = []
     error_messages = []

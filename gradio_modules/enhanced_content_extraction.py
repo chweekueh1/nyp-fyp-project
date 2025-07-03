@@ -11,12 +11,20 @@ import shutil
 import concurrent.futures
 import re
 
+# Import keyword filtering functionality
+try:
+    from llm.keyword_cache import filter_filler_words
+except ImportError:
+    # Fallback if keyword_cache is not available
+    def filter_filler_words(text: str) -> str:
+        return text
+
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
-CHUNK_LINE_THRESHOLD = 100  # lines
 CHUNK_CHAR_THRESHOLD = 1000  # characters
-MAX_WORKERS = 4
+MAX_WORKERS = 8
 
 
 def find_tool(tool_name: str) -> Optional[str]:
@@ -36,29 +44,44 @@ def find_tool(tool_name: str) -> Optional[str]:
     return shutil.which(tool_name)
 
 
-def strip_yaml_front_matter(md_path: str) -> str:
-    """Escape all lines that are exactly '---', '___', or '***' (optionally with whitespace) by prefixing them with a backslash, throughout the entire file. This prevents Pandoc from interpreting them as YAML delimiters or horizontal rules."""
-    with open(md_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    escaped_lines = []
-    pattern = re.compile(r"^\s*(---|___|\*\*\*)\s*$")
-    num_escaped = 0
-    for line in lines:
-        if pattern.match(line):
-            escaped_lines.append("\\" + line if not line.startswith("\\") else line)
-            num_escaped += 1
-        else:
-            escaped_lines.append(line)
-    if num_escaped > 0:
-        logger.info(
-            f"Escaped {num_escaped} horizontal rule/YAML delimiter lines in markdown for Pandoc safety: {md_path}"
-        )
-    # Write to a temp file
-    with tempfile.NamedTemporaryFile(
-        delete=False, suffix=".md", mode="w", encoding="utf-8"
-    ) as tmp:
-        tmp.writelines(escaped_lines)
-        return tmp.name
+def escape_special_characters(text: str) -> str:
+    """
+    Escape problematic special characters in the text while preserving useful punctuation.
+    Replace problematic characters with a space.
+    """
+    # More selective cleaning - preserve common punctuation and useful symbols
+    # Remove only problematic characters that might cause issues with pandoc or processing
+    return re.sub(r"[^\w\s\n.,!?;:()\"'\-_+=<>[\]{}|\\/@#$%^&*~`]", " ", text)
+
+
+def apply_text_processing(content: str, file_ext: str) -> str:
+    """
+    Apply text processing (special character cleaning and keyword filtering) to text-based files.
+
+    :param content: The text content to process
+    :type content: str
+    :param file_ext: File extension to determine processing type
+    :type file_ext: str
+    :return: Processed text content
+    :rtype: str
+    """
+    # Define text-based file extensions that should receive processing
+    text_based_extensions = {".txt", ".md", ".markdown", ".csv", ".log"}
+
+    if file_ext.lower() not in text_based_extensions:
+        # For non-text-based files, return content as-is
+        return content
+
+    # Apply special character cleaning first
+    cleaned_content = escape_special_characters(content)
+
+    # Apply keyword filtering (remove filler words)
+    filtered_content = filter_filler_words(cleaned_content)
+
+    logger.info(
+        f"Applied text processing to {file_ext} file: special character cleaning and keyword filtering"
+    )
+    return filtered_content
 
 
 def split_markdown_chunks(md_path: str) -> list:
@@ -77,10 +100,10 @@ def split_markdown_chunks(md_path: str) -> list:
     if current_chunk:
         chunks.append("".join(current_chunk))
     # If only one chunk, fallback to splitting by lines
-    if len(chunks) == 1 and len(lines) > CHUNK_LINE_THRESHOLD:
+    if len(chunks) == 1 and len(lines) > CHUNK_CHAR_THRESHOLD:
         chunks = []
-        for i in range(0, len(lines), CHUNK_LINE_THRESHOLD):
-            chunks.append("".join(lines[i : i + CHUNK_LINE_THRESHOLD]))
+        for i in range(0, len(lines), CHUNK_CHAR_THRESHOLD):
+            chunks.append("".join(lines[i : i + CHUNK_CHAR_THRESHOLD]))
     return chunks
 
 
@@ -156,8 +179,6 @@ def extract_with_pandoc(
             logger.warning("Pandoc is not installed or not in PATH.")
             return None
         file_ext = Path(file_path).suffix.lower()
-
-        # Pandoc supported formats
         pandoc_formats = {
             ".docx": "docx",
             ".doc": "doc",
@@ -168,32 +189,29 @@ def extract_with_pandoc(
             ".epub": "epub",
             ".md": "markdown",
             ".markdown": "markdown",
+            ".pdf": "pdf",
+            ".txt": "markdown",
+            ".csv": "markdown",
+            ".log": "markdown",
         }
-
         if file_ext not in pandoc_formats:
             return None
-
         input_format = pandoc_formats[file_ext]
-
-        # For markdown, strip YAML front matter to avoid pandoc YAML parse errors
         temp_path = None
         file_to_use = file_path
-        if file_ext in {".md", ".markdown"}:
-            # Always strip YAML before any extraction
-            temp_path = strip_yaml_front_matter(file_path)
-            file_to_use = temp_path
-            # If large, chunk and parallelize
-            with open(file_to_use, "r", encoding="utf-8") as f:
+        # For text-based files, apply text processing (special character cleaning and keyword filtering) before Pandoc
+        # Note: PDF files are excluded as they are binary and should not be processed as text
+        if file_ext in {".txt", ".md", ".markdown", ".csv", ".log"}:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            if (
-                len(content) > CHUNK_CHAR_THRESHOLD
-                or content.count("\n") > CHUNK_LINE_THRESHOLD
-            ):
-                result = parallel_pandoc_chunks(file_to_use, input_format)
-                os.unlink(temp_path)
-                return result
-
-        # Use pandoc to convert to plain text
+            processed_content = apply_text_processing(content, file_ext)
+            tmp = tempfile.NamedTemporaryFile(
+                delete=False, suffix=file_ext, mode="w", encoding="utf-8"
+            )
+            tmp.write(processed_content)
+            tmp.close()
+            temp_path = tmp.name
+            file_to_use = temp_path
         cmd = [
             pandoc_path,
             "-f",
@@ -203,16 +221,13 @@ def extract_with_pandoc(
             "--wrap=none",
             file_to_use,
         ]
-
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
         # Clean up temp file if used
         if temp_path:
             try:
                 os.unlink(temp_path)
             except Exception:
                 pass
-
         if result.returncode == 0:
             content = result.stdout.strip()
             if content:
@@ -222,24 +237,8 @@ def extract_with_pandoc(
                 return content
         else:
             logger.warning(f"Pandoc extraction failed for {file_path}: {result.stderr}")
-            # Fallback for markdown: try plain text extraction
-            if file_ext in {".md", ".markdown"}:
-                logger.info(
-                    f"Falling back to plain text extraction for markdown file: {file_path} (YAML stripped)"
-                )
-                return extract_text_file_content(
-                    file_path, pre_stripped_temp=file_to_use
-                )
-
     except Exception as e:
         logger.error(f"Error in pandoc extraction for {file_path}: {e}")
-        # Fallback for markdown: try plain text extraction
-        if Path(file_path).suffix.lower() in {".md", ".markdown"}:
-            logger.info(
-                f"Falling back to plain text extraction for markdown file: {file_path} (YAML stripped)"
-            )
-            return extract_text_file_content(file_path, pre_stripped_temp=file_to_use)
-
     return None
 
 
@@ -373,33 +372,29 @@ def extract_text_file_content(
             else file_path
         )
         # Read up to 100 lines or 1000 characters, whichever is more
-        max_lines = CHUNK_LINE_THRESHOLD
-        min_chars = CHUNK_CHAR_THRESHOLD
-        content_lines = []
+        max_chars = CHUNK_CHAR_THRESHOLD
+        content_chars = []
         char_count = 0
         with open(target_path, "r", encoding="utf-8") as f:
             for i, line in enumerate(f):
-                content_lines.append(line)
+                content_chars.append(line)
                 char_count += len(line)
-                # If we've reached both thresholds, break
-                if i + 1 >= max_lines and char_count >= min_chars:
+                # If we've reached the threshold, break
+                if char_count >= max_chars:
                     break
-            # If we hit 100 lines but not 1000 chars, keep reading until 1000 chars
-            while char_count < min_chars:
+            # If we hit the threshold but not 1000 chars, keep reading until 1000 chars
+            while char_count < max_chars:
                 next_line = f.readline()
                 if not next_line:
                     break
-                content_lines.append(next_line)
+                content_chars.append(next_line)
                 char_count += len(next_line)
-            # If we hit 1000 chars but not 100 lines, keep reading until 100 lines
-            while len(content_lines) < max_lines:
-                next_line = f.readline()
-                if not next_line:
-                    break
-                content_lines.append(next_line)
-                char_count += len(next_line)
-        content = "".join(content_lines)
-        return content
+        content = "".join(content_chars)
+
+        # Apply text processing (special character cleaning and keyword filtering) for text-based files
+        processed_content = apply_text_processing(content, file_ext)
+
+        return processed_content
     except Exception as e:
         logger.error(f"Error reading text file {file_path}: {e}")
     finally:
@@ -449,10 +444,6 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
     extraction_methods = []
     pre_stripped_temp = None
     try:
-        # For markdown, pre-strip YAML and use temp file for all extraction attempts
-        if file_ext in {".md", ".markdown"}:
-            pre_stripped_temp = strip_yaml_front_matter(file_path)
-
         # PDF files
         if file_ext == ".pdf":
             extraction_methods.append(("pdf_extraction", extract_pdf_content))
@@ -586,8 +577,13 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
             "reasoning": "No content available for classification",
             "confidence": 0.0,
         }
-    # Hash the content for caching
-    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    # Apply keyword filtering to the content before classification
+    # This helps remove filler words that might interfere with classification accuracy
+    filtered_content = filter_filler_words(content)
+
+    # Hash the filtered content for caching
+    content_hash = hashlib.sha256(filtered_content.encode("utf-8")).hexdigest()
     cache = cache_manager.get_cache("classification_results")
     if content_hash in cache:
         result = cache[content_hash]
@@ -606,7 +602,7 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
         perf_monitor.start_timer("classification_llm_call")
         from llm.classificationModel import classify_text
 
-        result = classify_text(content)
+        result = classify_text(filtered_content)
         perf_monitor.end_timer("classification_llm_call")
         # Extract the answer which should be JSON
         answer = result.get("answer", "{}")

@@ -30,6 +30,7 @@ langchain_experimental
 langgraph==0.3.30
 langgraph-checkpoint-sqlite==2.0.7
 nest_asyncio==1.6.0
+nltk
 
 # Data handling (minimal)
 numpy==1.26.4
@@ -57,4 +58,5 @@ requests==2.32.3
 SQLAlchemy==2.0.40
 starlette==0.46.1
 tiktoken==0.9.0
+unstructured
 uvicorn==0.34.0

@@ -16,12 +16,12 @@ from gradio_modules.enhanced_content_extraction import (
     enhanced_extract_file_content,
     classify_file_content,
 )
+from infra_utils import get_chatbot_dir, clear_uploaded_files
 
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
 # from infra_utils import get_chatbot_dir
 # from llm.dataProcessing import ExtractText  # Moved to function level
 # from llm.classificationModel import classify_text  # Moved to function level
-from infra_utils import get_chatbot_dir
 
 # Hardcoded list of allowed file extensions
 ALLOWED_EXTENSIONS = [
@@ -219,6 +219,12 @@ def file_classification_interface(username_state: gr.State) -> tuple:
             )
 
             upload_btn = gr.Button("Upload & Classify", variant="primary", size="lg")
+
+            # Add Clear Uploaded Files button
+            clear_files_btn = gr.Button(
+                "🗑️ Clear Uploaded Files", variant="stop", size="sm"
+            )
+            clear_files_status = gr.Markdown(visible=False)
 
         # File selection section for already uploaded files
         with gr.Group():
@@ -607,6 +613,15 @@ def file_classification_interface(username_state: gr.State) -> tuple:
                 hide_loading(),
             )
 
+    def handle_clear_uploaded_files():
+        try:
+            clear_uploaded_files()
+            return (gr.update(visible=True, value="✅ Uploaded files cleared!"),)
+        except Exception as e:
+            return (
+                gr.update(visible=True, value=f"❌ Error clearing uploaded files: {e}"),
+            )
+
     # Event handlers with loading indicators
     upload_btn.click(fn=show_loading, outputs=[loading_indicator]).then(
         fn=handle_upload_click,
@@ -649,6 +664,8 @@ def file_classification_interface(username_state: gr.State) -> tuple:
         fn=get_upload_history, inputs=[username_state], outputs=[history_md]
     )
 
+    clear_files_btn.click(fn=handle_clear_uploaded_files, outputs=[clear_files_status])
+
     # Initialize file dropdown on interface load
     def initialize_interface(username: str) -> gr.update:
         """Initialize the interface with user's uploaded files.
@@ -681,4 +698,6 @@ def file_classification_interface(username_state: gr.State) -> tuple:
         refresh_files_btn,
         classify_existing_btn,
         loading_indicator,
+        clear_files_btn,
+        clear_files_status,
     )

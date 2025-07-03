@@ -10,8 +10,3 @@ __pycache__/
 # Ignore logs
 logs/
 logs/*
-
-# Ignore data
-data/
-data/*
-data/*/*

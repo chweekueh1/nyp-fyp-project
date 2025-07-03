@@ -9,6 +9,7 @@ Users can send messages, manage chat sessions, search history, and rename chats.
 from typing import Tuple, Any, List, Dict
 
 import gradio as gr
+from infra_utils import clear_chat_history
 
 # Backend import moved to function level to avoid early ChromaDB initialization
 
@@ -118,6 +119,8 @@ def chatbot_ui(
     gr.Textbox,
     gr.Button,
     gr.Markdown,
+    gr.Button,
+    gr.Markdown,
 ]:
     """
     Create the chatbot interface components with chat history loading, search, and renaming.
@@ -172,6 +175,13 @@ def chatbot_ui(
 
         # Search results (initially visible but empty)
         search_results = gr.Markdown(value="", label="Search Results")
+
+        # Add Clear Chat History button
+        with gr.Row():
+            clear_chat_btn = gr.Button(
+                "🗑️ Clear Chat History", variant="stop", size="sm"
+            )
+            clear_chat_status = gr.Markdown(visible=False)
 
     # Main chat interface
     with gr.Group():
@@ -423,6 +433,15 @@ def chatbot_ui(
         except Exception as e:
             return f"❌ Error renaming chat: {str(e)}", gr.update(), current_chat_id
 
+    def handle_clear_chat_history():
+        try:
+            clear_chat_history()
+            return (gr.update(visible=True, value="✅ Chat history cleared!"),)
+        except Exception as e:
+            return (
+                gr.update(visible=True, value=f"❌ Error clearing chat history: {e}"),
+            )
+
     # Event handlers (only set up if requested and in Blocks context)
     if setup_events:
         chat_selector.change(
@@ -476,6 +495,9 @@ def chatbot_ui(
             outputs=[chat_selector, chat_id_state, chatbot],
         )
 
+        # Clear Chat History button
+        clear_chat_btn.click(fn=handle_clear_chat_history, outputs=[clear_chat_status])
+
     return (
         chat_selector,
         new_chat_btn,
@@ -488,4 +510,6 @@ def chatbot_ui(
         rename_input,
         rename_btn,
         debug_md,
+        clear_chat_btn,
+        clear_chat_status,
     )

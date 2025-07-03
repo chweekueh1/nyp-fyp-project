@@ -23,6 +23,7 @@ from infra_utils import (
 import logging  # Added for internal logging in this file
 import pickle
 import threading
+from llm.keyword_cache import get_cached_response, set_cached_response
 
 # Set up logging for this specific module
 logging.basicConfig(
@@ -320,6 +321,15 @@ qa_prompt = ChatPromptTemplate.from_messages(
 def match_keywords(question: str) -> List[str]:
     if not question:
         return []
+    # Check cache first
+    cached = get_cached_response(question)
+    if cached is not None:
+        try:
+            predictions = json.loads(cached)
+            if isinstance(predictions, list):
+                return predictions
+        except Exception:
+            pass
     try:
         # Define the function parameter for keyword matching
         tool_param = ChatCompletionToolParam(
@@ -358,6 +368,8 @@ def match_keywords(question: str) -> List[str]:
             tool_choice={"type": "function", "function": {"name": "match_keywords"}},
         )
         predictions = _extract_predictions_from_response(r, question)
+        # Store in cache
+        set_cached_response(question, json.dumps(predictions))
         return predictions
     except openai.APIError as e:
         logging.error(

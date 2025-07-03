@@ -260,6 +260,12 @@ def docker_build_test():
     print("🔨 Building Docker image 'nyp-fyp-chatbot-test'...")
     logger.info("Building Docker image 'nyp-fyp-chatbot-test'.")
 
+    # Temporarily rename .dockerignore to allow test files
+    dockerignore_backup = None
+    if os.path.exists(".dockerignore"):
+        dockerignore_backup = ".dockerignore.backup"
+        os.rename(".dockerignore", dockerignore_backup)
+
     try:
         subprocess.run(
             [
@@ -285,6 +291,10 @@ def docker_build_test():
         print(f"❌ An unexpected error occurred during Docker build: {e}")
         logger.error(f"Unexpected error during Docker build: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        # Restore .dockerignore
+        if dockerignore_backup and os.path.exists(dockerignore_backup):
+            os.rename(dockerignore_backup, ".dockerignore")
 
 
 def docker_build_prod():

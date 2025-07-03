@@ -1,63 +1,73 @@
-# Ignore Python cache and venv
-__pycache__/
-.venv/
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Python cache and virtual environments
+__pycache__
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.so
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Ignore git and local dev files
-.git/
-.gitignore
-.gitattributes
-
-# Ignore test files (only for production and dev builds)
-# tests/ is included in Dockerfile.test
-
-# Ignore local environment files
-.env
-.env.*
-
-# Ignore OS files
-.DS_Store
-Thumbs.db
+# IDE and editor files
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
 
-# Ignore large local files not needed in image
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+logs/
 *.log
 *.tmp
-*.tar
-*.gz
-*.zip
+*.temp
 
-# Ignore documentation and misc files
+# Documentation
 README.md
-LICENSE
-misc/
 *.md
+docs/
 
-# Ignore development tools
-.pre-commit-config.yaml
-.markdownlint.yaml
+# Docker files (except the main Dockerfile)
+Dockerfile.dev
+Dockerfile.test
+docker-compose*.yml
+
+# Development and build files
+build/
+dist/
+*.egg-info/
+
+# Data directories (will be created at runtime)
+data/
+keyword_cache/
+
+# Misc
 .ruff_cache/
+.mypy_cache/
 
-# Ignore IDE files
-.vscode/
-.idea/
-*.sublime-*
+# Test files and directories (excluded for production and development builds)
+tests/
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Ignore Docker files (except the one being built)
-Dockerfile*
-.dockerignore
-
-# Ignore setup and build files (except setup.py which is needed)
-# setup.py is included in dev and test builds
-
-# Ignore performance and monitoring files
-# Note: performance_utils.py is needed and copied explicitly in Dockerfiles
-
-# Ignore logs directory (created at runtime)
-logs/
+# Note: setup.py is included for all builds
+# Test files are excluded by default but can be explicitly copied in test builds

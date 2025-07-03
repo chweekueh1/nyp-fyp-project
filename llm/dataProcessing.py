@@ -576,8 +576,8 @@ def OpenAIMetadataTagger(document: list[Document]):
     }
 
     llm = ChatOpenAI(
-        temperature=0.8, model="gpt-4o-mini"
-    )  # Changed to gpt-4o-mini for consistency
+        temperature=0.8, model="gpt-4o"
+    )  # Changed to gpt-4o for data processing
 
     document_transformer = create_metadata_tagger(metadata_schema=schema, llm=llm)
     enhanced_documents = document_transformer.transform_documents(document)

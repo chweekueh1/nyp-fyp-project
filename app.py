@@ -239,7 +239,21 @@ def create_main_app():
 
                             chat_history_state = gr.State([])
                             selected_chat_id = gr.State("")
-                            chatbot_ui(
+                            (
+                                chat_selector,
+                                new_chat_btn,
+                                chatbot,
+                                chat_input,
+                                send_btn,
+                                search_input,
+                                search_btn,
+                                search_results,
+                                rename_input,
+                                rename_btn,
+                                debug_md,
+                                clear_chat_btn,
+                                clear_chat_status,
+                            ) = chatbot_ui(
                                 username_state,
                                 chat_history_state,
                                 selected_chat_id,
@@ -260,7 +274,25 @@ def create_main_app():
                                 file_classification_interface,
                             )
 
-                            file_classification_interface(username_state)
+                            (
+                                file_upload,
+                                upload_btn,
+                                status_md,
+                                results_section,
+                                classification_result,
+                                sensitivity_result,
+                                file_info,
+                                reasoning_result,
+                                summary_result,
+                                history_md,
+                                refresh_history_btn,
+                                file_dropdown,
+                                refresh_files_btn,
+                                classify_existing_btn,
+                                loading_indicator,
+                                clear_files_btn,
+                                clear_files_status,
+                            ) = file_classification_interface(username_state)
                         except ImportError as e:
                             gr.Markdown(
                                 f"⚠️ **File classification interface not available:** {e}"
@@ -273,7 +305,19 @@ def create_main_app():
                         try:
                             from gradio_modules.audio_input import audio_interface
 
-                            audio_interface(username_state, setup_events=True)
+                            (
+                                audio_input,
+                                process_audio_btn,
+                                transcription_output,
+                                response_output,
+                                status_message,
+                                edit_transcription,
+                                edit_btn,
+                                send_edited_btn,
+                                history_output,
+                                clear_history_btn,
+                                audio_history,
+                            ) = audio_interface(username_state, setup_events=True)
                         except ImportError as e:
                             gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
                             gr.Markdown(

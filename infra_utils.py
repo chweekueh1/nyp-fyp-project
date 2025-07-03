@@ -119,3 +119,37 @@ def setup_logging() -> logging.Logger:
         f.write("")
 
     return logger
+
+
+def clear_chat_history() -> None:
+    """Delete all files in the chat_sessions directory."""
+    chat_history_dir = os.path.join(get_chatbot_dir(), "data", "chat_sessions")
+    if os.path.exists(chat_history_dir):
+        for fname in os.listdir(chat_history_dir):
+            fpath = os.path.join(chat_history_dir, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                elif os.path.isdir(fpath):
+                    import shutil
+
+                    shutil.rmtree(fpath)
+            except Exception as e:
+                print(f"Warning: Could not delete {fpath}: {e}")
+
+
+def clear_uploaded_files() -> None:
+    """Delete all files in the uploads directory (data/modelling/data by default)."""
+    uploads_dir = os.path.join(get_chatbot_dir(), "data", "modelling", "data")
+    if os.path.exists(uploads_dir):
+        for fname in os.listdir(uploads_dir):
+            fpath = os.path.join(uploads_dir, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                elif os.path.isdir(fpath):
+                    import shutil
+
+                    shutil.rmtree(fpath)
+            except Exception as e:
+                print(f"Warning: Could not delete {fpath}: {e}")
