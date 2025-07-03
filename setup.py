@@ -4,20 +4,41 @@
 import os
 import sys
 import subprocess
+import shutil
+import time
+from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scripts"))
 from fix_permissions import fix_nypai_chatbot_permissions
 from main import main
 
-fix_nypai_chatbot_permissions()
+# Remove any existing venv in the Docker venv location before building
+if os.name == "nt":
+    venv_path = os.path.expanduser(r"~/.nypai-chatbot/venv")
+else:
+    venv_path = "/home/appuser/.nypai-chatbot/venv"
+if os.path.exists(venv_path):
+    try:
+        shutil.rmtree(venv_path)
+        print(f"Removed existing venv at {venv_path}")
+    except Exception as e:
+        print(f"Warning: Could not remove venv at {venv_path}: {e}")
+
+# Only fix permissions on Unix-like systems, and only before logging is initialized
+if os.name != "nt":
+    # Ensure entrypoint.sh is executable before Docker build (use Python if possible)
+    entrypoint_path = os.path.join(
+        os.path.dirname(__file__), "scripts", "entrypoint.sh"
+    )
+    if os.path.exists(entrypoint_path):
+        try:
+            os.chmod(entrypoint_path, 0o755)
+        except Exception as e:
+            print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
+    fix_nypai_chatbot_permissions()
 
 # Now continue with the rest of the imports and logger setup
-import shutil
-import time
-from typing import Optional
-
-# Assuming utils.py exists and contains rel2abspath, ensure_chatbot_dir_exists, get_chatbot_dir, setup_logging
-from infra_utils import setup_logging
+from infra_utils import setup_logging, get_docker_venv_python
 
 # Initialize logging as configured in utils.py
 # This will set up console output and file logging to ~/.nypai-chatbot/logs/app.log
@@ -36,8 +57,6 @@ if os.name == "nt":
 else:
     LOCAL_VENV_PATH = os.path.expanduser("~/.nypai-chatbot/venv")
     VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
-DOCKER_VENV_PATH = "/home/appuser/.nypai-chatbot/venv"
-DOCKER_VENV_PYTHON = os.path.join(DOCKER_VENV_PATH, "bin", "python")
 
 
 def _add_shebang_to_python_files(directory: str) -> None:
@@ -212,15 +231,36 @@ def ensure_docker_running() -> None:
         sys.exit(1)
 
 
+def get_dockerfile_venv_path(dockerfile_path):
+    try:
+        with open(dockerfile_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("ARG VENV_PATH="):
+                    return line.strip().split("=", 1)[1]
+    except Exception:
+        pass
+    return "/home/appuser/.nypai-chatbot/venv"  # fallback
+
+
 def docker_build():
     """
     Build the development Docker image 'nyp-fyp-chatbot-dev' with optimized CPU utilization.
     """
     ensure_docker_running()  # Ensures Docker daemon is running before attempting to build
 
-    print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
-    )
+    # Determine venv_path for debug print based on build type
+    venv_path = get_dockerfile_venv_path("Dockerfile")
+    if "--docker-build-test" in sys.argv:
+        venv_path = get_dockerfile_venv_path("Dockerfile.test")
+    elif "--docker-build-dev" in sys.argv:
+        venv_path = get_dockerfile_venv_path("Dockerfile.dev")
+    elif "--docker-build-all" in sys.argv:
+        venv_path = (
+            get_dockerfile_venv_path("Dockerfile"),
+            get_dockerfile_venv_path("Dockerfile.dev"),
+            get_dockerfile_venv_path("Dockerfile.test"),
+        )
+    print(f"🐳 [DEBUG] Dockerfile will install venv at: {venv_path}")
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
     )
@@ -329,7 +369,7 @@ def docker_build_test():
     ensure_docker_running()
 
     print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
+        f"🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/{venv_path}"
     )
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
@@ -448,7 +488,7 @@ def docker_build_prod():
     ensure_docker_running()
 
     print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
+        f"🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/{venv_path}"
     )
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
@@ -717,19 +757,13 @@ def docker_test(test_target: Optional[str] = None) -> None:
         f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
     )
     print("🔍 Running environment check (scripts/check_env.py) before tests...")
-    # Always use host venv Python for pre-Docker env check
-    if running_in_docker():
-        python_exe = "/home/appuser/.nypai-chatbot/venv/bin/python"  # Use venv python explicitly in Docker
-    else:
-        python_exe = VENV_PYTHON
+    python_exe = get_docker_venv_python("test")
     env_check_result = subprocess.run([python_exe, "scripts/check_env.py"])
     if env_check_result.returncode != 0:
         print("❌ Environment check failed. Aborting tests.")
         sys.exit(1)
     else:
         print("✅ Environment check passed.")
-
-    # Now run the actual tests
     if test_target:
         print(f"🧪 Running {test_target} in test Docker container...")
         logger.info(f"Running {test_target} inside test Docker container.")
@@ -747,14 +781,12 @@ def docker_test(test_target: Optional[str] = None) -> None:
                 )
                 sys.exit(1)
         elif test_target.startswith("tests/") and test_target.endswith(".py"):
-            result = subprocess.run(
-                ["/home/appuser/.nypai-chatbot/venv/bin/python", test_target]
-            )
+            result = subprocess.run([get_docker_venv_python("test"), test_target])
             sys.exit(result.returncode)
         else:
             result = subprocess.run(
                 [
-                    "/home/appuser/.nypai-chatbot/venv/bin/python",
+                    get_docker_venv_python("test"),
                     "tests/comprehensive_test_suite.py",
                     "--suite",
                     test_target,
@@ -766,7 +798,7 @@ def docker_test(test_target: Optional[str] = None) -> None:
         logger.info("Running Docker environment verification.")
         result = subprocess.run(
             [
-                "/home/appuser/.nypai-chatbot/venv/bin/python",
+                get_docker_venv_python("test"),
                 "tests/test_docker_environment.py",
             ]
         )
@@ -775,7 +807,6 @@ def docker_test(test_target: Optional[str] = None) -> None:
 
 def docker_test_suite(suite_name: str) -> None:
     """Run a specific test suite inside the Docker test container."""
-    # Map suite names to comprehensive_test_suite.py --suite argument
     valid_suites = [
         "frontend",
         "backend",
@@ -792,16 +823,10 @@ def docker_test_suite(suite_name: str) -> None:
             "Available suites: frontend, backend, integration, unit, performance, demo, all, comprehensive"
         )
         sys.exit(1)
-
-    # Always use the comprehensive test suite runner
     print(f"🧪 Running test suite: {suite_name}")
     logger.info(f"Running test suite: {suite_name}")
-    cmd = [
-        "/home/appuser/.nypai-chatbot/venv/bin/python",
-        "tests/comprehensive_test_suite.py",
-    ]
+    cmd = [get_docker_venv_python("test"), "tests/comprehensive_test_suite.py"]
     if suite_name in ["all", "comprehensive"]:
-        # Run the full suite (no --suite needed, default runs all)
         pass
     else:
         cmd += ["--suite", suite_name]
@@ -824,7 +849,7 @@ def docker_test_file(test_file: str) -> None:
         sys.exit(1)
     print(f"🧪 Running test file: {test_file}")
     logger.info(f"Running test file: {test_file}")
-    cmd = ["/home/appuser/.nypai-chatbot/venv/bin/python", test_file]
+    cmd = [get_docker_venv_python("test"), test_file]
     try:
         result = subprocess.run(cmd)
         sys.exit(result.returncode)
@@ -955,7 +980,7 @@ def setup_pre_commit():
     try:
         # Determine the virtual environment path
         if running_in_docker():
-            venv_path = DOCKER_VENV_PATH
+            venv_path = get_dockerfile_venv_path("Dockerfile")
         else:
             venv_path = LOCAL_VENV_PATH
 

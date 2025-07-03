@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import os
 import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 
 def rel2abspath(relative_path: str) -> str:
@@ -77,51 +75,20 @@ def get_chatbot_dir() -> str:
 
 def setup_logging() -> logging.Logger:
     """
-    Set up centralized logging configuration in ~/.nypai-chatbot/logs.
-
-    :return: The configured logger instance.
-    :rtype: logging.Logger
+    Set up centralized logging configuration. In test mode (TESTING=true), only log to console. In all modes, do not use file-based logging.
     """
-    logs_dir = Path(get_chatbot_dir()) / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    # Configure the root logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-
-    # Clear any existing handlers
     logger.handlers = []
-
-    # Create formatter
     formatter = logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-
-    # Create rotating file handler
-    log_file = logs_dir / "app.log"
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=3,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-
-    # Add handler to root logger
-    logger.addHandler(file_handler)
-
-    # Also log to console with INFO level
+    # Only log to console in all modes
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-
-    # Clear the log file
-    with open(log_file, "w") as f:
-        f.write("")
-
     return logger
 
 
@@ -157,3 +124,44 @@ def clear_uploaded_files() -> None:
                     shutil.rmtree(fpath)
             except Exception as e:
                 print(f"Warning: Could not delete {fpath}: {e}")
+
+
+def get_docker_venv_path(mode="prod") -> str:
+    """
+    Return the Docker venv path for the given mode (prod, dev, test).
+    - If running inside a container, use the VENV_PATH environment variable if set.
+    - Otherwise, parse the default from the relevant Dockerfile.
+    - Fallback to the known default for each mode.
+    """
+    import os
+
+    # If running inside a container, use the environment variable
+    if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
+        return os.environ.get("VENV_PATH", "/home/appuser/.nypai-chatbot/venv")
+    # Map mode to Dockerfile
+    dockerfile_map = {
+        "prod": "Dockerfile",
+        "dev": "Dockerfile.dev",
+        "test": "Dockerfile.test",
+    }
+    dockerfile = dockerfile_map.get(mode, "Dockerfile")
+    try:
+        with open(dockerfile, "r") as f:
+            for line in f:
+                if line.strip().startswith("ARG VENV_PATH="):
+                    return line.strip().split("=", 1)[1]
+    except Exception:
+        pass
+    # Fallbacks
+    if mode == "dev":
+        return "/home/appuser/.nypai-chatbot/venv-dev"
+    elif mode == "test":
+        return "/home/appuser/.nypai-chatbot/venv-test"
+    return "/home/appuser/.nypai-chatbot/venv"
+
+
+def get_docker_venv_python(mode="prod") -> str:
+    """
+    Return the path to the Python executable in the Docker venv for the given mode.
+    """
+    return os.path.join(get_docker_venv_path(mode), "bin", "python")

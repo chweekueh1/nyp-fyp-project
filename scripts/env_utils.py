@@ -13,8 +13,6 @@ if os.name == "nt":
 else:
     LOCAL_VENV_PATH = os.path.expanduser("~/.nypai-chatbot/venv")
     VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
-DOCKER_VENV_PATH = "/home/appuser/.nypai-chatbot/venv"
-DOCKER_VENV_PYTHON = os.path.join(DOCKER_VENV_PATH, "bin", "python")
 
 
 def running_in_docker() -> bool:

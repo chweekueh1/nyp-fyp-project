@@ -55,11 +55,10 @@ class TestSuite:
         try:
             print(f"  🧪 Running {test_file.name}...")
 
-            # Use venv python explicitly if running in Docker
-            if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-                python_exe = "/home/appuser/.nypai-chatbot/venv/bin/python"
-            else:
-                python_exe = sys.executable
+            venv_path = os.environ.get(
+                "VENV_PATH", "/home/appuser/.nypai-chatbot/venv-test"
+            )
+            python_exe = os.path.join(venv_path, "bin", "python")
 
             result = subprocess.run(
                 [python_exe, str(test_file)],

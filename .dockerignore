@@ -55,8 +55,6 @@ dist/
 *.egg-info/
 
 # Data directories (will be created at runtime)
-data/
-keyword_cache/
 
 # Misc
 .ruff_cache/
@@ -69,3 +67,5 @@ htmlcov/
 
 # Note: setup.py is included for all builds
 # Test files are excluded by default but can be explicitly copied in test builds
+
+/home/appuser/.nypai-chatbot/venv

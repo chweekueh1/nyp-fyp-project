@@ -43,7 +43,6 @@ def show_data_storage_info():
         "data/chat_sessions",
         "data/user_info",
         "data/vector_store/duckdb/chat",
-        "logs",
     ]
 
     for subdir in subdirs:

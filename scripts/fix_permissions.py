@@ -47,5 +47,22 @@ def fix_nypai_chatbot_permissions():
             print(f"⚠️  Could not fix permissions for {chatbot_dir}: {e}")
 
 
+def fix_host_nypai_chatbot_permissions():
+    """
+    Fix host ~/.nypai-chatbot permissions for Docker compatibility (UID 1001, 755).
+    """
+    chatbot_dir = os.path.expanduser("~/.nypai-chatbot")
+    if os.path.exists(chatbot_dir):
+        try:
+            subprocess.run(
+                ["sudo", "chown", "-R", "1001:1001", chatbot_dir], check=True
+            )
+            subprocess.run(["sudo", "chmod", "-R", "755", chatbot_dir], check=True)
+            print(f"✅ Fixed host permissions for {chatbot_dir} (UID 1001, 755)")
+        except Exception as e:
+            print(f"⚠️  Could not fix host permissions for {chatbot_dir}: {e}")
+
+
 if __name__ == "__main__":
     fix_nypai_chatbot_permissions()
+    fix_host_nypai_chatbot_permissions()

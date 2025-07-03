@@ -3,13 +3,14 @@ import os
 import sys
 
 # --- VENV PATH CHECK & DEBUG INFO ---
-DOCKER_VENV_PATH = "/home/appuser/.nypai-chatbot/venv"
+from infra_utils import get_docker_venv_path
+
 print(f"🐍 Python executable: {sys.executable}")
 print(f"🔗 sys.prefix (venv): {sys.prefix}")
 if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-    print(f"ℹ️  Dockerfiles install the venv at: {DOCKER_VENV_PATH}")
+    print(f"ℹ️  Dockerfiles install the venv at: {get_docker_venv_path('test')}")
     # In Docker, ensure we are running from the correct venv
-    expected_prefix = DOCKER_VENV_PATH
+    expected_prefix = get_docker_venv_path("test")
     actual_prefix = sys.prefix
     if not actual_prefix.startswith(expected_prefix):
         print(
@@ -57,7 +58,6 @@ def check_env():
         os.path.join(chatbot_dir, "data", "vector_store"),
         os.path.join(chatbot_dir, "data", "user_info"),
         os.path.join(chatbot_dir, "data", "chat_sessions"),
-        os.path.join(chatbot_dir, "logs"),
     ]
     for d in required_dirs:
         print(f"Checking: {d}")

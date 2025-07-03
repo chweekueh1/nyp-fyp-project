@@ -1,4 +1,0 @@
-2025-07-01 13:11:18 - INFO - root - Checking if Docker daemon is running with 'docker info'.
-2025-07-01 13:11:18 - INFO - root - Docker daemon is already running.
-2025-07-01 13:11:18 - INFO - root - Docker image 'nyp-fyp-chatbot' already exists.
-2025-07-01 13:11:18 - INFO - root - Running Docker container for 'nyp-fyp-chatbot'.

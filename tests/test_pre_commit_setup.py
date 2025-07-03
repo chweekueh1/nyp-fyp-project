@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 from pathlib import Path
+from infra_utils import get_docker_venv_path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -20,7 +21,7 @@ def test_pre_commit_installation():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/home/appuser/.nypai-chatbot/venv"
+            venv_path = get_docker_venv_path("test")
         else:
             venv_path = os.path.join(project_root, ".venv")
 
@@ -112,7 +113,7 @@ def test_pre_commit_hooks_installed():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/home/appuser/.nypai-chatbot/venv"
+            venv_path = get_docker_venv_path("test")
         else:
             venv_path = os.path.join(project_root, ".venv")
 
@@ -169,7 +170,7 @@ def test_pre_commit_validation():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/home/appuser/.nypai-chatbot/venv"
+            venv_path = get_docker_venv_path("test")
         else:
             venv_path = os.path.join(project_root, ".venv")
 

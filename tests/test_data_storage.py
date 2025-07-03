@@ -36,7 +36,6 @@ def test_chatbot_directory_structure():
             "data/chat_sessions",
             "data/user_info",
             "data/vector_store/duckdb/chat",
-            "logs",
         ]
 
         for subdir in expected_subdirs:

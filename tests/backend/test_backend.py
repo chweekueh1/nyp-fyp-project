@@ -43,7 +43,6 @@ from infra_utils import (
     create_folders,
     ensure_chatbot_dir_exists,
     get_chatbot_dir,
-    setup_logging,
 )
 
 
@@ -697,26 +696,6 @@ def test_ensure_chatbot_dir_exists():
         raise
 
 
-def test_setup_logging():
-    """Test setup_logging configures logging and creates log file."""
-    print("🔍 Testing setup_logging function...")
-    try:
-        logger = setup_logging()
-        logger.debug("Test debug log entry")
-        log_file = os.path.join(os.path.dirname(__file__), "..", "..", "app.log")
-        log_file = os.path.abspath(log_file)
-        assert os.path.isfile(log_file), f"Log file not created: {log_file}"
-        with open(log_file, "r", encoding="utf-8") as f:
-            content = f.read()
-        assert "Test debug log entry" in content or len(content) > 0, (
-            "Log file is empty or missing log entry"
-        )
-        print("✅ test_setup_logging: PASSED")
-    except Exception as e:
-        print(f"❌ test_setup_logging: FAILED - {e}")
-        raise
-
-
 async def run_backend_tests():
     """Run all backend tests."""
     print("🚀 Running backend tests...")
@@ -744,7 +723,6 @@ async def run_backend_tests():
         test_create_folders,
         test_get_chatbot_dir,
         test_ensure_chatbot_dir_exists,
-        test_setup_logging,
     ]
 
     # Add special character tests if the module is available

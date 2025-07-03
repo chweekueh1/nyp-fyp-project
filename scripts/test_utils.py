@@ -3,8 +3,6 @@ import sys
 import subprocess
 from typing import Optional
 from infra_utils import setup_logging
-from docker_utils import ensure_test_docker_image
-from env_utils import running_in_docker
 
 logger = setup_logging()
 
@@ -15,23 +13,23 @@ if os.name == "nt":
 else:
     LOCAL_VENV_PATH = os.path.expanduser("~/.nypai-chatbot/venv")
     VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
-DOCKER_VENV_PATH = "/home/appuser/.nypai-chatbot/venv"
-DOCKER_VENV_PYTHON = os.path.join(DOCKER_VENV_PATH, "bin", "python")
 
 ENV_FILE_PATH = os.environ.get("DOCKER_ENV_FILE", ".env")
 
 
-def docker_test(test_target: Optional[str] = None) -> None:
-    ensure_test_docker_image()
-    print("🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv")
+def docker_test(test_target: Optional[str] = None, mode: str = "test") -> None:
+    image_map = {
+        "test": "nyp-fyp-chatbot-test",
+        "prod": "nyp-fyp-chatbot-prod",
+        "dev": "nyp-fyp-chatbot-dev",
+    }
+    image = image_map.get(mode, "nyp-fyp-chatbot-test")
+    print(f"🐳 [DEBUG] Using Docker image: {image}")
     print(
         f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
     )
     print("🔍 Running environment check (scripts/check_env.py) before tests...")
-    if running_in_docker():
-        python_exe = "/home/appuser/.nypai-chatbot/venv/bin/python"
-    else:
-        python_exe = VENV_PYTHON
+    python_exe = "python"
     env_check_result = subprocess.run([python_exe, "scripts/check_env.py"])
     if env_check_result.returncode != 0:
         print("❌ Environment check failed. Aborting tests.")
@@ -39,8 +37,8 @@ def docker_test(test_target: Optional[str] = None) -> None:
     else:
         print("✅ Environment check passed.")
     if test_target:
-        print(f"🧪 Running {test_target} in test Docker container...")
-        logger.info(f"Running {test_target} inside test Docker container.")
+        print(f"🧪 Running {test_target} in Docker container...")
+        logger.info(f"Running {test_target} inside Docker container.")
         if test_target == "all":
             print(
                 "🚀 Running all tests using scripts/bootstrap_tests.sh for full integration..."
@@ -55,14 +53,12 @@ def docker_test(test_target: Optional[str] = None) -> None:
                 )
                 sys.exit(1)
         elif test_target.startswith("tests/") and test_target.endswith(".py"):
-            result = subprocess.run(
-                ["/home/appuser/.nypai-chatbot/venv/bin/python", test_target]
-            )
+            result = subprocess.run(["python", test_target])
             sys.exit(result.returncode)
         else:
             result = subprocess.run(
                 [
-                    "/home/appuser/.nypai-chatbot/venv/bin/python",
+                    "python",
                     "tests/comprehensive_test_suite.py",
                     "--suite",
                     test_target,
@@ -74,14 +70,14 @@ def docker_test(test_target: Optional[str] = None) -> None:
         logger.info("Running Docker environment verification.")
         result = subprocess.run(
             [
-                "/home/appuser/.nypai-chatbot/venv/bin/python",
-                "tests/test_docker_environment.py",
+                "python",
+                "scripts/test_docker_environment.py",
             ]
         )
         sys.exit(result.returncode)
 
 
-def docker_test_suite(suite_name: str) -> None:
+def docker_test_suite(suite_name: str, mode: str = "test") -> None:
     valid_suites = [
         "frontend",
         "backend",
@@ -100,24 +96,37 @@ def docker_test_suite(suite_name: str) -> None:
         sys.exit(1)
     print(f"🧪 Running test suite: {suite_name}")
     logger.info(f"Running test suite: {suite_name}")
+    image_map = {
+        "test": "nyp-fyp-chatbot-test",
+        "prod": "nyp-fyp-chatbot-prod",
+        "dev": "nyp-fyp-chatbot-dev",
+    }
+    image = image_map.get(mode, "nyp-fyp-chatbot-test")
     cmd = [
-        "/home/appuser/.nypai-chatbot/venv/bin/python",
+        "docker",
+        "run",
+        "--rm",
+        "-it",
+        "--env-file",
+        ENV_FILE_PATH,
+        image,
+        "python",
         "tests/comprehensive_test_suite.py",
+        "--suite",
+        suite_name,
     ]
-    if suite_name in ["all", "comprehensive"]:
-        pass
-    else:
-        cmd += ["--suite", suite_name]
     try:
         result = subprocess.run(cmd)
         sys.exit(result.returncode)
     except Exception as e:
-        print(f"❌ Failed to run test suite {suite_name}: {e}")
-        logger.error(f"Failed to run test suite {suite_name}: {e}", exc_info=True)
+        print(f"❌ Failed to run test suite {suite_name} in Docker: {e}")
+        logger.error(
+            f"Failed to run test suite {suite_name} in Docker: {e}", exc_info=True
+        )
         sys.exit(1)
 
 
-def docker_test_file(test_file: str) -> None:
+def docker_test_file(test_file: str, mode: str = "test") -> None:
     import pathlib
 
     test_path = pathlib.Path(test_file)
@@ -126,13 +135,31 @@ def docker_test_file(test_file: str) -> None:
         sys.exit(1)
     print(f"🧪 Running test file: {test_file}")
     logger.info(f"Running test file: {test_file}")
-    cmd = ["/home/appuser/.nypai-chatbot/venv/bin/python", test_file]
+    image_map = {
+        "test": "nyp-fyp-chatbot-test",
+        "prod": "nyp-fyp-chatbot-prod",
+        "dev": "nyp-fyp-chatbot-dev",
+    }
+    image = image_map.get(mode, "nyp-fyp-chatbot-test")
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "-it",
+        "--env-file",
+        ENV_FILE_PATH,
+        image,
+        "python",
+        test_file,
+    ]
     try:
         result = subprocess.run(cmd)
         sys.exit(result.returncode)
     except Exception as e:
-        print(f"❌ Failed to run test file {test_file}: {e}")
-        logger.error(f"Failed to run test file {test_file}: {e}", exc_info=True)
+        print(f"❌ Failed to run test file {test_file} in Docker: {e}")
+        logger.error(
+            f"Failed to run test file {test_file} in Docker: {e}", exc_info=True
+        )
         sys.exit(1)
 
 

@@ -17,10 +17,11 @@ from test_utils import (
     docker_test_file,
     list_available_tests,
 )
-from env_utils import ENV_FILE_PATH, VENV_PYTHON, running_in_docker, logger
+from env_utils import ENV_FILE_PATH, running_in_docker, logger
 from precommit_utils import setup_pre_commit
 from fix_permissions import fix_nypai_chatbot_permissions
 import subprocess
+from infra_utils import get_docker_venv_path
 
 fix_nypai_chatbot_permissions()
 
@@ -139,6 +140,14 @@ Examples:
         help="Run tests inside Docker container (internal use)",
     )
 
+    parser.add_argument(
+        "--docker-mode",
+        type=str,
+        choices=["test", "prod", "dev"],
+        default="test",
+        help="Select which Docker image/venv to use for test commands (default: test)",
+    )
+
     args = parser.parse_args()
 
     # Handle Docker commands
@@ -160,35 +169,38 @@ Examples:
     elif args.docker_test:
         ensure_test_docker_image()
         print(
-            "🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv"
+            "🐳 [DEBUG] Dockerfile installs venv at: "
+            + get_docker_venv_path(args.docker_mode)
         )
         print(
             f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
         )
         print("🔍 Running environment check (scripts/check_env.py) before tests...")
-        docker_test()
+        docker_test(mode=args.docker_mode)
         return
     elif args.docker_test_suite:
         ensure_test_docker_image()
         print(
-            "🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv"
+            "🐳 [DEBUG] Dockerfile installs venv at: "
+            + get_docker_venv_path(args.docker_mode)
         )
         print(
             f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
         )
         print("🔍 Running environment check (scripts/check_env.py) before tests...")
-        docker_test_suite(args.docker_test_suite)
+        docker_test_suite(args.docker_test_suite, mode=args.docker_mode)
         return
     elif args.docker_test_file:
         ensure_test_docker_image()
         print(
-            "🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv"
+            "🐳 [DEBUG] Dockerfile installs venv at: "
+            + get_docker_venv_path(args.docker_mode)
         )
         print(
             f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
         )
         print("🔍 Running environment check (scripts/check_env.py) before tests...")
-        docker_test_file(args.docker_test_file)
+        docker_test_file(args.docker_test_file, mode=args.docker_mode)
         return
     elif args.list_tests:
         list_available_tests()
@@ -211,7 +223,7 @@ Examples:
         logger.info("Running test suite inside the container (internal call).")
         try:
             subprocess.run(
-                [VENV_PYTHON, "tests/comprehensive_test_suite.py"],
+                ["python", "tests/comprehensive_test_suite.py"],
                 check=True,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
@@ -230,9 +242,7 @@ Examples:
 
     # This block executes if no specific argparse argument matches
     elif running_in_docker():
-        print(
-            "🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv"
-        )
+        print("🐳 [DEBUG] Dockerfile installs venv at: " + get_docker_venv_path("dev"))
         print(
             f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
         )

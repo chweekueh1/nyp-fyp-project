@@ -3,7 +3,7 @@ import sys
 import subprocess
 import shutil
 import time
-from infra_utils import setup_logging
+from infra_utils import setup_logging, get_docker_venv_path
 from env_utils import check_env_file
 
 logger = setup_logging()
@@ -17,8 +17,6 @@ if os.name == "nt":
 else:
     LOCAL_VENV_PATH = os.path.expanduser("~/.nypai-chatbot/venv")
     VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
-DOCKER_VENV_PATH = "/home/appuser/.nypai-chatbot/venv"
-DOCKER_VENV_PYTHON = os.path.join(DOCKER_VENV_PATH, "bin", "python")
 
 
 def running_in_docker() -> bool:
@@ -136,9 +134,7 @@ def ensure_docker_running() -> None:
 
 def docker_build():
     ensure_docker_running()
-    print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
-    )
+    print(f"🐳 [DEBUG] Dockerfile will install venv at: {get_docker_venv_path('dev')}")
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
     )
@@ -187,9 +183,7 @@ def docker_build():
 
 def docker_build_test():
     ensure_docker_running()
-    print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
-    )
+    print(f"🐳 [DEBUG] Dockerfile will install venv at: {get_docker_venv_path('test')}")
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
     )
@@ -238,9 +232,7 @@ def docker_build_test():
 
 def docker_build_prod():
     ensure_docker_running()
-    print(
-        "🐳 [DEBUG] Dockerfile will install venv at: /home/appuser/.nypai-chatbot/venv"
-    )
+    print(f"🐳 [DEBUG] Dockerfile will install venv at: {get_docker_venv_path('prod')}")
     print(
         "🐳 [DEBUG] Docker containers will load environment variables from .env via --env-file"
     )
