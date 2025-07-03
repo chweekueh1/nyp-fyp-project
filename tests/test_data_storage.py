@@ -35,7 +35,7 @@ def test_chatbot_directory_structure():
         expected_subdirs = [
             "data/chat_sessions",
             "data/user_info",
-            "data/vector_store/chroma_db",
+            "data/vector_store/duckdb/chat",
             "logs",
         ]
 

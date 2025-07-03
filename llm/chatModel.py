@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_chroma import Chroma
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import START, StateGraph
@@ -71,7 +70,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 llm: Optional[ChatOpenAI] = None
 embedding: Optional[OpenAIEmbeddings] = None
 client: Optional[openai.OpenAI] = None
-db: Optional[Chroma] = None
+db: Optional[Any] = None  # Will be DuckDBVectorStore
 app = None  # LangGraph workflow app
 llm_init_lock = threading.Lock()
 
@@ -123,44 +122,42 @@ def initialize_llm_and_db() -> None:
             db = None
             return
 
-        # Load Chroma DB with caching
+        # Load DuckDB vector store with caching
         try:
             if embedding is None:
                 logging.critical(
-                    "Embedding model not initialized. Cannot initialize Chroma DB."
+                    "Embedding model not initialized. Cannot initialize DuckDB vector store."
                 )
                 db = None
                 return
 
-            logging.info("🗄️ Loading Chroma DB...")
-            db = Chroma(
-                collection_name="chat",
-                embedding_function=embedding,
-                persist_directory=DATABASE_PATH,
-            )
-            logging.info(f"Chroma DB 'chat' loaded from {DATABASE_PATH}")
+            logging.info("🗄️ Loading DuckDB vector store...")
+            from backend.database import get_duckdb_collection
+
+            db = get_duckdb_collection("chat")
+            logging.info(f"DuckDB vector store 'chat' loaded from {DATABASE_PATH}")
 
             # Cache the database for faster subsequent loads
             try:
                 # Test the database connection
                 db.get(limit=1)
-                logging.info("Chroma DB loaded from cache.")
+                logging.info("DuckDB vector store loaded from cache.")
             except Exception as cache_e:
-                logging.warning(f"Chroma DB cache test failed: {cache_e}")
+                logging.warning(f"DuckDB vector store cache test failed: {cache_e}")
                 # Try to recreate from existing data
                 try:
-                    db = Chroma(
-                        collection_name="chat",
-                        embedding_function=embedding,
-                        persist_directory=DATABASE_PATH,
+                    db = get_duckdb_collection("chat")
+                    logging.info(
+                        "Successfully recreated DuckDB vector store from cache"
                     )
-                    logging.info("Successfully recreated Chroma DB from cache")
                 except Exception as recreate_e:
-                    logging.error(f"Failed to recreate Chroma DB: {recreate_e}")
+                    logging.error(
+                        f"Failed to recreate DuckDB vector store: {recreate_e}"
+                    )
                     db = None
 
         except Exception as e:
-            logging.critical(f"Failed to load Chroma DB 'chat': {e}")
+            logging.critical(f"Failed to load DuckDB vector store 'chat': {e}")
             db = None
 
         # Initialize LangGraph workflow
@@ -175,8 +172,10 @@ def initialize_llm_and_db() -> None:
 
         # Save successful initialization state
         if llm and embedding and client and db:
-            logging.info("Saved Chroma DB to cache")
-            logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
+            logging.info("Saved DuckDB vector store to cache")
+            logging.info(
+                "LLM, DuckDB vector store, and OpenAI client initialized successfully."
+            )
 
 
 def _initialize_langgraph_workflow() -> None:
@@ -428,7 +427,7 @@ def route_retriever(question: str) -> Optional[Any]:
     """
     if db is None:
         logging.error(
-            "Chroma DB not initialized. Cannot route retriever. Returning None."
+            "DuckDB vector store not initialized. Cannot route retriever. Returning None."
         )
         return None
 
@@ -443,13 +442,16 @@ def route_retriever(question: str) -> Optional[Any]:
             logging.error("db is None in route_retriever's default path.")
             return None
 
+    # Convert ChromaDB filter format to keyword list for DuckDB
     keyword_filter = build_keyword_filter(matched_keywords)
     logging.info(
         f"Keywords matched: {matched_keywords}. Applying filter: {keyword_filter}."
     )
     # Ensure db.as_retriever() is only called if db is not None
     if db:
-        return db.as_retriever(search_kwargs={"k": 5, "filter": keyword_filter})
+        return db.as_retriever(
+            search_kwargs={"k": 5, "filter": {"keywords": matched_keywords}}
+        )
     else:
         logging.error("db is None in route_retriever's filtered path.")
         return None
@@ -539,16 +541,18 @@ def _error_state(
 # --- LangGraph Workflow Setup ---
 CACHE_DIR = os.path.join(BASE_CHATBOT_DIR, "data", "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
-CHROMA_CACHE_PATH = os.path.join(CACHE_DIR, "chroma_db.pkl")
+DUCKDB_CACHE_PATH = os.path.join(CACHE_DIR, "duckdb_vectorstore.pkl")
 LANGCHAIN_CACHE_PATH = os.path.join(CACHE_DIR, "langchain_workflow.pkl")
 CACHE_VERSION = "1.0"  # Add version for cache invalidation
 
 app: Optional[Any] = None  # Initialize app to None
 # Ensure llm, db, and client are all initialized before compiling the workflow
 if llm and db and client:
-    logging.info("LLM, Chroma DB, and OpenAI client initialized successfully.")
-    # Try to load Chroma DB and LangGraph workflow from cache
-    chroma_loaded = False
+    logging.info(
+        "LLM, DuckDB vector store, and OpenAI client initialized successfully."
+    )
+    # Try to load DuckDB vector store and LangGraph workflow from cache
+    duckdb_loaded = False
     workflow_loaded = False
 
     def load_from_cache(cache_path: str, cache_type: str) -> tuple[Optional[Any], bool]:
@@ -568,11 +572,11 @@ if llm and db and client:
 
     def save_to_cache(cache_path: str, data: Any, cache_type: str) -> None:
         try:
-            # For Chroma DB, we only cache the collection name and persist directory
-            if isinstance(data, Chroma):
+            # For DuckDB vector store, we only cache the collection name and database path
+            if hasattr(data, "collection_name") and hasattr(data, "db_path"):
                 cache_data = {
-                    "collection_name": data._collection.name,
-                    "persist_directory": data._persist_directory,
+                    "collection_name": data.collection_name,
+                    "db_path": data.db_path,
                 }
             else:
                 cache_data = data
@@ -585,30 +589,30 @@ if llm and db and client:
 
     # Load from cache
     prev_db = db
-    _db, chroma_loaded = load_from_cache(CHROMA_CACHE_PATH, "Chroma DB")
-    if chroma_loaded and _db is not None:
-        logging.info("Chroma DB loaded from cache.")
-        # Recreate Chroma DB from cached data
+    _db, duckdb_loaded = load_from_cache(DUCKDB_CACHE_PATH, "DuckDB vector store")
+    if duckdb_loaded and _db is not None:
+        logging.info("DuckDB vector store loaded from cache.")
+        # Recreate DuckDB vector store from cached data
         try:
-            db = Chroma(
-                collection_name=_db["collection_name"],
-                embedding_function=embedding,
-                persist_directory=_db["persist_directory"],
-            )
-            logging.info("Successfully recreated Chroma DB from cache")
+            from backend.database import get_duckdb_collection
+
+            db = get_duckdb_collection(_db["collection_name"])
+            logging.info("Successfully recreated DuckDB vector store from cache")
         except Exception as e:
-            logging.error(f"Failed to recreate Chroma DB from cache: {e}")
+            logging.error(f"Failed to recreate DuckDB vector store from cache: {e}")
             db = prev_db
     else:
-        logging.info("Chroma DB not found in cache, using initialized instance.")
+        logging.info(
+            "DuckDB vector store not found in cache, using initialized instance."
+        )
         # db is already initialized above
 
-    # Only save Chroma DB metadata to cache, not the full object
+    # Only save DuckDB vector store metadata to cache, not the full object
     if db is not None:
-        save_to_cache(CHROMA_CACHE_PATH, db, "Chroma DB")
+        save_to_cache(DUCKDB_CACHE_PATH, db, "DuckDB vector store")
 else:
     logging.critical(
-        "LLM, Chroma DB, or OpenAI client not initialized. Chat functions will be limited."
+        "LLM, DuckDB vector store, or OpenAI client not initialized. Chat functions will be limited."
     )
 
 

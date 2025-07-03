@@ -56,10 +56,10 @@ def initialize_backend_in_background():
                 f.write("initializing")
 
             logger.info("🚀 Starting background backend initialization...")
-            logger.info("⏳ This will initialize ChromaDB and AI models...")
+            logger.info("⏳ This will initialize DuckDB vector store and AI models...")
 
             # Delay the import until we're ready to initialize
-            # This prevents ChromaDB from initializing during module import
+            # This prevents DuckDB vector store from initializing during module import
             import importlib
 
             # Initialize backend asynchronously

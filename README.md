@@ -19,9 +19,6 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 * **Python 3.11.0 or higher**: Ensure you have a compatible Python version installed.
 * **Git**: Required for cloning the repository.
 * **OpenAI API key**: Necessary for AI functionalities.
-* **Compiler Tools**:
-  * **Windows**: Microsoft Visual C++ Build Tools are required for certain Python packages (like ChromaDB) that need to compile C/C++ extensions.
-  * **Linux**: While Python's `pip` generally handles compilation on Linux if standard build tools are available, you might need to install `build-essential` (Debian/Ubuntu) or `base-devel` (Arch Linux) if you encounter compilation errors for specific packages.
 
 ### Installation
 
@@ -37,23 +34,10 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
       * **Windows**: You can download it from [Python.org](https://www.python.org/downloads/release/python-3119/). During installation, make sure to **check the box "Add python.exe to PATH"**.
       * **Linux**: It's recommended to install Python via your distribution's package manager (e.g., `sudo apt install python3.11` on Debian/Ubuntu, `sudo pacman -S python` on Arch Linux) or using a version manager like `pyenv`.
 
-3. **Install Compiler Tools (if prompted or encountering errors)**
-
-      * **Windows (Microsoft Visual C++ Build Tools)**:
-          * Download from [visualstudio.microsoft.com/visual-cpp-build-tools/](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
-          * After installation, run the setup executable and then the **Visual Studio Installer**.
-          * Navigate to **Individual components**.
-          * Select `MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)` (or its ARM equivalent).
-          * Select `Windows 11 SDK (10.0.22621.0)` (or the appropriate Windows 10 SDK).
-          * Install the selected components.
-      * **Linux**: If you encounter compilation errors during `pip install`, you might need to install development tools. For example:
-          * Debian/Ubuntu: `sudo apt install build-essential python3-dev`
-          * Arch Linux: `sudo pacman -S base-devel python` (usually part of base installation)
-
-4. **The rest of the installation is handled by the setup script. Proceed to step 7!**
+3. **The rest of the installation is handled by the setup script. Proceed to step 7!**
     (The setup script will create and manage the virtual environment, install Python dependencies, and set up Pandoc/Tesseract.)
 
-5. **Set up environment variables**
+4. **Set up environment variables**
 
     ```bash
     # Copy the development environment template
@@ -63,7 +47,7 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
     # OPENAI_API_KEY=your_openai_api_key
     ```
 
-6. **Run the setup script**
+5. **Run the setup script**
 
     ```bash
     python setup.py

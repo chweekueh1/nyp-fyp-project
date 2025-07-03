@@ -683,7 +683,7 @@ def test_ensure_chatbot_dir_exists():
         path = get_chatbot_dir()
 
         # Test that the function works whether directory exists or not
-        # Don't try to delete it as it might contain locked files (ChromaDB)
+        # Don't try to delete it as it might contain locked files (DuckDB vector store)
         ensure_chatbot_dir_exists()
         assert os.path.isdir(path), f"Chatbot dir not created: {path}"
 

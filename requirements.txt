@@ -4,38 +4,33 @@ aiosqlite==0.21.0
 
 # Security and authentication
 bcrypt==4.3.0
-chroma-hnswlib==0.7.6
-
-# Database and vector store (essential for RAG)
-chromadb==0.6.3
 cryptography==44.0.2
+
+# Web framework and async (can be installed in parallel)
 fastapi==0.115.12
 filetype==1.2.0
-# Core web framework and dependencies
+
+# Gradio framework
 gradio==5.34.0
 gradio_client==1.10.3
 keybert
 
-# LangChain core (minimal)
+# LangChain ecosystem (install together for better dependency resolution)
 langchain>=0.3.24,<1.0.0
-langchain-chroma==0.2.2
 langchain-community==0.3.23
 langchain-core>=0.3.56,<1.0.0
 langchain-openai==0.3.12
-
-# LangChain experimental
 langchain_experimental
 
-# LangGraph for conversation flow
+# LangGraph
 langgraph==0.3.30
 langgraph-checkpoint-sqlite==2.0.7
 nest_asyncio==1.6.0
 nltk
-
-# Data handling (minimal)
+# Core dependencies (install first - these are often pre-compiled)
 numpy==1.26.4
 
-# OpenAI and AI core
+# AI and ML libraries (these often have heavy compilation)
 openai==1.72.0
 pandas==2.2.3
 pdftotext
@@ -43,18 +38,16 @@ pillow==11.1.0
 pydantic==2.11.2
 pydantic-settings==2.8.1
 
-# Document processing (core only)
+# Document processing (install last as they may have complex dependencies)
 pypdf==5.4.0
-
-# Utilities
 python-dateutil==2.9.0.post0
-
-# File processing and utilities
 python-dotenv==1.1.0
 python-multipart==0.0.20
 pytz==2025.2
 PyYAML==6.0.2
 requests==2.32.3
+
+# Database and data handling
 SQLAlchemy==2.0.40
 starlette==0.46.1
 tiktoken==0.9.0

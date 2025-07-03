@@ -11,7 +11,7 @@ from typing import Tuple, Any, List, Dict
 import gradio as gr
 from infra_utils import clear_chat_history
 
-# Backend import moved to function level to avoid early ChromaDB initialization
+# Backend import moved to function level to avoid early DuckDB vector store initialization
 
 
 def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
@@ -26,7 +26,7 @@ def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
     if not username:
         return {}
 
-    # Lazy import to avoid early ChromaDB initialization
+    # Lazy import to avoid early DuckDB vector store initialization
     import backend
 
     chat_ids = backend.list_user_chat_ids(username)

@@ -28,15 +28,15 @@ async def init_backend():
         else:
             logger.warning("⚠️ LLM functions not available")
 
-        # Initialize ChromaDB
+        # Initialize DuckDB vector store
         try:
-            db = get_chroma_db()
+            db = get_chroma_db()  # This now returns DuckDB collection
             if db:
-                logger.info("✅ ChromaDB initialized")
+                logger.info("✅ DuckDB vector store initialized")
             else:
-                logger.warning("⚠️ ChromaDB not available")
+                logger.warning("⚠️ DuckDB vector store not available")
         except Exception as e:
-            logger.error(f"❌ Error initializing ChromaDB: {e}")
+            logger.error(f"❌ Error initializing DuckDB vector store: {e}")
 
         logger.info("✅ Backend initialization completed")
 
@@ -61,16 +61,16 @@ async def init_backend_async_internal():
             else:
                 logger.warning("⚠️ LLM functions initialization failed")
 
-        # Initialize ChromaDB with performance monitoring
-        with perf_monitor("chromadb_initialization"):
+        # Initialize DuckDB vector store with performance monitoring
+        with perf_monitor("duckdb_initialization"):
             try:
-                db = get_chroma_db()
+                db = get_chroma_db()  # This now returns DuckDB collection
                 if db:
-                    logger.info("✅ ChromaDB initialized successfully")
+                    logger.info("✅ DuckDB vector store initialized successfully")
                 else:
-                    logger.warning("⚠️ ChromaDB initialization failed")
+                    logger.warning("⚠️ DuckDB vector store initialization failed")
             except Exception as e:
-                logger.error(f"❌ ChromaDB initialization error: {e}")
+                logger.error(f"❌ DuckDB vector store initialization error: {e}")
 
         # Initialize data processing functions
         with perf_monitor("data_processing_initialization"):
@@ -123,12 +123,15 @@ def get_backend_status() -> dict:
                 "error": str(e),
             }
 
-        # Check ChromaDB
+        # Check DuckDB vector store
         try:
-            db = get_chroma_db()
-            status["components"]["chromadb"] = {"available": db is not None}
+            db = get_chroma_db()  # This now returns DuckDB collection
+            status["components"]["duckdb_vectorstore"] = {"available": db is not None}
         except Exception as e:
-            status["components"]["chromadb"] = {"available": False, "error": str(e)}
+            status["components"]["duckdb_vectorstore"] = {
+                "available": False,
+                "error": str(e),
+            }
 
         # Check data processing
         try:

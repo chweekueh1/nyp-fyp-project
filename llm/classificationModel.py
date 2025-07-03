@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_chroma import Chroma
 import openai
 import os
 from langchain_core.prompts import ChatPromptTemplate
@@ -26,11 +25,9 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")
 # Initialize components
 llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
 embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-db = Chroma(
-    collection_name="classification",
-    embedding_function=embedding,
-    persist_directory=DATABASE_PATH,
-)
+from backend.database import get_duckdb_collection
+
+db = get_duckdb_collection("classification")
 
 # Define prompt templates
 multi_query_template = PromptTemplate(

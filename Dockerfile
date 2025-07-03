@@ -1,50 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Multi-stage Dockerfile for NYP FYP Chatbot
-# Build stage with all dependencies
-FROM python:3.11-alpine AS builder
-
-# Set environment variables for build
-ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-
-WORKDIR /app
-
-# Install build dependencies
-RUN apk add --no-cache \
-    build-base \
-    libffi-dev \
-    openssl-dev \
-    zlib-dev \
-    jpeg-dev \
-    freetype-dev \
-    libpng-dev \
-    cmake \
-    pkgconfig \
-    # ONNX Runtime dependencies for musl
-    libgomp \
-    libstdc++ \
-    gcc-libs \
-    # Document processing dependencies
-    pandoc \
-    tesseract-ocr \
-    tesseract-ocr-data-eng \
-    poppler-utils \
-    # Additional dependencies for better OCR and document processing
-    tesseract-ocr-dev \
-    poppler-dev
-
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Copy requirements and install Python dependencies
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Runtime stage with Alpine Linux
+# Single-stage Dockerfile for NYP FYP Chatbot
 FROM python:3.11-alpine
 
 # Set environment variables
@@ -53,61 +9,72 @@ ENV GRADIO_SERVER_NAME="0.0.0.0"
 ENV GRADIO_SERVER_PORT="7860"
 ENV IN_DOCKER="1"
 ENV PRODUCTION="true"
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Set build optimization environment variables
+ENV MAKEFLAGS="-j$(nproc)"
+ENV PYTHONHASHSEED=random
+ENV PIP_USE_PEP517=1
+
+# Add pip parallelization and optimization
+ARG PARALLEL_JOBS=4
+ENV PIP_JOBS=${PARALLEL_JOBS}
+ENV PIP_PREFER_BINARY=1
+ENV PIP_ONLY_BINARY=:all:
 
 WORKDIR /app
 
-# Install runtime system dependencies
+# Install system dependencies (including document processing) with parallel optimization
 RUN apk add --no-cache \
-    # Document processing runtime dependencies
+    # Core build dependencies for Python packages
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    zlib-dev \
+    # Image processing dependencies (for Pillow)
+    jpeg-dev \
+    freetype-dev \
+    libpng-dev \
+    # Core runtime dependencies
+    libgomp \
+    libstdc++ \
+    libgcc \
+    # Document processing dependencies
+    pandoc \
     tesseract-ocr \
     tesseract-ocr-data-eng \
     poppler-utils \
-    # Additional runtime dependencies
-    libjpeg \
-    libpng \
-    freetype \
-    # ONNX Runtime runtime dependencies for musl
-    libgomp \
-    libstdc++ \
-    gcc-libs \
     # Security and performance
     ca-certificates \
     && update-ca-certificates
 
-# Copy virtual environment from builder stage
-COPY --from=builder /opt/venv /opt/venv
+# Create virtual environment
+RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy only the necessary application files
-COPY app.py ./
-COPY backend.py ./
-COPY infra_utils.py ./
-COPY performance_utils.py ./
-COPY hashing.py ./
-COPY flexcyon_theme.py ./
+# Copy requirements and install Python dependencies with advanced parallelization
+COPY requirements.txt ./requirements.txt
 
-# Copy backend package
+# Use build cache mount for pip cache and optimize pip installation with parallelization
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip wheel setuptools && \
+    pip install --no-cache-dir --use-pep517 --parallel ${PARALLEL_JOBS} --prefer-binary -r requirements.txt && \
+    pip install --no-cache-dir --use-pep517 --parallel ${PARALLEL_JOBS} --prefer-binary overrides tenacity rich tqdm typer
+
+# Copy all application files in a single layer to reduce layers and improve caching
+COPY app.py backend.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py ./
 COPY backend/ ./backend/
-
-# Copy gradio modules
 COPY gradio_modules/ ./gradio_modules/
-
-# Copy LLM modules
 COPY llm/ ./llm/
-
-# Copy static assets
 COPY styles/ ./styles/
 COPY scripts/ ./scripts/
 
-# Create necessary directories
-RUN mkdir -p logs data
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
-
-# Change ownership of app directory
-RUN chown -R appuser:appgroup /app
+# Create necessary directories and set up user in a single layer
+RUN mkdir -p logs data && \
+    addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser

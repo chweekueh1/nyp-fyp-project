@@ -118,6 +118,7 @@ def ensure_docker_running() -> None:
                         )
                         print("✅ Docker daemon started successfully.")
                         logger.info("Docker daemon started successfully.")
+
                         return  # Docker started, return
                     except subprocess.CalledProcessError:
                         print(f"Waiting for Docker to start... ({i}/10)")
@@ -192,7 +193,7 @@ def ensure_docker_running() -> None:
 
 def docker_build():
     """
-    Build the development Docker image 'nyp-fyp-chatbot-dev'.
+    Build the development Docker image 'nyp-fyp-chatbot-dev' with optimized CPU utilization.
     """
     ensure_docker_running()  # Ensures Docker daemon is running before attempting to build
 
@@ -208,27 +209,81 @@ def docker_build():
     except Exception:
         pass  # Ignore errors
 
-    # --- BUILD THE NEW IMAGE ---
-    print("🔨 Building Docker image 'nyp-fyp-chatbot-dev'...")
-    logger.info("Building Docker image 'nyp-fyp-chatbot-dev'.")
+    # --- BUILD THE NEW IMAGE WITH OPTIMIZATIONS ---
+    print("🔨 Building Docker image 'nyp-fyp-chatbot-dev' with CPU optimizations...")
+    logger.info("Building Docker image 'nyp-fyp-chatbot-dev' with optimizations.")
+
+    # Set BuildKit environment variables for parallel builds
+    env = os.environ.copy()
+    env["DOCKER_BUILDKIT"] = "1"
+    env["COMPOSE_DOCKER_CLI_BUILD"] = "1"
+
+    # Get CPU core count for parallelization
+    try:
+        import multiprocessing
+
+        cpu_cores = multiprocessing.cpu_count()
+    except (ImportError, OSError):
+        cpu_cores = 4  # Fallback
+
+    print(f"🚀 Using {cpu_cores} CPU cores for parallel build")
+    logger.info(f"Using {cpu_cores} CPU cores for parallel build")
+
+    start_time = time.time()
 
     try:
+        # Build command with optimizations
+        build_cmd = [
+            "docker",
+            "build",
+            "-f",
+            "Dockerfile.dev",
+            "-t",
+            "nyp-fyp-chatbot-dev",
+            "--build-arg",
+            f"PARALLEL_JOBS={cpu_cores}",
+            "--build-arg",
+            "BUILDKIT_INLINE_CACHE=1",
+            "--progress=plain",
+            ".",
+        ]
+
         subprocess.run(
-            [
-                "docker",
-                "build",
-                "-f",
-                "Dockerfile.dev",
-                "-t",
-                "nyp-fyp-chatbot-dev",
-                ".",
-            ],
+            build_cmd,
             check=True,
             stdout=sys.stdout,
             stderr=sys.stderr,
+            env=env,
         )
-        print("✅ Docker image 'nyp-fyp-chatbot-dev' built successfully.")
-        logger.info("Docker image 'nyp-fyp-chatbot-dev' built successfully.")
+
+        end_time = time.time()
+        build_duration = int(end_time - start_time)
+
+        print(
+            f"✅ Docker image 'nyp-fyp-chatbot-dev' built successfully in {build_duration} seconds."
+        )
+        logger.info(
+            f"Docker image 'nyp-fyp-chatbot-dev' built successfully in {build_duration} seconds."
+        )
+
+        # Show build cache statistics
+        try:
+            print("📊 Build cache statistics:")
+            subprocess.run(
+                [
+                    "docker",
+                    "system",
+                    "df",
+                    "--format",
+                    "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}",
+                ],
+                check=True,
+                stdout=sys.stdout,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass  # Ignore cache stats errors
+
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to build Docker image: {e}")
         logger.error(f"Failed to build Docker image: {e}", exc_info=True)
@@ -241,7 +296,7 @@ def docker_build():
 
 def docker_build_test():
     """
-    Build the test Docker image 'nyp-fyp-chatbot-test'.
+    Build the test Docker image 'nyp-fyp-chatbot-test' with optimized CPU utilization.
     """
     ensure_docker_running()
 
@@ -257,8 +312,24 @@ def docker_build_test():
     except Exception:
         pass  # Ignore errors
 
-    print("🔨 Building Docker image 'nyp-fyp-chatbot-test'...")
-    logger.info("Building Docker image 'nyp-fyp-chatbot-test'.")
+    print("🔨 Building Docker image 'nyp-fyp-chatbot-test' with CPU optimizations...")
+    logger.info("Building Docker image 'nyp-fyp-chatbot-test' with optimizations.")
+
+    # Set BuildKit environment variables for parallel builds
+    env = os.environ.copy()
+    env["DOCKER_BUILDKIT"] = "1"
+    env["COMPOSE_DOCKER_CLI_BUILD"] = "1"
+
+    # Get CPU core count for parallelization
+    try:
+        import multiprocessing
+
+        cpu_cores = multiprocessing.cpu_count()
+    except (ImportError, OSError):
+        cpu_cores = 4  # Fallback
+
+    print(f"🚀 Using {cpu_cores} CPU cores for parallel build")
+    logger.info(f"Using {cpu_cores} CPU cores for parallel build")
 
     # Temporarily rename .dockerignore to allow test files
     dockerignore_backup = None
@@ -266,23 +337,61 @@ def docker_build_test():
         dockerignore_backup = ".dockerignore.backup"
         os.rename(".dockerignore", dockerignore_backup)
 
+    start_time = time.time()
+
     try:
+        # Build command with optimizations
+        build_cmd = [
+            "docker",
+            "build",
+            "-f",
+            "Dockerfile.test",
+            "-t",
+            "nyp-fyp-chatbot-test",
+            "--build-arg",
+            f"PARALLEL_JOBS={cpu_cores}",
+            "--build-arg",
+            "BUILDKIT_INLINE_CACHE=1",
+            "--progress=plain",
+            ".",
+        ]
+
         subprocess.run(
-            [
-                "docker",
-                "build",
-                "-f",
-                "Dockerfile.test",
-                "-t",
-                "nyp-fyp-chatbot-test",
-                ".",
-            ],
+            build_cmd,
             check=True,
             stdout=sys.stdout,
             stderr=sys.stderr,
+            env=env,
         )
-        print("✅ Docker image 'nyp-fyp-chatbot-test' built successfully.")
-        logger.info("Docker image 'nyp-fyp-chatbot-test' built successfully.")
+
+        end_time = time.time()
+        build_duration = int(end_time - start_time)
+
+        print(
+            f"✅ Docker image 'nyp-fyp-chatbot-test' built successfully in {build_duration} seconds."
+        )
+        logger.info(
+            f"Docker image 'nyp-fyp-chatbot-test' built successfully in {build_duration} seconds."
+        )
+
+        # Show build cache statistics
+        try:
+            print("📊 Build cache statistics:")
+            subprocess.run(
+                [
+                    "docker",
+                    "system",
+                    "df",
+                    "--format",
+                    "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}",
+                ],
+                check=True,
+                stdout=sys.stdout,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass  # Ignore cache stats errors
+
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to build Docker image: {e}")
         logger.error(f"Failed to build Docker image: {e}", exc_info=True)
@@ -299,7 +408,7 @@ def docker_build_test():
 
 def docker_build_prod():
     """
-    Build the production Docker image 'nyp-fyp-chatbot-prod'.
+    Build the production Docker image 'nyp-fyp-chatbot-prod' with optimized CPU utilization.
     """
     ensure_docker_running()
 
@@ -315,26 +424,80 @@ def docker_build_prod():
     except Exception:
         pass  # Ignore errors
 
-    print("🔨 Building Docker image 'nyp-fyp-chatbot-prod'...")
-    logger.info("Building Docker image 'nyp-fyp-chatbot-prod'.")
+    print("🔨 Building Docker image 'nyp-fyp-chatbot-prod' with CPU optimizations...")
+    logger.info("Building Docker image 'nyp-fyp-chatbot-prod' with optimizations.")
+
+    # Set BuildKit environment variables for parallel builds
+    env = os.environ.copy()
+    env["DOCKER_BUILDKIT"] = "1"
+    env["COMPOSE_DOCKER_CLI_BUILD"] = "1"
+
+    # Get CPU core count for parallelization
+    try:
+        import multiprocessing
+
+        cpu_cores = multiprocessing.cpu_count()
+    except (ImportError, OSError):
+        cpu_cores = 4  # Fallback
+
+    print(f"🚀 Using {cpu_cores} CPU cores for parallel build")
+    logger.info(f"Using {cpu_cores} CPU cores for parallel build")
+
+    start_time = time.time()
 
     try:
+        # Build command with optimizations
+        build_cmd = [
+            "docker",
+            "build",
+            "-f",
+            "Dockerfile",
+            "-t",
+            "nyp-fyp-chatbot-prod",
+            "--build-arg",
+            f"PARALLEL_JOBS={cpu_cores}",
+            "--build-arg",
+            "BUILDKIT_INLINE_CACHE=1",
+            "--progress=plain",
+            ".",
+        ]
+
         subprocess.run(
-            [
-                "docker",
-                "build",
-                "-f",
-                "Dockerfile",
-                "-t",
-                "nyp-fyp-chatbot-prod",
-                ".",
-            ],
+            build_cmd,
             check=True,
             stdout=sys.stdout,
             stderr=sys.stderr,
+            env=env,
         )
-        print("✅ Docker image 'nyp-fyp-chatbot-prod' built successfully.")
-        logger.info("Docker image 'nyp-fyp-chatbot-prod' built successfully.")
+
+        end_time = time.time()
+        build_duration = int(end_time - start_time)
+
+        print(
+            f"✅ Docker image 'nyp-fyp-chatbot-prod' built successfully in {build_duration} seconds."
+        )
+        logger.info(
+            f"Docker image 'nyp-fyp-chatbot-prod' built successfully in {build_duration} seconds."
+        )
+
+        # Show build cache statistics
+        try:
+            print("📊 Build cache statistics:")
+            subprocess.run(
+                [
+                    "docker",
+                    "system",
+                    "df",
+                    "--format",
+                    "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}",
+                ],
+                check=True,
+                stdout=sys.stdout,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass  # Ignore cache stats errors
+
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to build Docker image: {e}")
         logger.error(f"Failed to build Docker image: {e}", exc_info=True)
@@ -342,6 +505,57 @@ def docker_build_prod():
     except Exception as e:
         print(f"❌ An unexpected error occurred during Docker build: {e}")
         logger.error(f"Unexpected error during Docker build: {e}", exc_info=True)
+        sys.exit(1)
+
+
+def docker_build_all():
+    """
+    Build all Docker images (dev, test, prod) with optimized CPU utilization.
+    """
+    print("🚀 Building all Docker images with CPU optimizations...")
+    logger.info("Building all Docker images with optimizations.")
+
+    start_time = time.time()
+
+    try:
+        # Build development image
+        print("\n🔨 Building development image...")
+        docker_build()
+
+        # Build test image
+        print("\n🔨 Building test image...")
+        docker_build_test()
+
+        # Build production image
+        print("\n🔨 Building production image...")
+        docker_build_prod()
+
+        end_time = time.time()
+        total_duration = int(end_time - start_time)
+
+        print(f"\n✅ All Docker images built successfully in {total_duration} seconds.")
+        logger.info(
+            f"All Docker images built successfully in {total_duration} seconds."
+        )
+
+        # Show all images
+        print("\n📋 Built images:")
+        subprocess.run(
+            [
+                "docker",
+                "images",
+                "nyp-fyp-chatbot-*",
+                "--format",
+                "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}",
+            ],
+            check=True,
+            stdout=sys.stdout,
+            stderr=subprocess.DEVNULL,
+        )
+
+    except Exception as e:
+        print(f"❌ Failed to build all Docker images: {e}")
+        logger.error(f"Failed to build all Docker images: {e}", exc_info=True)
         sys.exit(1)
 
 
@@ -797,10 +1011,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Build different Docker containers (Python 3.12 Alpine)
+  # Build different Docker containers with CPU optimizations
   python setup.py --docker-build          # Build development container
   python setup.py --docker-build-test     # Build test container
   python setup.py --docker-build-prod     # Build production container
+  python setup.py --docker-build-all      # Build all containers
 
   # Run development container
   python setup.py --docker-run
@@ -826,18 +1041,24 @@ Examples:
     parser.add_argument(
         "--docker-build",
         action="store_true",
-        help="Build the development Docker image 'nyp-fyp-chatbot-dev'",
+        help="Build the development Docker image 'nyp-fyp-chatbot-dev' with CPU optimizations",
     )
     parser.add_argument(
         "--docker-build-test",
         action="store_true",
-        help="Build the test Docker image 'nyp-fyp-chatbot-test'",
+        help="Build the test Docker image 'nyp-fyp-chatbot-test' with CPU optimizations",
     )
     parser.add_argument(
         "--docker-build-prod",
         action="store_true",
-        help="Build the production Docker image 'nyp-fyp-chatbot-prod'",
+        help="Build the production Docker image 'nyp-fyp-chatbot-prod' with CPU optimizations",
     )
+    parser.add_argument(
+        "--docker-build-all",
+        action="store_true",
+        help="Build all Docker images (dev, test, prod) with CPU optimizations",
+    )
+
     parser.add_argument(
         "--docker-run",
         action="store_true",
@@ -909,6 +1130,9 @@ Examples:
         return
     elif args.docker_build_prod:
         docker_build_prod()
+        return
+    elif args.docker_build_all:
+        docker_build_all()
         return
     elif args.docker_run:
         docker_run()

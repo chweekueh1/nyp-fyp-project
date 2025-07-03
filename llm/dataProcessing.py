@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_chroma import Chroma
+
 import openai
 import os
 import sys
@@ -196,22 +196,14 @@ create_folders(os.path.dirname(get_keywords_databank_path()))
 # Initialize databases with proper error handling
 try:
     embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+    from backend.database import get_duckdb_collection, DuckDBVectorStore
 
-    classification_db = Chroma(
-        collection_name="classification",
-        embedding_function=embedding,
-        persist_directory=DATABASE_PATH,
-    )
+    classification_db = get_duckdb_collection("classification")
+    chat_db = get_duckdb_collection("chat")
 
-    chat_db = Chroma(
-        collection_name="chat",
-        embedding_function=embedding,
-        persist_directory=DATABASE_PATH,
-    )
-
-    logging.info("Successfully initialized Chroma databases")
+    logging.info("Successfully initialized DuckDB vector stores")
 except Exception as e:
-    logging.critical(f"Failed to initialize Chroma databases: {e}")
+    logging.critical(f"Failed to initialize DuckDB vector stores: {e}")
     raise
 
 
@@ -221,7 +213,7 @@ MAX_MEMORY_MB = int(os.getenv("LLM_MAX_MEMORY_MB", "50"))
 MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "4"))
 
 
-def dataProcessing(file: str, collection: Chroma = chat_db) -> None:
+def dataProcessing(file: str, collection: DuckDBVectorStore = chat_db) -> None:
     """
     Ultra-optimized data processing with performance improvements.
     - Uses thread pool for parallel keyword extraction and chunking if many documents.
@@ -1017,30 +1009,42 @@ def optimized_batching(
 
 
 # Adding documents to the appropriate collection
-def databaseInsertion(batches: Iterable[list[Document]], collection: Chroma) -> None:
+def databaseInsertion(
+    batches: Iterable[list[Document]], collection: DuckDBVectorStore
+) -> None:
     """
     Add documents to the appropriate collection.
 
     :param batches: Iterable of batches of Document objects.
     :type batches: Iterable[list[Document]]
-    :param collection: The Chroma collection to insert documents into.
-    :type collection: Chroma
+    :param collection: The DuckDB vector store collection to insert documents into.
+    :type collection: DuckDBVectorStore
     """
     for chunk in batches:
-        collection.add_documents(documents=chunk)
+        # Convert LangChain Document objects to DuckDB format
+        docs_for_duckdb = []
+        for doc in chunk:
+            docs_for_duckdb.append(
+                {
+                    "id": doc.metadata.get("id", str(hash(doc.page_content))),
+                    "content": doc.page_content,
+                    "metadata": doc.metadata,
+                }
+            )
+        collection.add_documents(docs_for_duckdb)
 
 
 # Optimized parallel database insertion
 def parallelDatabaseInsertion(
-    batches: Iterable[list[Document]], collection: Chroma
+    batches: Iterable[list[Document]], collection: DuckDBVectorStore
 ) -> None:
     """
     Optimized database insertion with error handling and performance monitoring.
 
     :param batches: Iterable of batches of Document objects.
     :type batches: Iterable[list[Document]]
-    :param collection: The Chroma collection to insert documents into.
-    :type collection: Chroma
+    :param collection: The DuckDB vector store collection to insert documents into.
+    :type collection: DuckDBVectorStore
     """
     import concurrent.futures
     import threading
@@ -1055,7 +1059,17 @@ def parallelDatabaseInsertion(
         batch_idx, batch = batch_data
         try:
             with insertion_lock:  # Ensure thread-safe database access
-                collection.add_documents(documents=batch)
+                # Convert LangChain Document objects to DuckDB format
+                docs_for_duckdb = []
+                for doc in batch:
+                    docs_for_duckdb.append(
+                        {
+                            "id": doc.metadata.get("id", str(hash(doc.page_content))),
+                            "content": doc.page_content,
+                            "metadata": doc.metadata,
+                        }
+                    )
+                collection.add_documents(docs_for_duckdb)
             return f"✅ Batch {batch_idx}: {len(batch)} docs"
         except Exception as e:
             logging.error(f"❌ Batch {batch_idx} failed: {e}")
