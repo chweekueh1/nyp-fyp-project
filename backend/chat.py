@@ -9,11 +9,11 @@ import json
 import logging
 import re
 from typing import List, Tuple, Dict, Any
-from datetime import datetime, timezone
 from .config import CHAT_DATA_PATH, CHAT_SESSIONS_PATH
 from .rate_limiting import check_rate_limit, get_rate_limit_info
 from .utils import sanitize_input, save_message_async
 from .database import get_llm_functions
+from .timezone_utils import get_utc_timestamp, now_singapore
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -167,8 +167,12 @@ def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
         if not os.path.exists(user_folder):
             return []
 
+        # Return empty results for empty query
+        if not query or not query.strip():
+            return []
+
         results = []
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
 
         for filename in os.listdir(user_folder):
             if filename.endswith(".json"):
@@ -252,7 +256,8 @@ def list_user_chat_ids(username: str) -> list:
 def create_new_chat_id(username: str) -> str:
     """Create a new chat ID for a user."""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use Singapore timezone for chat ID generation
+        timestamp = now_singapore().strftime("%Y%m%d_%H%M%S")
         chat_id = f"chat_{timestamp}"
 
         # Ensure the chat file exists
@@ -268,7 +273,7 @@ def create_new_chat_id(username: str) -> str:
 
     except Exception as e:
         logger.error(f"Error in create_new_chat_id: {e}")
-        return f"chat_{int(datetime.now().timestamp())}"
+        return f"chat_{int(now_singapore().timestamp())}"
 
 
 def generate_smart_chat_name(first_message: str) -> str:
@@ -278,11 +283,35 @@ def generate_smart_chat_name(first_message: str) -> str:
         cleaned = re.sub(r"[^\w\s]", "", first_message)
         words = cleaned.split()
 
-        # Take first few meaningful words
-        meaningful_words = [w for w in words if len(w) > 2][:3]
+        # Filter out common stop words and short words
+        stop_words = {
+            "how",
+            "do",
+            "i",
+            "a",
+            "an",
+            "the",
+            "is",
+            "are",
+            "can",
+            "you",
+            "me",
+            "with",
+            "what",
+            "where",
+            "when",
+            "why",
+            "help",
+        }
+        meaningful_words = [
+            w for w in words if len(w) > 2 and w.lower() not in stop_words
+        ]
 
-        if meaningful_words:
-            name = " ".join(meaningful_words).title()
+        # Take up to 4 meaningful words to capture more context
+        selected_words = meaningful_words[:4]
+
+        if selected_words:
+            name = " ".join(selected_words).title()
             # Limit length
             if len(name) > 30:
                 name = name[:27] + "..."
@@ -300,14 +329,16 @@ def create_and_persist_new_chat(username: str) -> str:
     try:
         chat_id = create_new_chat_id(username)
 
+        # Ensure the sessions directory exists
+        os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
+
         # Create session file
         session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-        os.makedirs(os.path.dirname(session_file), exist_ok=True)
 
         session_data = {
             "chat_id": chat_id,
             "username": username,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": get_utc_timestamp(),
             "name": "New Chat",
         }
 
@@ -327,14 +358,16 @@ def create_and_persist_smart_chat(username: str, first_message: str) -> str:
         chat_id = create_new_chat_id(username)
         chat_name = generate_smart_chat_name(first_message)
 
+        # Ensure the sessions directory exists
+        os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
+
         # Create session file
         session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-        os.makedirs(os.path.dirname(session_file), exist_ok=True)
 
         session_data = {
             "chat_id": chat_id,
             "username": username,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": get_utc_timestamp(),
             "name": chat_name,
             "first_message": first_message,
         }

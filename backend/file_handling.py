@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from .config import CHAT_DATA_PATH
 from .rate_limiting import check_rate_limit
 from .database import get_classification
+from .timezone_utils import get_utc_timestamp
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -281,7 +282,7 @@ async def process_zip_file(file_content: bytes, filename: str, username: str) ->
                 "original_zip": filename,
                 "extracted_files": extracted_files,
                 "total_files": len(extracted_files),
-                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_at": get_utc_timestamp(),
             }
 
     except Exception as e:
@@ -292,7 +293,10 @@ async def process_zip_file(file_content: bytes, filename: str, username: str) ->
 def generateUniqueFilename(prefix: str, username: str, extension: str) -> str:
     """Generate a unique filename for uploaded files."""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use Singapore timezone for filename generation
+        from .timezone_utils import now_singapore
+
+        timestamp = now_singapore().strftime("%Y%m%d_%H%M%S")
         unique_id = f"{prefix}_{username}_{timestamp}"
 
         # Clean extension
@@ -303,4 +307,6 @@ def generateUniqueFilename(prefix: str, username: str, extension: str) -> str:
 
     except Exception as e:
         logger.error(f"Error in generateUniqueFilename: {e}")
-        return f"{prefix}_{int(datetime.now().timestamp())}{extension}"
+        from .timezone_utils import now_singapore
+
+        return f"{prefix}_{int(now_singapore().timestamp())}{extension}"

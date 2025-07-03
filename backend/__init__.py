@@ -47,6 +47,7 @@ from .chat import (
     get_chat_history,
     search_chat_history,
     create_new_chat_id,
+    generate_smart_chat_name,
     create_and_persist_new_chat,
     create_and_persist_smart_chat,
     get_user_chats,
@@ -90,6 +91,18 @@ from .utils import (
 
 from .main import init_backend, init_backend_async_internal, get_backend_status
 
+from .timezone_utils import (
+    get_app_timezone,
+    now_singapore,
+    utc_to_singapore,
+    singapore_to_utc,
+    format_singapore_datetime,
+    get_iso_timestamp_singapore,
+    get_utc_timestamp,
+    parse_stored_timestamp,
+    get_timezone_info,
+)
+
 
 # Export all public functions and constants
 __all__ = [
@@ -104,6 +117,7 @@ __all__ = [
     "get_chat_history",
     "search_chat_history",
     "create_new_chat_id",
+    "generate_smart_chat_name",
     "create_and_persist_new_chat",
     "create_and_persist_smart_chat",
     "get_user_chats",
@@ -168,4 +182,14 @@ __all__ = [
     "AUTH_RATE_LIMIT_REQUESTS",
     "AUTH_RATE_LIMIT_WINDOW",
     "EMBEDDING_MODEL",
+    # Timezone utilities
+    "get_app_timezone",
+    "now_singapore",
+    "utc_to_singapore",
+    "singapore_to_utc",
+    "format_singapore_datetime",
+    "get_iso_timestamp_singapore",
+    "get_utc_timestamp",
+    "parse_stored_timestamp",
+    "get_timezone_info",
 ]

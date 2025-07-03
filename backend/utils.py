@@ -9,9 +9,9 @@ import html
 import re
 import json
 from typing import Dict, Any, Union
-from datetime import datetime, timezone
 from infra_utils import setup_logging, ensure_chatbot_dir_exists
 from .config import CHAT_DATA_PATH, CHAT_SESSIONS_PATH, USER_DB_PATH
+from .timezone_utils import get_utc_timestamp
 
 # Set up logging
 logger = setup_logging()
@@ -91,10 +91,10 @@ async def save_message_async(username, chat_id, message):
         with open(chat_file, "r") as f:
             chat_data = json.load(f)
 
-        # Add timestamp to message
+        # Add timestamp to message (store in UTC for consistency)
         message_with_timestamp = {
             **message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": get_utc_timestamp(),
         }
 
         chat_data["messages"].append(message_with_timestamp)

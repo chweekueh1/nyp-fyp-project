@@ -120,11 +120,11 @@ def test_chatbot_integration():
                 username_state, chat_history_state, chat_id_state, setup_events=False
             )
 
-            if len(components) == 11:
+            if len(components) == 13:
                 print("  ✅ Chatbot UI components created successfully")
                 print(f"    - Components: {[type(c).__name__ for c in components]}")
             else:
-                print(f"  ❌ Expected 11 components, got {len(components)}")
+                print(f"  ❌ Expected 13 components, got {len(components)}")
                 return False
 
         # Test load_all_chats function

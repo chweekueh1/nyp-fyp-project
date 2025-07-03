@@ -11,6 +11,7 @@ import os
 import json
 import tempfile
 import shutil
+import time
 from pathlib import Path
 
 # Add project root to path
@@ -23,17 +24,26 @@ def setup_test_environment():
     test_dir = tempfile.mkdtemp(prefix="enhanced_chatbot_test_")
 
     import backend
+    import infra_utils
 
-    original_get_chatbot_dir = backend.get_chatbot_dir
+    original_get_chatbot_dir = infra_utils.get_chatbot_dir
 
     def mock_get_chatbot_dir():
         return test_dir
 
-    backend.get_chatbot_dir = mock_get_chatbot_dir
+    infra_utils.get_chatbot_dir = mock_get_chatbot_dir
     backend.CHAT_SESSIONS_PATH = os.path.join(test_dir, "data", "chat_sessions")
+    backend.CHAT_DATA_PATH = os.path.join(test_dir, "data", "chats")
     backend.USER_DB_PATH = os.path.join(test_dir, "data", "user_info", "users.json")
 
+    # Also update the imported variables in the chat module
+    import backend.chat
+
+    backend.chat.CHAT_SESSIONS_PATH = backend.CHAT_SESSIONS_PATH
+    backend.chat.CHAT_DATA_PATH = backend.CHAT_DATA_PATH
+
     os.makedirs(backend.CHAT_SESSIONS_PATH, exist_ok=True)
+    os.makedirs(backend.CHAT_DATA_PATH, exist_ok=True)
     os.makedirs(os.path.dirname(backend.USER_DB_PATH), exist_ok=True)
 
     return test_dir, original_get_chatbot_dir
@@ -41,9 +51,9 @@ def setup_test_environment():
 
 def cleanup_test_environment(test_dir, original_get_chatbot_dir):
     """Clean up the test environment."""
-    import backend
+    import infra_utils
 
-    backend.get_chatbot_dir = original_get_chatbot_dir
+    infra_utils.get_chatbot_dir = original_get_chatbot_dir
     shutil.rmtree(test_dir, ignore_errors=True)
 
 
@@ -105,15 +115,36 @@ def create_test_chats_with_content():
         },
     ]
 
-    user_folder = os.path.join(backend.CHAT_SESSIONS_PATH, username)
-    os.makedirs(user_folder, exist_ok=True)
+    # Create chat data files (where search_chat_history looks)
+    user_data_folder = os.path.join(backend.CHAT_DATA_PATH, username)
+    os.makedirs(user_data_folder, exist_ok=True)
+
+    # Create session files (for chat metadata)
+    user_sessions_folder = backend.CHAT_SESSIONS_PATH
+    os.makedirs(user_sessions_folder, exist_ok=True)
 
     created_chats = []
-    for chat_data in test_chats:
-        chat_file = os.path.join(user_folder, f"{chat_data['name']}.json")
-        with open(chat_file, "w", encoding="utf-8") as f:
+    for i, chat_data in enumerate(test_chats):
+        # Create a timestamp-based chat ID
+        chat_id = f"test_chat_{i + 1}_{int(time.time())}"
+
+        # Create chat data file (contains messages for search)
+        chat_data_file = os.path.join(user_data_folder, f"{chat_id}.json")
+        with open(chat_data_file, "w", encoding="utf-8") as f:
             json.dump({"messages": chat_data["messages"]}, f, indent=2)
-        created_chats.append(chat_data["name"])
+
+        # Create session file (contains chat metadata)
+        session_file = os.path.join(user_sessions_folder, f"{username}_{chat_id}.json")
+        session_data = {
+            "chat_id": chat_id,
+            "username": username,
+            "created_at": backend.get_utc_timestamp(),
+            "name": chat_data["name"],
+        }
+        with open(session_file, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=2)
+
+        created_chats.append({"chat_id": chat_id, "name": chat_data["name"]})
 
     return created_chats
 
@@ -177,16 +208,31 @@ def test_smart_chat_creation():
 
         # Verify chat was created
         assert chat_id, "Chat ID should not be empty"
-        assert (
-            "Binary Search Algorithm" in chat_id or "Implement Binary Search" in chat_id
-        ), f"Chat name should be meaningful: {chat_id}"
 
-        # Verify file exists
-        user_folder = os.path.join(backend.CHAT_SESSIONS_PATH, username)
+        # Verify session file exists (this contains the smart name)
+        session_file = os.path.join(
+            backend.CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json"
+        )
+        assert os.path.exists(session_file), (
+            f"Session file should exist at {session_file}"
+        )
+
+        # Verify session file content has smart name
+        with open(session_file, "r", encoding="utf-8") as f:
+            session_data = json.load(f)
+            assert "name" in session_data, "Session file should have 'name' key"
+            chat_name = session_data["name"]
+            assert (
+                "Binary Search Algorithm" in chat_name
+                or "Implement Binary Search" in chat_name
+            ), f"Chat name should be meaningful: {chat_name}"
+
+        # Verify chat data file exists
+        user_folder = os.path.join(backend.CHAT_DATA_PATH, username)
         chat_file = os.path.join(user_folder, f"{chat_id}.json")
         assert os.path.exists(chat_file), f"Chat file should exist at {chat_file}"
 
-        # Verify file content
+        # Verify chat data file content
         with open(chat_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             assert "messages" in data, "Chat file should have 'messages' key"
@@ -244,12 +290,13 @@ def test_chat_history_search():
                 # Verify result structure
                 for result in results:
                     assert "chat_id" in result, "Result should have chat_id"
-                    assert "chat_name" in result, "Result should have chat_name"
-                    assert "matching_messages" in result, (
-                        "Result should have matching_messages"
+                    assert "message" in result, "Result should have message"
+                    assert "timestamp" in result, "Result should have timestamp"
+                    # Verify message content contains the query
+                    message_content = result["message"].get("content", "").lower()
+                    assert query.lower() in message_content, (
+                        f"Query '{query}' should be found in message content"
                     )
-                    assert "match_count" in result, "Result should have match_count"
-                    assert result["match_count"] > 0, "Should have at least one match"
             else:
                 assert actual_count == 0, (
                     f"Expected no results for '{query}', got {actual_count}"
@@ -288,9 +335,9 @@ def test_chatbot_ui_integration():
                 username_state, chat_history_state, chat_id_state, setup_events=False
             )
 
-            # Should return 11 components now (including search and rename)
-            assert len(components) == 11, (
-                f"Expected 11 components, got {len(components)}"
+            # Should return 13 components now (including search, rename, and clear chat)
+            assert len(components) == 13, (
+                f"Expected 13 components, got {len(components)}"
             )
 
             (
@@ -305,6 +352,8 @@ def test_chatbot_ui_integration():
                 rename_input,
                 rename_btn,
                 debug_md,
+                clear_chat_btn,
+                clear_chat_status,
             ) = components
 
             # Verify all components exist

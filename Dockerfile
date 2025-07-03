@@ -11,6 +11,7 @@ ENV IN_DOCKER="1"
 ENV PRODUCTION="true"
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV TZ=Asia/Singapore
 
 # Set build optimization environment variables
 ENV MAKEFLAGS="-j$(nproc)"
@@ -51,9 +52,12 @@ RUN apk add --no-cache \
     poppler-utils \
     poppler-dev \
     curl \
+    # Timezone support
+    tzdata \
     # Security and performance
     ca-certificates \
-    && update-ca-certificates
+    && update-ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Create necessary directories and set up user in a single layer
 RUN mkdir -p data && \
@@ -84,6 +88,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     export PATH="$HOME/.local/bin:$PATH" && \
     ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
     ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements.txt && \
     uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
@@ -97,9 +102,8 @@ COPY gradio_modules/ ./gradio_modules/
 COPY llm/ ./llm/
 COPY styles/ ./styles/
 COPY scripts/ ./scripts/
-
-# Copy .env file for environment variables
-COPY .env ./.enrv
+# Note: .env file should be passed at runtime via --env-file
+# Tests are not needed in production image
 
 # Set PYTHONPATH so all modules are importable
 ENV PYTHONPATH=/app
@@ -116,9 +120,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:7860/')" || exit 1
 
 # Set the entrypoint and default command
-RUN echo "[BUILD] Using ENTRYPOINT: /usr/local/bin/python3 /usr/local/bin/entrypoint.py"
-ENTRYPOINT ["/usr/local/bin/python3", "/usr/local/bin/entrypoint.py"]
-CMD ["python", "app.py"]
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py"
+ENTRYPOINT ["python", "/usr/local/bin/entrypoint.py"]
+CMD ["/bin/sh", "-c", "${VENV_PATH}/bin/python app.py"]
 
 # Set the shell so that the venv is always activated for RUN commands
 SHELL ["/bin/sh", "-c"]

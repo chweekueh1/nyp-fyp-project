@@ -59,6 +59,8 @@ class TestSuite:
                 "VENV_PATH", "/home/appuser/.nypai-chatbot/venv-test"
             )
             python_exe = os.path.join(venv_path, "bin", "python")
+            print(f"    [TestSuite] Using python executable: {python_exe}")
+            print(f"    [TestSuite] VENV_PATH: {venv_path}")
 
             result = subprocess.run(
                 [python_exe, str(test_file)],

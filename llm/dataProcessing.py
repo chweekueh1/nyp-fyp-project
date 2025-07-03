@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
+import logging
+
+# Optional unstructured import - fallback to simple text extraction if not available
+try:
+    from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
+
+    UNSTRUCTURED_AVAILABLE = True
+except ImportError:
+    UNSTRUCTURED_AVAILABLE = False
+    logging.warning("Unstructured not available, using simple text extraction fallback")
 from langchain_community.document_transformers.openai_functions import (
     create_metadata_tagger,
 )
@@ -14,9 +23,17 @@ import os
 import sys
 from glob import glob
 from dotenv import load_dotenv
-from keybert import KeyBERT
-from keybert.llm import OpenAI
-from keybert import KeyLLM
+
+# Optional KeyBERT imports - fallback to simple implementation if not available
+try:
+    from keybert import KeyBERT
+    from keybert.llm import OpenAI
+    from keybert import KeyLLM
+
+    KEYBERT_AVAILABLE = True
+except ImportError:
+    KEYBERT_AVAILABLE = False
+    logging.warning("KeyBERT not available, using fast keyword extraction fallback")
 import warnings
 import shelve
 from infra_utils import create_folders, get_chatbot_dir
@@ -470,6 +487,12 @@ def OptimizedUnstructuredExtraction(file_path: str) -> list[Document]:
     :rtype: list[Document]
     :raises Exception: If extraction fails.
     """
+    if not UNSTRUCTURED_AVAILABLE:
+        logging.warning(
+            "Unstructured not available, falling back to fast text extraction"
+        )
+        return FastTextExtraction(file_path)
+
     try:
         # Use UnstructuredFileLoader with optimized settings
         loader = UnstructuredFileLoader(
@@ -504,6 +527,12 @@ def StandardUnstructuredExtraction(file_path: str):
     :return: List of Document objects containing extracted text and metadata.
     :rtype: list[Document]
     """
+    if not UNSTRUCTURED_AVAILABLE:
+        logging.warning(
+            "Unstructured not available, falling back to fast text extraction"
+        )
+        return FastTextExtraction(file_path)
+
     try:
         loader = UnstructuredFileLoader(file_path, encoding="utf-8")
         documents = loader.load()
@@ -575,6 +604,65 @@ def KeyBERTMetadataTagger(document: str | list[Document]) -> list[str]:
     :return: List of extracted keywords.
     :rtype: list[str]
     """
+    if not KEYBERT_AVAILABLE:
+        logging.warning("KeyBERT not available, using simple keyword extraction")
+        # Fallback to simple extraction
+        if isinstance(document, str):
+            text = document
+        elif isinstance(document, list) and len(document) > 0:
+            text = " ".join([doc.page_content for doc in document])
+        else:
+            return []
+
+        # Simple keyword extraction
+        import re
+        from collections import Counter
+
+        words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
+        stop_words = {
+            "the",
+            "and",
+            "for",
+            "are",
+            "but",
+            "not",
+            "you",
+            "all",
+            "can",
+            "had",
+            "her",
+            "was",
+            "one",
+            "our",
+            "out",
+            "day",
+            "get",
+            "has",
+            "him",
+            "his",
+            "how",
+            "man",
+            "new",
+            "now",
+            "old",
+            "see",
+            "two",
+            "way",
+            "who",
+            "boy",
+            "did",
+            "its",
+            "let",
+            "put",
+            "say",
+            "she",
+            "too",
+            "use",
+        }
+        filtered_words = [word for word in words if word not in stop_words]
+        word_counts = Counter(filtered_words)
+        return [word for word, count in word_counts.most_common(5)]
+
     kw_model = KeyBERT()
     keywords = kw_model.extract_keywords(
         document,
@@ -757,6 +845,10 @@ def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
     :return: List of Document objects with keywords added to metadata.
     :rtype: list[Document]
     """
+    if not KEYBERT_AVAILABLE:
+        logging.warning("KeyBERT not available, falling back to fast extraction")
+        return FastKeyBERTMetadataTagger(documents)
+
     try:
         from functools import lru_cache
 
@@ -828,6 +920,10 @@ def KeyBERTOpenAIMetadataTagger(document: str | list[Document]) -> list[str]:
     :return: List of extracted keywords.
     :rtype: list[str]
     """
+    if not KEYBERT_AVAILABLE:
+        logging.warning("KeyBERT not available, using simple keyword extraction")
+        return KeyBERTMetadataTagger(document)
+
     # Create your LLM
     llm = OpenAI(client)
     kw_model = KeyLLM(llm)

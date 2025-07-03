@@ -3,6 +3,9 @@ import os
 import sys
 from infra_utils import get_docker_venv_path
 
+# Set timezone environment variable for Singapore (UTC+8)
+os.environ.setdefault("TZ", "Asia/Singapore")
+
 
 # Determine if running as root (Unix)
 def is_root():
@@ -35,7 +38,8 @@ else:
 # Exec the command
 if len(sys.argv) > 1:
     if sys.argv[1] == "python":
-        cmd = ["/usr/local/bin/python3"] + sys.argv[2:]
+        venv_python = os.path.join(venv_bin, "python")
+        cmd = [venv_python] + sys.argv[2:]
     else:
         cmd = sys.argv[1:]
     print(f"[entrypoint.py] Executing: {cmd}")

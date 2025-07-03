@@ -23,13 +23,14 @@ def setup_test_environment():
     test_dir = tempfile.mkdtemp(prefix="backend_fixes_test_")
 
     import backend
+    import infra_utils
 
-    original_get_chatbot_dir = backend.get_chatbot_dir
+    original_get_chatbot_dir = infra_utils.get_chatbot_dir
 
     def mock_get_chatbot_dir():
         return test_dir
 
-    backend.get_chatbot_dir = mock_get_chatbot_dir
+    infra_utils.get_chatbot_dir = mock_get_chatbot_dir
     backend.CHAT_SESSIONS_PATH = os.path.join(test_dir, "data", "chat_sessions")
     backend.USER_DB_PATH = os.path.join(test_dir, "data", "user_info", "users.json")
 
@@ -41,9 +42,9 @@ def setup_test_environment():
 
 def cleanup_test_environment(test_dir, original_get_chatbot_dir):
     """Clean up the test environment."""
-    import backend
+    import infra_utils
 
-    backend.get_chatbot_dir = original_get_chatbot_dir
+    infra_utils.get_chatbot_dir = original_get_chatbot_dir
     shutil.rmtree(test_dir, ignore_errors=True)
 
 
@@ -114,6 +115,7 @@ def test_chat_renaming():
 
     try:
         import backend
+        from backend.chat import create_and_persist_new_chat
         from tests.test_utils import ensure_default_test_user, get_default_test_user
 
         # Ensure default test user exists
@@ -121,22 +123,46 @@ def test_chat_renaming():
         test_user = get_default_test_user()
         username = test_user["username"]
 
+        # Update all modules' CHAT_SESSIONS_PATH to use the test environment path
+        import backend.chat
+        import backend.config
+
+        # Update the config module first (this is the source of truth)
+        backend.config.CHAT_SESSIONS_PATH = backend.CHAT_SESSIONS_PATH
+
+        # Update the chat module (which imports from config)
+        backend.chat.CHAT_SESSIONS_PATH = backend.CHAT_SESSIONS_PATH
+
         # Create a test chat
-        original_chat_id = backend.create_and_persist_new_chat(username)
+        original_chat_id = create_and_persist_new_chat(username)
 
-        # Add some content to the chat
-        user_folder = os.path.join(backend.CHAT_SESSIONS_PATH, username)
-        chat_file = os.path.join(user_folder, f"{original_chat_id}.json")
+        # The session file is created by create_and_persist_new_chat
+        session_file = os.path.join(
+            backend.CHAT_SESSIONS_PATH, f"{username}_{original_chat_id}.json"
+        )
 
-        test_content = {
-            "messages": [
-                {"role": "user", "content": "Hello, this is a test message"},
-                {"role": "assistant", "content": "Hello! How can I help you today?"},
-            ]
-        }
+        # Verify the session file was created
+        if not os.path.exists(session_file):
+            print(f"  ❌ Session file not found at: {session_file}")
+            print(f"  📁 CHAT_SESSIONS_PATH: {backend.CHAT_SESSIONS_PATH}")
+            print(
+                f"  📁 Directory contents: {os.listdir(backend.CHAT_SESSIONS_PATH) if os.path.exists(backend.CHAT_SESSIONS_PATH) else 'Directory does not exist'}"
+            )
+            raise FileNotFoundError(f"Session file not created: {session_file}")
 
-        with open(chat_file, "w", encoding="utf-8") as f:
-            json.dump(test_content, f, indent=2)
+        # Read the existing session data and add some test content
+        with open(session_file, "r", encoding="utf-8") as f:
+            session_data = json.load(f)
+
+        # Add some test messages to the session data
+        session_data["messages"] = [
+            {"role": "user", "content": "Hello, this is a test message"},
+            {"role": "assistant", "content": "Hello! How can I help you today?"},
+        ]
+
+        # Save the updated session data
+        with open(session_file, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=2)
 
         print(f"  📝 Created test chat: '{original_chat_id}'")
 
@@ -147,22 +173,23 @@ def test_chat_renaming():
         assert result["success"], (
             f"Rename failed: {result.get('error', 'Unknown error')}"
         )
-        new_chat_id = result["new_chat_id"]
+        new_name_returned = result["new_name"]
 
-        print(f"  ✅ Renamed to: '{new_chat_id}'")
+        print(f"  ✅ Renamed to: '{new_name_returned}'")
 
-        # Verify old file is gone and new file exists
-        old_file = os.path.join(user_folder, f"{original_chat_id}.json")
-        new_file = os.path.join(user_folder, f"{new_chat_id}.json")
+        # Verify the name was actually changed in the session file
+        assert os.path.exists(session_file), "Session file should still exist"
 
-        assert not os.path.exists(old_file), "Old chat file should be deleted"
-        assert os.path.exists(new_file), "New chat file should exist"
+        # Verify content is preserved and name is updated
+        with open(session_file, "r", encoding="utf-8") as f:
+            updated_content = json.load(f)
 
-        # Verify content is preserved
-        with open(new_file, "r", encoding="utf-8") as f:
-            preserved_content = json.load(f)
-
-        assert preserved_content == test_content, "Chat content should be preserved"
+        assert updated_content["name"] == new_name, (
+            f"Name should be updated to '{new_name}'"
+        )
+        # Verify the messages are still there
+        assert "messages" in updated_content, "Messages should be preserved"
+        assert len(updated_content["messages"]) == 2, "Should have 2 test messages"
 
         print("  ✅ Content preserved correctly")
 
@@ -170,14 +197,14 @@ def test_chat_renaming():
         print("  🧪 Testing edge cases...")
 
         # Empty name
-        result = backend.rename_chat(new_chat_id, "", username)
+        result = backend.rename_chat(original_chat_id, "", username)
         assert not result["success"], "Should fail with empty name"
 
         # Invalid characters in name
-        result = backend.rename_chat(new_chat_id, "Test<>Chat", username)
+        result = backend.rename_chat(original_chat_id, "Test<>Chat", username)
         assert result["success"], "Should handle invalid characters"
         if result["success"]:
-            print(f"    ✅ Invalid chars handled: '{result['new_chat_id']}'")
+            print(f"    ✅ Invalid chars handled: '{result['new_name']}'")
 
         # Non-existent chat
         result = backend.rename_chat("nonexistent_chat", "New Name", username)
@@ -215,9 +242,9 @@ def test_chatbot_ui_with_rename():
                 username_state, chat_history_state, chat_id_state, setup_events=False
             )
 
-            # Should return 11 components now (including rename)
-            assert len(components) == 11, (
-                f"Expected 11 components, got {len(components)}"
+            # Should return 13 components now (including rename and clear chat functionality)
+            assert len(components) == 13, (
+                f"Expected 13 components, got {len(components)}"
             )
 
             (
@@ -231,6 +258,8 @@ def test_chatbot_ui_with_rename():
                 search_results,
                 rename_input,
                 rename_btn,
+                clear_chat_btn,
+                clear_chat_status,
                 debug_md,
             ) = components
 

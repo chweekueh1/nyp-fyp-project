@@ -24,13 +24,17 @@ def setup_test_environment():
     test_dir = tempfile.mkdtemp(prefix="ui_fixes_test_")
 
     import backend
+    import infra_utils
 
-    original_get_chatbot_dir = backend.get_chatbot_dir
+    # Mock the get_chatbot_dir function from infra_utils
+    original_get_chatbot_dir = infra_utils.get_chatbot_dir
 
     def mock_get_chatbot_dir():
         return test_dir
 
-    backend.get_chatbot_dir = mock_get_chatbot_dir
+    infra_utils.get_chatbot_dir = mock_get_chatbot_dir
+
+    # Update backend config paths to use the test directory
     backend.CHAT_SESSIONS_PATH = os.path.join(test_dir, "data", "chat_sessions")
     backend.USER_DB_PATH = os.path.join(test_dir, "data", "user_info", "users.json")
 
@@ -42,9 +46,9 @@ def setup_test_environment():
 
 def cleanup_test_environment(test_dir, original_get_chatbot_dir):
     """Clean up the test environment."""
-    import backend
+    import infra_utils
 
-    backend.get_chatbot_dir = original_get_chatbot_dir
+    infra_utils.get_chatbot_dir = original_get_chatbot_dir
     shutil.rmtree(test_dir, ignore_errors=True)
 
 
@@ -139,6 +143,10 @@ def test_search_functionality():
         # Create test chat with content
         chat_id = backend.create_and_persist_new_chat(username)
         user_folder = os.path.join(backend.CHAT_SESSIONS_PATH, username)
+
+        # Ensure user folder exists
+        os.makedirs(user_folder, exist_ok=True)
+
         chat_file = os.path.join(user_folder, f"{chat_id}.json")
 
         test_content = {
@@ -209,9 +217,9 @@ def test_chatbot_ui_search():
                 username_state, chat_history_state, chat_id_state, setup_events=False
             )
 
-            # Should return 11 components
-            assert len(components) == 11, (
-                f"Expected 11 components, got {len(components)}"
+            # Should return 13 components (updated for clear chat functionality)
+            assert len(components) == 13, (
+                f"Expected 13 components, got {len(components)}"
             )
 
             # Test search function directly

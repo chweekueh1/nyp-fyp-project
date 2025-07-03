@@ -1100,5 +1100,29 @@ repos:
         sys.exit(1)
 
 
+def update_test_shebangs():
+    """
+    Update all test files to use a dynamic shell shebang that uses VENV_PATH.
+    """
+    import glob
+    import re
+
+    test_files = glob.glob("tests/**/*.py", recursive=True)
+    dynamic_shebang = "#!/bin/sh\n'''exec' \"${VENV_PATH:-/home/appuser/.nypai-chatbot/venv-test}/bin/python\" \"$0\" \"$@\"\n' '''\n"
+    for file_path in test_files:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        # Always print the shebang line, even if not a python shebang
+        if lines:
+            print(f"[setup.py] {file_path} shebang: {lines[0].strip()}")
+        # Replace only if the first line is a python shebang
+        if lines and re.match(r"^#!.*python", lines[0]):
+            if lines[0] != dynamic_shebang:
+                print(f"[setup.py] Updating shebang in {file_path}")
+                lines[0] = dynamic_shebang
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+
+
 if __name__ == "__main__":
     main()

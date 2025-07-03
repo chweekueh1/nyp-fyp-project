@@ -168,7 +168,12 @@ def get_llm_functions():
 def _init_llm_functions():
     from llm import chatModel
 
-    return chatModel
+    # Return a dictionary of functions instead of the module
+    return {
+        "get_convo_hist_answer": chatModel.get_convo_hist_answer,
+        "is_llm_ready": chatModel.is_llm_ready,
+        "initialize_llm_and_db": chatModel.initialize_llm_and_db,
+    }
 
 
 def get_data_processing():

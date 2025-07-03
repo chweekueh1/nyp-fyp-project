@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from .config import client
 from .rate_limiting import check_rate_limit
 from .database import get_llm_functions
+from .timezone_utils import get_utc_timestamp
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -129,7 +130,7 @@ async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
             return {
                 "status": "success",
                 "transcript": transcript,
-                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_at": get_utc_timestamp(),
             }
 
         finally:

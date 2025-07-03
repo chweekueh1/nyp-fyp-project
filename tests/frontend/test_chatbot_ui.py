@@ -31,6 +31,8 @@ def test_chatbot_ui() -> None:
             rename_input,
             rename_btn,
             debug_md,
+            clear_chat_btn,
+            clear_chat_status,
         ) = chatbot_ui(username, chat_history, chat_id, setup_events=False)
         assert chat_selector is not None, "Chat selector should be created"
         assert new_chat_btn is not None, "New chat button should be created"
@@ -43,6 +45,8 @@ def test_chatbot_ui() -> None:
         assert rename_input is not None, "Rename input should be created"
         assert rename_btn is not None, "Rename button should be created"
         assert debug_md is not None, "Debug markdown should be created"
+        assert clear_chat_btn is not None, "Clear chat button should be created"
+        assert clear_chat_status is not None, "Clear chat status should be created"
     print("test_chatbot_ui: PASSED")
 
 

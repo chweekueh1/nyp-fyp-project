@@ -9,6 +9,7 @@ ENV IN_DOCKER="true"
 ENV TESTING="true"
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV TZ=Asia/Singapore
 
 # Set build optimization environment variables
 ENV MAKEFLAGS="-j$(nproc)"
@@ -50,9 +51,12 @@ RUN apk add --no-cache \
     poppler-dev \
     # Testing tools
     curl \
+    # Timezone support
+    tzdata \
     # Security and performance
     ca-certificates \
-    && update-ca-certificates
+    && update-ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Create necessary directories and set up user in a single layer
 RUN mkdir -p data && \
@@ -84,9 +88,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     ${VENV_PATH}/bin/pip install uv && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements.txt && \
-    uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
-    uv pip install --prerelease=allow --no-deps keybert && \
-    uv pip install --prerelease=allow --no-deps unstructured
+    uv pip install --prerelease=allow overrides tenacity rich tqdm typer
 
 # Copy all application files in a single layer to reduce layers and improve caching
 COPY app.py backend.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py ./
@@ -110,19 +112,19 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; print('Python environment OK')" || exit 1
 
 # Set the entrypoint and default command
-RUN echo "[BUILD] Using ENTRYPOINT: /usr/local/bin/python3 /usr/local/bin/entrypoint.py"
-ENTRYPOINT ["/usr/local/bin/python3", "/usr/local/bin/entrypoint.py"]
-CMD ["python", "tests/comprehensive_test_suite.py"]
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py"
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-test/bin/python", "/usr/local/bin/entrypoint.py"]
+CMD ["/bin/sh", "-c", "/home/appuser/.nypai-chatbot/venv-test/bin/python tests/comprehensive_test_suite.py"]
 
-# Copy .env file for environment variables
-COPY .env ./.env
+# Note: .env file should be passed at runtime via --env-file
 
 # Set PYTHONPATH so all modules are importable
 ENV PYTHONPATH=/app
 
-# Install all dependencies (ensure this is after requirements.txt is copied)
-RUN ${VENV_PATH}/bin/pip install --upgrade pip && \
-    ${VENV_PATH}/bin/pip install -r requirements.txt
+# Verify installation and show Python path
+RUN echo "[BUILD] Python executable: $(which python)" && \
+    echo "[BUILD] Python version: $(python --version)" && \
+    echo "[BUILD] Pip version: $(pip --version)"
 
 # Set the shell so that the venv is always activated for RUN commands
 SHELL ["/bin/sh", "-c"]

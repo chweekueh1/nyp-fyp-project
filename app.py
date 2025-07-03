@@ -272,8 +272,10 @@ def create_main_app():
                         try:
                             from gradio_modules.file_classification import (
                                 file_classification_interface,
+                                setup_file_classification_events,
                             )
 
+                            components = file_classification_interface(username_state)
                             (
                                 file_upload,
                                 upload_btn,
@@ -292,7 +294,10 @@ def create_main_app():
                                 loading_indicator,
                                 clear_files_btn,
                                 clear_files_status,
-                            ) = file_classification_interface(username_state)
+                            ) = components
+
+                            # Set up event handlers within Blocks context
+                            setup_file_classification_events(components, username_state)
                         except ImportError as e:
                             gr.Markdown(
                                 f"⚠️ **File classification interface not available:** {e}"
