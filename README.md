@@ -1,11 +1,5 @@
 # NYP FYP CNC Chatbot
 
-A Gradio-based Python chatbot application designed to help staff identify and use the correct sensitivity labels in their communications. The application features login, registration, chat, and search functionalities.
-
----
-
-## About
-
 The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the correct sensitivity labels in their communications. It makes use of the Python programming language, along with integrations of Gradio, Pandoc, Tesseract OCR and OpenAI.
 
 ---
@@ -55,7 +49,75 @@ The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the cor
 
     The Docker image will take a while to build for the first time (2 to 3 minutes) as it sets up all required dependencies, including creating a virtual environment, installing Python packages, and configuring Pandoc and Tesseract OCR.
 
----
+6. **Run with Docker (Recommended)**
+
+    ```bash
+    python setup.py --docker-build
+    python setup.py --docker-run
+    ```
+
+7. **Access the application**
+
+    Open <http://localhost:7860> in your browser
+
+## 📋 TODO
+
+* [ ] Integrate scripts.js to trigger search in each relevant tab
+* [ ] Push Docker image at the end of FYP
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+* **Python 3.11.0 or higher**: Ensure you have a compatible Python version installed.
+* **Git**: Required for cloning the repository.
+* **OpenAI API key**: Necessary for AI functionalities.
+
+### Installation
+
+1. **Clone the repository**
+
+    ```bash
+    git clone <repository-url>
+    cd nyp-fyp-project
+    ```
+
+2. **Install Python Version 3.11.0 (if you don't have it)**
+
+      * **Windows**: You can download it from [Python.org](https://www.python.org/downloads/release/python-3119/). During installation, make sure to **check the box "Add python.exe to PATH"**.
+      * **Linux**: It's recommended to install Python via your distribution's package manager (e.g., `sudo apt install python3.11` on Debian/Ubuntu, `sudo pacman -S python` on Arch Linux) or using a version manager like `pyenv`.
+
+3. **The rest of the installation is handled by the setup script. Proceed to step 7!**
+    (The setup script will create and manage the virtual environment, install Python dependencies, and set up Pandoc/Tesseract.)
+
+4. **Set up environment variables**
+
+    ```bash
+    # Copy the development environment template
+    cp .env.dev .env
+
+    # Edit .env and add your OpenAI API key
+    # OPENAI_API_KEY=your_openai_api_key
+    ```
+
+5. **Run the setup script**
+
+    ```bash
+    python setup.py
+    ```
+
+    The Docker image will take a while to build for the first time (2 to 3 minutes) as it sets up all required dependencies, including creating a virtual environment, installing Python packages, and configuring Pandoc and Tesseract OCR.
+
+6. **Run with Docker (Recommended)**
+
+    ```bash
+    python setup.py --docker-build
+    python setup.py --docker-run
+    ```
+
+7. **Access the application**
+
+    Open <http://localhost:7860> in your browser
 
 ## 🐳 Docker Multi-Container Architecture
 
@@ -133,7 +195,7 @@ The application stores user data in a dedicated directory to ensure data persist
 ### **Data Location**
 
 * **Local Development**: `~/.nypai-chatbot/`
-* **Docker**: `/root/.nypai-chatbot/` (mounted from host `~/.nypai-chatbot/`)
+* **Docker**: `/home/appuser/.nypai-chatbot/` (mounted from host `~/.nypai-chatbot/`)
 
 ### **Directory Structure**
 
@@ -277,9 +339,15 @@ If pre-commit hooks fail:
 
 ---
 
-## 🐳 Docker Usage (Recommended)
+## 🐳 Docker Usage (Cross-Platform)
 
 The application is designed to run seamlessly in Docker with all dependencies (Python 3.11, Tesseract, Pandoc, Poppler, etc.) pre-installed. All Python packages are installed directly from requirements.txt for a clean, reproducible build.
+
+### **Cross-Platform Support**
+
+✅ **Linux**: Full support with automatic Docker daemon management
+✅ **macOS**: Full support via Docker Desktop
+✅ **Windows**: Full support via Docker Desktop with automatic path conversion
 
 ### Quick Start
 
@@ -290,6 +358,13 @@ python setup.py --docker-run
 ```
 
 The application will be available at <http://localhost:7860>.
+
+### **Windows-Specific Notes**
+
+* **Docker Desktop**: Must be installed and running
+* **Path Conversion**: Automatic conversion of Windows paths to Docker format
+* **Permissions**: Uses Windows `icacls` for permission management
+* **Volume Mounts**: Automatically converts `C:\Users\...` to `/c/Users/...`
 
 ### Manual Docker Commands (Advanced)
 
@@ -312,7 +387,11 @@ If you prefer to use Docker commands directly:
 3. **Run the Docker container**
 
    ```bash
-   docker run --env-file .env -v ~/.nypai-chatbot:/root/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
+   # Linux/macOS
+   docker run --env-file .env -v ~/.nypai-chatbot:/home/appuser/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
+
+   # Windows (PowerShell)
+   docker run --env-file .env -v ${env:USERPROFILE}\.nypai-chatbot:/home/appuser/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
    ```
 
 ---
@@ -421,52 +500,151 @@ sudo systemctl start firewalld
 
 ```
 nyp-fyp-project/
-├── app.py                    # Main application entry point
-├── backend.py                # Backend API and business logic
-├── setup.py                  # Build and deployment scripts
-├── requirements.txt          # Python dependencies
-├── Dockerfile*               # Multi-container Docker setup
-├── gradio_modules/           # UI components
-│   ├── login_and_register.py # Authentication interface
-│   ├── chatbot.py            # Enhanced chatbot interface
-│   ├── file_classification.py # File upload & classification
-│   ├── audio_input.py        # Audio input interface
-│   ├── chat_interface.py     # Legacy (tests only)
-│   ├── search_interface.py   # Legacy (tests only)
-│   ├── chat_history.py       # Legacy (tests only)
-│   └── file_upload.py        # Legacy (tests only)
-├── llm/                      # Language model services
-│   ├── chatModel.py          # Chat functionality
-│   ├── classificationModel.py # Document classification
-│   └── dataProcessing.py     # Data processing utilities
-├── styles/                   # CSS and theming
-├── scripts/                  # JavaScript and client-side code
-├── tests/                    # Comprehensive test suite
-│   ├── frontend/             # UI component tests
-│   ├── backend/              # Backend functionality tests
-│   ├── integration/          # End-to-end tests
-│   ├── llm/                  # Language model tests
-│   ├── demos/                # Interactive demonstrations
-│   └── utils/                # Testing utilities
-└── misc/                     # Documentation and utilities
+├── app.py                          # Main Gradio application entry point
+├── backend.py                      # Legacy backend (being modularized)
+├── infra_utils.py                  # Infrastructure utilities (logging, paths)
+├── performance_utils.py            # Performance optimization utilities
+├── hashing.py                      # Password hashing utilities
+├── flexcyon_theme.py               # Custom Gradio theme
+├── setup.py                        # Build, test, and deployment automation
+├── requirements.txt                # Python dependencies
+├── Dockerfile                      # Production Docker image
+├── Dockerfile.dev                  # Development Docker image
+├── Dockerfile.test                 # Test Docker image
+├── .env.dev                        # Environment variables template
+├── .pre-commit-config.yaml         # Pre-commit hooks configuration
+├── ruff.toml                       # Ruff linter configuration
+│
+├── backend/                        # Modular backend components
+│   ├── __init__.py
+│   ├── main.py                     # Main backend entry point
+│   ├── auth.py                     # Authentication and user management
+│   ├── chat.py                     # Chat functionality
+│   ├── database.py                 # Database operations
+│   ├── file_handling.py            # File upload and processing
+│   ├── audio.py                    # Audio processing
+│   ├── config.py                   # Configuration management
+│   ├── rate_limiting.py            # Rate limiting utilities
+│   └── utils.py                    # Backend utilities
+│
+├── gradio_modules/                 # Gradio UI components
+│   ├── chat_interface.py           # Main chat interface
+│   ├── file_upload.py              # File upload component
+│   ├── file_classification.py      # File classification UI
+│   ├── audio_input.py              # Audio input component
+│   ├── chat_history.py             # Chat history display
+│   ├── search_interface.py         # Search functionality
+│   ├── login_and_register.py       # Authentication UI
+│   ├── change_password.py          # Password change UI
+│   ├── chatbot.py                  # Core chatbot component
+│   ├── enhanced_content_extraction.py  # Content extraction
+│   └── classification_formatter.py # Classification formatting
+│
+├── llm/                           # LLM and AI components
+│   ├── chatModel.py               # Chat model implementation
+│   ├── classificationModel.py     # Classification model
+│   ├── dataProcessing.py          # Data processing utilities
+│   └── keyword_cache.py           # Keyword caching system
+│
+├── scripts/                       # Utility scripts
+│   ├── scripts.js                 # JavaScript utilities
+│   └── entrypoint.sh              # Docker entrypoint script
+│
+├── styles/                        # CSS styling
+│   ├── styles.css                 # Main stylesheet
+│   └── performance.css            # Performance optimizations
+│
+├── tests/                         # Comprehensive test suite
+│   ├── README.md                  # Test documentation
+│   ├── run_all_tests.py           # Test runner
+│   ├── run_tests.py               # Alternative test runner
+│   ├── comprehensive_test_suite.py # Main test orchestrator
+│   ├── test_utils.py              # Test utilities
+│   ├── test_data_storage.py       # Data storage tests
+│   ├── test_docker_environment.py # Docker environment tests
+│   │
+│   ├── backend/                   # Backend tests
+│   │   ├── test_backend.py        # Core backend tests
+│   │   ├── test_backend_fixes_and_rename.py
+│   │   ├── test_modular_backend.py # Modular backend tests
+│   │   └── test_special_characters.py
+│   │
+│   ├── frontend/                  # Frontend tests
+│   │   ├── test_all_interfaces.py # All UI components
+│   │   ├── test_chat_ui.py        # Chat interface tests
+│   │   ├── test_file_upload_ui.py # File upload tests
+│   │   ├── test_login_ui.py       # Login interface tests
+│   │   ├── test_chatbot_ui.py     # Chatbot component tests
+│   │   ├── test_search_ui.py      # Search interface tests
+│   │   ├── test_chat_history_ui.py # Chat history tests
+│   │   ├── test_file_audio_ui.py  # Audio interface tests
+│   │   ├── test_file_classification.py # Classification tests
+│   │   ├── test_change_password_functionality.py
+│   │   ├── test_ui_fixes.py       # UI fixes and improvements
+│   │   ├── test_theme_styles.py   # Theme and styling tests
+│   │   └── test_ui_state_interactions.py
+│   │
+│   ├── integration/               # Integration tests
+│   │   ├── test_integration.py    # Core integration tests
+│   │   ├── test_chatbot_integration.py
+│   │   ├── test_enhanced_chatbot_features.py
+│   │   ├── test_file_classification_integration.py
+│   │   └── test_improved_app.py
+│   │
+│   ├── performance/               # Performance tests
+│   │   ├── test_optimized_performance.py
+│   │   ├── test_startup_tracking.py
+│   │   ├── test_comprehensive_test_suite_fixes.py
+│   │   ├── test_demo_organization.py
+│   │   ├── test_final_organization_verification.py
+│   │   ├── test_logging_and_dependency_paths.py
+│   │   ├── test_syntax_and_formatting_fixes.py
+│   │   ├── test_enhanced_classification_core.py
+│   │   ├── test_enhanced_file_classification.py
+│   │   ├── test_file_path_and_logout_fixes.py
+│   │   ├── test_file_path_isolation.py
+│   │   ├── test_file_upload_backend_fix.py
+│   │   ├── test_file_upload_location_fix.py
+│   │   ├── test_complete_login_features.py
+│   │   ├── test_chat_button_styling.py
+│   │   └── test_dynamic_login_interface.py
+│   │
+│   ├── llm/                       # LLM-specific tests
+│   │   └── test_llm.py
+│   │
+│   ├── demos/                     # Demo applications
+│   │   ├── README.md
+│   │   ├── demo_audio_interface.py
+│   │   ├── demo_chatbot_with_history.py
+│   │   ├── demo_data_storage.py
+│   │   ├── demo_enhanced_chatbot.py
+│   │   ├── demo_enhanced_classification.py
+│   │   ├── demo_file_classification.py
+│   │   └── demo_final_working_chatbot.py
+│   │
+│   └── utils/                     # Test utilities
+│       ├── debug_chatbot_ui.py
+│       ├── diagnose_chatbot_issue.py
+│       └── minimal_chatbot_test.py
+│
+└── misc/                          # Documentation and notes
+    ├── BUILD_OPTIMIZATION.md      # Build optimization notes
+    ├── DEPENDENCY_FIXES.md        # Dependency resolution notes
+    ├── DEPENDENCY_INSTALLATION.md # Installation troubleshooting
+    ├── FILE_CLASSIFICATION_IMPLEMENTATION.md
+    ├── ORGANIZATION_SUMMARY.md    # Project organization notes
+    ├── TODO.md                    # Development tasks
+    └── verify_chatbot_integration.md
 ```
 
-For detailed test structure, see [tests/README.md](tests/README.md#directory-structure).
+### **Key Features**
 
----
-
-## 📊 Features
-
-* **Sensitivity Label Assistance**: Help staff identify and use correct sensitivity labels
-* **User Authentication**: Login and registration system
-* **Chat Interface**: Real-time chat with AI assistant
-* **Search Functionality**: Search through chat history
-* **File Upload**: Support for document upload and processing (PDF, DOCX, etc.)
-* **Audio Input**: Voice-to-text functionality
-* **Chat History**: Persistent chat sessions
-* **Global Search**: Command-based navigation and search
-* **OCR Integration**: Text extraction from images using Tesseract
-* **Document Processing**: Support for various document formats via Pandoc
+* **Modular Architecture**: Backend components are organized into focused modules
+* **Comprehensive Testing**: Extensive test suite covering unit, integration, and performance tests
+* **Docker Support**: Multiple Docker configurations for development, testing, and production
+* **UI Components**: Reusable Gradio components for different functionalities
+* **LLM Integration**: Dedicated modules for AI/ML functionality
+* **Performance Optimization**: Utilities for monitoring and improving performance
 
 ---
 
@@ -531,3 +709,34 @@ pip install -r requirements.txt
 ```bash
 python3 app.py
 ```
+
+## 📚 Additional Documentation
+
+For detailed technical information, see the `misc/` directory:
+
+* **`misc/DOCKER_BUILD_OPTIMIZATION.md`**: Docker build optimization details and size comparisons
+* **`misc/DEPENDENCY_FIXES.md`**: Dependency resolution and fixes applied
+* **`misc/FILE_CLASSIFICATION_IMPLEMENTATION.md`**: Detailed file classification feature implementation
+* **`misc/verify_chatbot_integration.md`**: Chatbot integration verification details
+
+## 📋 TODO
+
+## 🐍 Deterministic Python Virtual Environment
+
+All development and testing should use the deterministic virtual environment at `~/.nypai-chatbot/venv`.
+
+### Setup (first time only)
+
+```sh
+python3 -m venv ~/.nypai-chatbot/venv
+~/.nypai-chatbot/venv/bin/pip install --upgrade pip
+~/.nypai-chatbot/venv/bin/pip install -r requirements.txt
+```
+
+### To activate the venv for your shell
+
+```sh
+source scripts/activate_nypai_venv.sh
+```
+
+All Python commands (including running setup.py, tests, etc.) should be run with this venv activated.

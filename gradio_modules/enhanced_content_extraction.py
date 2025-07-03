@@ -28,11 +28,13 @@ MAX_WORKERS = 8
 
 
 def find_tool(tool_name: str) -> Optional[str]:
-    # Prefer system PATH in Docker
+    # Always prefer system PATH in Docker
     if os.getenv("IN_DOCKER", "false").lower() in ("1", "true"):
         path = shutil.which(tool_name)
         if path:
             return path
+        # In Docker, do not check local user paths
+        return None
     # Optionally, check local dependencies for non-Docker
     home = os.path.expanduser("~")
     local_path = os.path.join(

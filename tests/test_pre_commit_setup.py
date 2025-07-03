@@ -20,7 +20,7 @@ def test_pre_commit_installation():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/opt/venv"
+            venv_path = "/home/appuser/.nypai-chatbot/venv"
         else:
             venv_path = os.path.join(project_root, ".venv")
 
@@ -112,7 +112,7 @@ def test_pre_commit_hooks_installed():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/opt/venv"
+            venv_path = "/home/appuser/.nypai-chatbot/venv"
         else:
             venv_path = os.path.join(project_root, ".venv")
 
@@ -169,7 +169,7 @@ def test_pre_commit_validation():
     try:
         # Determine virtual environment path
         if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-            venv_path = "/opt/venv"
+            venv_path = "/home/appuser/.nypai-chatbot/venv"
         else:
             venv_path = os.path.join(project_root, ".venv")
 

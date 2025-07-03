@@ -63,9 +63,6 @@ keyword_cache/
 .mypy_cache/
 
 # Test files and directories (excluded for production and development builds)
-tests/
-test_*.py
-*_test.py
 .pytest_cache/
 .coverage
 htmlcov/

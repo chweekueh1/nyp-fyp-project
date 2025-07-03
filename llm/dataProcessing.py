@@ -19,7 +19,7 @@ from keybert.llm import OpenAI
 from keybert import KeyLLM
 import warnings
 import shelve
-from infra_utils import create_folders, rel2abspath
+from infra_utils import create_folders, get_chatbot_dir
 import logging
 from typing import Generator, Iterable
 from performance_utils import perf_monitor, cache_manager
@@ -40,7 +40,7 @@ def get_data_paths() -> tuple[str, str, str, str]:
     :return: Tuple containing chat_data_path, classification_data_path, keywords_databank_path, and database_path.
     :rtype: tuple[str, str, str, str]
     """
-    base_dir = os.getcwd()
+    base_dir = get_chatbot_dir()
 
     # Check if we're in a test environment (only explicit TESTING env var)
     is_test_env = os.getenv("TESTING", "").lower() == "true"
@@ -64,32 +64,21 @@ def get_data_paths() -> tuple[str, str, str, str]:
 
         logging.info(f"🧪 Using test data paths: {chat_data_path}")
     else:
-        # Use production paths from environment
-        chat_data_path = os.path.join(
-            base_dir, os.getenv("CHAT_DATA_PATH", "data/modelling/data")
+        # Use production paths
+        chat_data_path = os.path.join(base_dir, "uploads", "txt_files")
+        classification_data_path = os.path.join(
+            base_dir, "uploads", "classification_files"
         )
-        classification_data_path = rel2abspath(
-            os.path.join(
-                base_dir,
-                os.getenv(
-                    "CLASSIFICATION_DATA_PATH",
-                    "data/modelling/CNC chatbot/data classification",
-                ),
-            )
-        )
-        keywords_databank_path = rel2abspath(
-            os.path.join(
-                base_dir,
-                os.getenv("KEYWORDS_DATABANK_PATH", "data/keyword/keywords_databank"),
-            )
-        )
-        database_path = rel2abspath(
-            os.path.join(
-                base_dir, os.getenv("DATABASE_PATH", "data/vector_store/chroma_db")
-            )
-        )
+        keywords_databank_path = os.path.join(base_dir, "data", "keywords_databank")
+        database_path = os.path.join(base_dir, "data", "vector_store", "chroma_db")
 
-        logging.info(f"🏭 Using production data paths: {chat_data_path}")
+        # Ensure production directories exist
+        os.makedirs(chat_data_path, exist_ok=True)
+        os.makedirs(classification_data_path, exist_ok=True)
+        os.makedirs(os.path.dirname(keywords_databank_path), exist_ok=True)
+        os.makedirs(database_path, exist_ok=True)
+
+        logging.info(f"Using production data paths: {chat_data_path}")
 
     return (
         chat_data_path,

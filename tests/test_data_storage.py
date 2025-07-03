@@ -212,7 +212,7 @@ def test_docker_vs_local_paths():
 
         if in_docker:
             print("  🐳 Running in Docker environment")
-            expected_path = "/root/.nypai-chatbot"
+            expected_path = "/home/appuser/.nypai-chatbot"
         else:
             print("  💻 Running in local environment")
             expected_path = os.path.expanduser("~/.nypai-chatbot")

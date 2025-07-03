@@ -64,8 +64,12 @@ def get_chatbot_dir() -> str:
     """
     # Check if we're running in Docker
     if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
-        # In Docker, use the mounted volume path
-        return "/root/.nypai-chatbot"
+        # In Docker, check if we're running as appuser (non-root)
+        if os.getuid() == 1001:  # appuser UID
+            return "/home/appuser/.nypai-chatbot"
+        else:
+            # In Docker as root, use the mounted volume path
+            return "/root/.nypai-chatbot"
     else:
         # In local development, use user's home directory
         return os.path.expanduser("~/.nypai-chatbot")

@@ -1,2 +1,0 @@
-- [ ] Integrate scripts.js to trigger search in each relevant tab
-- [ ] Push Docker image at the end of FYP

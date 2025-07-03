@@ -13,17 +13,18 @@ sys.path.insert(0, str(project_root))
 
 # Now import after path setup
 from llm.chatModel import initialize_llm_and_db
-from infra_utils import setup_logging, get_chatbot_dir
+from infra_utils import setup_logging
 
 initialize_llm_and_db()
 
 
 def test_logging_directory_setup():
-    """Test that logging is configured to use ~/.nypai-chatbot/logs/"""
+    """Test that logging is configured to use the correct logs directory."""
     print("🔍 Testing Logging Directory Setup...")
 
     try:
         import logging
+        from infra_utils import get_chatbot_dir
 
         # Clear any existing handlers
         root_logger = logging.getLogger()
@@ -34,7 +35,8 @@ def test_logging_directory_setup():
         setup_logging()
 
         # Check that log file is in the correct location
-        expected_logs_dir = get_chatbot_dir() + "/logs"
+        chatbot_dir = get_chatbot_dir()
+        expected_logs_dir = os.path.join(chatbot_dir, "logs")
         expected_log_file = os.path.join(expected_logs_dir, "app.log")
 
         # Verify logs directory exists
@@ -73,19 +75,20 @@ def test_logging_directory_setup():
 
 
 def test_dependency_paths_configuration():
-    """Test that dependencies are configured to use ~/.nypai-chatbot/data/dependencies/"""
+    """Test that dependencies are configured to use the correct directory."""
     print("🔍 Testing Dependency Paths Configuration...")
 
     try:
         from infra_utils import get_chatbot_dir
 
         # Check expected directory structure
-        expected_deps_dir = get_chatbot_dir() + "/data/dependencies"
+        chatbot_dir = get_chatbot_dir()
+        expected_deps_dir = os.path.join(chatbot_dir, "data", "dependencies")
 
         # Check pandoc path structure
         if sys.platform == "win32":  # Windows
             expected_pandoc = os.path.join(expected_deps_dir, "pandoc", "pandoc.exe")
-        else:  # Linux/macOS
+        else:  # Linux/macOS or Docker
             expected_pandoc = os.path.join(expected_deps_dir, "pandoc", "bin", "pandoc")
 
         # Check tesseract path structure
@@ -93,7 +96,7 @@ def test_dependency_paths_configuration():
             expected_tesseract = os.path.join(
                 expected_deps_dir, "tesseract", "tesseract.exe"
             )
-        else:  # Linux/macOS
+        else:  # Linux/macOS or Docker
             expected_tesseract = os.path.join(
                 expected_deps_dir, "tesseract", "bin", "tesseract"
             )

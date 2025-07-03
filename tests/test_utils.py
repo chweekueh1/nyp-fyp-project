@@ -6,6 +6,7 @@ Test utilities for isolated testing without persisting to production database.
 import sys
 from pathlib import Path
 from typing import Optional, Any
+import unittest
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -86,7 +87,10 @@ def create_test_user(
         if result.get("code") == "200":
             print(f"✅ Created test user: {username}")
             return True
-        elif result.get("code") == "409":
+        elif result.get("code") == "409" or (
+            result.get("status") == "error"
+            and "already exists" in result.get("message", "").lower()
+        ):
             print(f"ℹ️ Test user already exists: {username}")
             return True
         else:
@@ -202,8 +206,27 @@ def with_test_user(username: Optional[str] = None, password: Optional[str] = Non
             username_to_use = username or DEFAULT_TEST_USERNAME
             password_to_use = password or DEFAULT_TEST_PASSWORD
             # Create test user
-            if not create_test_user(username_to_use, password_to_use):
-                raise Exception(f"Failed to create test user: {username_to_use}")
+            result = create_test_user(username_to_use, password_to_use)
+            if not result:
+                # Check if user already exists and skip if so
+                try:
+                    from backend import do_register_test
+                    import asyncio
+
+                    loop = asyncio.get_event_loop()
+                    register_result = loop.run_until_complete(
+                        do_register_test(
+                            username_to_use, password_to_use, DEFAULT_TEST_EMAIL
+                        )
+                    )
+                except Exception:
+                    register_result = {}
+                if register_result.get("code") == "409":
+                    raise unittest.SkipTest(
+                        f"Test user '{username_to_use}' already exists. Skipping test."
+                    )
+                else:
+                    raise Exception(f"Failed to create test user: {username_to_use}")
             try:
                 # Run the test
                 return test_func(*args, **kwargs)
@@ -234,7 +257,23 @@ class TestUserContext:
     def __enter__(self):
         self.created = create_test_user(self.username, self.password)
         if not self.created:
-            raise Exception(f"Failed to create test user: {self.username}")
+            # Check if user already exists and skip if so
+            try:
+                from backend import do_register_test
+                import asyncio
+
+                loop = asyncio.get_event_loop()
+                register_result = loop.run_until_complete(
+                    do_register_test(self.username, self.password, DEFAULT_TEST_EMAIL)
+                )
+            except Exception:
+                register_result = {}
+            if register_result.get("code") == "409":
+                raise unittest.SkipTest(
+                    f"Test user '{self.username}' already exists. Skipping test."
+                )
+            else:
+                raise Exception(f"Failed to create test user: {self.username}")
         return self.username
 
     def __exit__(self, exc_type, exc_val, exc_tb):

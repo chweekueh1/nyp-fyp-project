@@ -17,9 +17,10 @@ import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-# Add project root to path
+# Add project root to sys.path for all test runs
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 
 class TestSuite:
@@ -54,8 +55,14 @@ class TestSuite:
         try:
             print(f"  🧪 Running {test_file.name}...")
 
+            # Use venv python explicitly if running in Docker
+            if os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1":
+                python_exe = "/home/appuser/.nypai-chatbot/venv/bin/python"
+            else:
+                python_exe = sys.executable
+
             result = subprocess.run(
-                [sys.executable, str(test_file)],
+                [python_exe, str(test_file)],
                 cwd=str(self.project_root),
                 capture_output=True,
                 text=True,

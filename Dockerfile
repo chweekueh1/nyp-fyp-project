@@ -51,9 +51,9 @@ RUN apk add --no-cache \
     ca-certificates \
     && update-ca-certificates
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Create deterministic virtual environment
+RUN python -m venv /home/appuser/.nypai-chatbot/venv
+ENV PATH="/home/appuser/.nypai-chatbot/venv/bin:$PATH"
 
 # Copy requirements and install Python dependencies with advanced parallelization
 COPY requirements.txt ./requirements.txt
@@ -61,10 +61,11 @@ COPY requirements.txt ./requirements.txt
 # Install uv and use it for fast parallel package installation
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     export PATH="/root/.local/bin:$PATH" && \
+    /home/appuser/.nypai-chatbot/venv/bin/pip install --upgrade pip wheel setuptools && \
+    /home/appuser/.nypai-chatbot/venv/bin/pip install uv && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements.txt && \
     uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
-    # Install problematic dependencies separately with specific strategies
     uv pip install --prerelease=allow --no-deps keybert && \
     uv pip install --prerelease=allow --no-deps unstructured
 
@@ -79,11 +80,28 @@ COPY scripts/ ./scripts/
 # Create necessary directories and set up user in a single layer
 RUN mkdir -p logs data && \
     addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup && \
-    chown -R appuser:appgroup /app
+    adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
+    # Create chatbot directory in appuser's home
+    mkdir -p /home/appuser/.nypai-chatbot/logs && \
+    mkdir -p /home/appuser/.nypai-chatbot/data && \
+    mkdir -p /home/appuser/.nypai-chatbot/uploads && \
+    mkdir -p /home/appuser/.nypai-chatbot/test_uploads && \
+    chown -R appuser:appgroup /app && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot
 
-# Switch to non-root user
-USER appuser
+# Copy and set up entrypoint script
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Copy .env file for environment variables
+COPY .env ./.env
+
+# Set PYTHONPATH so all modules are importable
+ENV PYTHONPATH=/app
+
+# Install all dependencies (ensure this is after requirements.txt is copied)
+RUN /home/appuser/.nypai-chatbot/venv/bin/pip install --upgrade pip && \
+    /home/appuser/.nypai-chatbot/venv/bin/pip install -r requirements.txt
 
 # Expose the port Gradio will listen on
 EXPOSE 7860
@@ -92,5 +110,10 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:7860/')" || exit 1
 
-# Set the default command to run the main application
-CMD ["python", "app.py"]
+# Set the entrypoint and default command
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/home/appuser/.nypai-chatbot/venv/bin/python", "app.py"]
+
+# Set the shell so that the venv is always activated for RUN commands
+SHELL ["/bin/sh", "-c"]
+ENV PATH="/home/appuser/.nypai-chatbot/venv/bin:$PATH"

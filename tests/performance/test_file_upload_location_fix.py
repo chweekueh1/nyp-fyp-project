@@ -24,26 +24,15 @@ def test_file_upload_directory_structure():
         # Set test environment
         os.environ["TESTING"] = "true"
 
-        # Test production directory structure
-        os.environ["TESTING"] = "false"
-
-        # Expected production path: ~/.nypai-chatbot/uploads/{username}
         chatbot_dir = get_chatbot_dir()
         expected_prod_path = os.path.join(chatbot_dir, "uploads", "testuser")
-
         print(f"  🏭 Expected production path: {expected_prod_path}")
 
-        # Test test directory structure
-        os.environ["TESTING"] = "true"
-
-        # Expected test path: ~/.nypai-chatbot/test_uploads/txt_files/{username}
         expected_test_path = os.path.join(
             chatbot_dir, "test_uploads", "txt_files", "testuser"
         )
-
         print(f"  🧪 Expected test path: {expected_test_path}")
 
-        # Verify the paths are different and correctly structured
         assert expected_prod_path != expected_test_path, (
             "Production and test paths should be different"
         )
@@ -60,10 +49,7 @@ def test_file_upload_directory_structure():
             "Test path should end with username"
         )
 
-        print("  ✅ Directory structure is correct")
-        print("  ✅ Production and test paths are separate")
         print("  ✅ File upload directory structure: PASSED")
-
         return True
 
     except Exception as e:

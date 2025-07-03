@@ -190,7 +190,11 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
         # Check if username already exists
         for user_data in users.values():
             if user_data.get("username") == username:
-                return {"status": "error", "message": "Username already exists."}
+                return {
+                    "status": "error",
+                    "message": "Username already exists.",
+                    "code": "409",
+                }
 
             if email and user_data.get("email") == email:
                 return {"status": "error", "message": "Email already registered."}
@@ -330,7 +334,11 @@ async def do_register_test(
         # Check if username already exists
         for user_data in users.values():
             if user_data.get("username") == username:
-                return {"status": "error", "message": "Username already exists."}
+                return {
+                    "status": "error",
+                    "message": "Username already exists.",
+                    "code": "409",
+                }
 
             if email and user_data.get("email") == email:
                 return {"status": "error", "message": "Email already registered."}
