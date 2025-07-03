@@ -45,6 +45,8 @@ RUN apk add --no-cache \
     tesseract-ocr \
     tesseract-ocr-data-eng \
     poppler-utils \
+    poppler-dev \
+    curl \
     # Security and performance
     ca-certificates \
     && update-ca-certificates
@@ -56,11 +58,15 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy requirements and install Python dependencies with advanced parallelization
 COPY requirements.txt ./requirements.txt
 
-# Use build cache mount for pip cache and optimize pip installation with parallelization
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip wheel setuptools && \
-    pip install --no-cache-dir --use-pep517 --parallel ${PARALLEL_JOBS} --prefer-binary -r requirements.txt && \
-    pip install --no-cache-dir --use-pep517 --parallel ${PARALLEL_JOBS} --prefer-binary overrides tenacity rich tqdm typer
+# Install uv and use it for fast parallel package installation
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    export PATH="/root/.local/bin:$PATH" && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements.txt && \
+    uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
+    # Install problematic dependencies separately with specific strategies
+    uv pip install --prerelease=allow --no-deps keybert && \
+    uv pip install --prerelease=allow --no-deps unstructured
 
 # Copy all application files in a single layer to reduce layers and improve caching
 COPY app.py backend.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py ./

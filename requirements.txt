@@ -13,7 +13,7 @@ filetype==1.2.0
 # Gradio framework
 gradio==5.34.0
 gradio_client==1.10.3
-keybert
+# keybert  # Temporarily disabled due to torch compatibility issues on Alpine
 
 # LangChain ecosystem (install together for better dependency resolution)
 langchain>=0.3.24,<1.0.0
@@ -33,6 +33,8 @@ numpy==1.26.4
 # AI and ML libraries (these often have heavy compilation)
 openai==1.72.0
 pandas==2.2.3
+pdf2image==1.17.0   # For PDF to image conversion if needed
+pdfplumber==0.11.4  # Alternative to pdftotext - better text extraction
 pdftotext
 pillow==11.1.0
 pydantic==2.11.2
@@ -51,5 +53,5 @@ requests==2.32.3
 SQLAlchemy==2.0.40
 starlette==0.46.1
 tiktoken==0.9.0
-unstructured
+# unstructured  # Temporarily disabled due to tokenizers pre-release issues
 uvicorn==0.34.0
