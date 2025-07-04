@@ -16,7 +16,6 @@ filetype==1.2.0
 # Gradio framework
 gradio==5.34.0
 gradio_client==1.10.3
-# keybert  # Installed separately in Dockerfile due to torch compatibility issues on Alpine
 
 # LangChain ecosystem (install together for better dependency resolution)
 langchain>=0.3.24,<1.0.0
@@ -56,3 +55,4 @@ starlette==0.46.1
 tiktoken==0.9.0
 # unstructured  # Installed separately in Dockerfile due to compatibility issues on Alpine
 uvicorn==0.34.0
+yake

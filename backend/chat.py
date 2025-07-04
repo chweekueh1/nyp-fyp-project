@@ -181,6 +181,7 @@ def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
                     with open(chat_file, "r") as f:
                         chat_data = json.load(f)
 
+                    chat_name = chat_data.get("name", filename.replace(".json", ""))
                     messages = chat_data.get("messages", [])
                     for message in messages:
                         content = message.get("content", "").lower()
@@ -188,6 +189,7 @@ def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
                             results.append(
                                 {
                                     "chat_id": filename.replace(".json", ""),
+                                    "chat_name": chat_name,
                                     "message": message,
                                     "timestamp": message.get("timestamp", ""),
                                 }
@@ -500,17 +502,28 @@ def rename_chat(old_chat_id: str, new_chat_name: str, username: str) -> Dict[str
         with open(old_session_file, "r") as f:
             session_data = json.load(f)
 
-        # Update name
+        # Update name in session file
         session_data["name"] = new_chat_name
-
-        # Save updated session data
         with open(old_session_file, "w") as f:
             json.dump(session_data, f, indent=2)
+
+        # Also update name in chat data file
+        user_folder = os.path.join(CHAT_DATA_PATH, username)
+        chat_data_file = os.path.join(user_folder, f"{old_chat_id}.json")
+        if os.path.exists(chat_data_file):
+            try:
+                with open(chat_data_file, "r") as f:
+                    chat_data = json.load(f)
+                chat_data["name"] = new_chat_name
+                with open(chat_data_file, "w") as f:
+                    json.dump(chat_data, f, indent=2)
+            except Exception as e:
+                logger.error(f"Error updating chat data file name: {e}")
 
         logger.info(
             f"Chat {old_chat_id} renamed to '{new_chat_name}' for user {username}"
         )
-        return {"success": True, "new_name": new_chat_name}
+        return {"success": True, "new_name": new_chat_name, "new_chat_id": old_chat_id}
 
     except Exception as e:
         logger.error(f"Error in rename_chat: {e}")

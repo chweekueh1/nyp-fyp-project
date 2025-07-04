@@ -591,7 +591,7 @@ class MemoryOptimizer:
 
         # Clear module cache for modules we don't need anymore
         modules_to_clear = [
-            "keybert",
+            "yake",
             "sentence_transformers",
             "transformers",
             "torch",

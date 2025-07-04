@@ -9,10 +9,12 @@ Users can send messages, manage chat sessions, search history, and rename chats.
 from typing import Tuple, Any, List, Dict
 
 import gradio as gr
+from llm.dataProcessing import YAKEMetadataTagger
 
 from infra_utils import clear_chat_history
 
-# Backend import moved to function level to avoid early DuckDB vector store initialization
+
+import backend
 
 
 def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
@@ -27,17 +29,29 @@ def load_all_chats(username: str) -> Dict[str, List[List[str]]]:
     if not username:
         return {}
 
-    # Lazy import to avoid early DuckDB vector store initialization
-    import backend
-
     chat_ids = backend.list_user_chat_ids(username)
     all_histories = {}
+    chat_names = {}
     for cid in chat_ids:
         try:
             hist = backend.get_chat_history(cid, username)
-            all_histories[cid] = [list(pair) for pair in hist] if hist else []
+            # Try to get the chat name from metadata
+            chat_name = None
+            try:
+                chat_name = backend.get_chat_name(cid, username)
+            except Exception:
+                pass
+            all_histories[cid] = {
+                "history": [list(pair) for pair in hist] if hist else [],
+                "name": chat_name or cid,
+            }
+            chat_names[cid] = chat_name or cid
         except Exception as e:
-            all_histories[cid] = [["[Error loading chat]", str(e)]]
+            all_histories[cid] = {
+                "history": [["[Error loading chat]", str(e)]],
+                "name": cid,
+            }
+            chat_names[cid] = cid
     return all_histories
 
 
@@ -56,9 +70,6 @@ def handle_search(username: str, query: str) -> str:
         return "Please enter a search query."
 
     try:
-        # Lazy import to avoid early ChromaDB initialization
-        import backend
-
         # Get search results from backend
         results = backend.search_chat_history(query.strip(), username)
 
@@ -139,7 +150,8 @@ def chatbot_ui(
         gr.Markdown("### 💬 Chat Management")
         with gr.Row():
             chat_selector = gr.Dropdown(choices=[], label="Select Chat")
-            new_chat_btn = gr.Button("New Chat", variant="primary", size="sm")
+            # new_chat_btn removed: chat creation is now automatic
+            # new_chat_btn = gr.Button("New Chat", variant="primary", size="sm")
 
     # Chat controls
     with gr.Group():
@@ -199,10 +211,8 @@ def chatbot_ui(
         """
         if not username or not chat_id:
             return []
-        try:
-            # Lazy import to avoid early ChromaDB initialization
-            import backend
 
+        try:
             hist = backend.get_chat_history(chat_id, username)
             # Convert tuples to messages format
             messages = []
@@ -296,9 +306,21 @@ def chatbot_ui(
                 bot_msg = history[i + 1].get("content", "")
                 tuple_history.append([user_msg, bot_msg])
 
+        # Extract keywords from the message using YAKE (top 20 words only, split by whitespace)
+        keywords = YAKEMetadataTagger(msg)
+        import collections
+
+        all_words = []
+        for kw in keywords:
+            all_words.extend([w for w in kw.split() if len(w) > 2])
+        word_counts = collections.Counter(all_words)
+        top_20_words = [w for w, _ in word_counts.most_common(20)]
+        filtered_keywords = ", ".join(top_20_words)
+
         # Get response from backend (async function)
         import asyncio
 
+        # Pass filtered keywords to backend for classification
         response_dict = asyncio.run(
             backend.get_chatbot_response(
                 {
@@ -306,14 +328,24 @@ def chatbot_ui(
                     "message": msg,
                     "history": tuple_history,  # Backend expects tuples format
                     "chat_id": chat_id,
+                    "keywords": filtered_keywords,  # Pass keywords for classification
                 }
             )
         )
 
         backend_history = response_dict.get("history", tuple_history)
         response_val = response_dict.get("response", "")
+        # Always treat response as string for markdown rendering (avoid syntax errors)
         if not isinstance(response_val, str):
             response_val = str(response_val)
+
+        # If the response contains a mermaid code block, ensure it is preserved and not parsed as JSON
+        import re
+
+        mermaid_match = re.search(r"```mermaid[\s\S]+?```", response_val)
+        if mermaid_match:
+            # Optionally, you could extract and display the diagram separately if needed
+            pass  # For now, just ensure markdown rendering
 
         # Convert backend response back to messages format
         new_history = []
@@ -331,10 +363,11 @@ def chatbot_ui(
             except Exception as e:
                 print(f"Warning: Could not update chat selector: {e}")
 
+        # Always return the response as markdown (for mermaid, code, etc.)
         return (
             "",
             new_history,
-            "Message sent successfully",
+            response_val,
             chat_selector_update,
             chat_id,
         )
@@ -392,9 +425,6 @@ def chatbot_ui(
             return "Please enter a new name for the chat.", gr.update(), current_chat_id
 
         try:
-            # Lazy import to avoid early ChromaDB initialization
-            import backend
-
             # Call backend rename function
             result = backend.rename_chat(current_chat_id, new_name.strip(), username)
 
@@ -430,6 +460,126 @@ def chatbot_ui(
                 gr.update(visible=True, value=f"❌ Error clearing chat history: {e}"),
             )
 
+    # In-memory chat list for UI (to keep dropdown and search in sync)
+    chat_ids_memory = set()
+
+    def update_chat_memory_and_dropdown(username: str):
+        all_chats = load_all_chats(username)
+        chat_ids = list(all_chats.keys())
+        chat_ids_memory.clear()
+        chat_ids_memory.update(chat_ids)
+        # Build choices as list of tuples (label, value)
+        choices = [(all_chats[cid]["name"], cid) for cid in chat_ids]
+        selected = chat_ids[0] if chat_ids else None
+        messages_history = []
+        if selected:
+            tuple_history = all_chats[selected]["history"]
+            for user_msg, bot_msg in tuple_history:
+                messages_history.append({"role": "user", "content": user_msg})
+                messages_history.append({"role": "assistant", "content": bot_msg})
+        return gr.update(choices=choices, value=selected), selected, messages_history
+
+    # Patch create_new_chat to update memory
+    def create_new_chat_and_update_memory(username: str):
+        dropdown_update, new_chat_id, messages_history = create_new_chat(username)
+        # Always update dropdown after chat creation
+        dropdown_update, selected, _ = update_chat_memory_and_dropdown(username)
+        return dropdown_update, new_chat_id, messages_history
+
+    # Patch send_message to update memory if new chat is created
+    def send_message_and_update_memory(user, msg, history, chat_id):
+        result = send_message(user, msg, history, chat_id)
+        # Always update dropdown after sending message (in case new chat is created)
+        chat_selector_update, selected, _ = update_chat_memory_and_dropdown(user)
+        # result: (input, new_history, debug, chat_selector_update, chat_id)
+        # Replace chat_selector_update in result with the updated one
+        result = list(result)
+        if len(result) >= 4:
+            result[3] = chat_selector_update
+        return tuple(result)
+
+    # Patch handle_rename to update memory
+    def handle_rename_and_update_memory(username, current_chat_id, new_name):
+        result = handle_rename(username, current_chat_id, new_name)
+        # Always update dropdown after rename
+        chat_selector_update, selected, _ = update_chat_memory_and_dropdown(username)
+        # Replace chat_selector_update in result with the updated one
+        result = list(result)
+        if len(result) >= 2:
+            result[1] = chat_selector_update
+        return tuple(result)
+
+    # Patch search to use in-memory chat_ids
+    def handle_search_in_memory(username: str, query: str) -> str:
+        if not username or not query.strip():
+            return "Please enter a search query."
+        all_chats = load_all_chats(username)
+        chat_ids = list(chat_ids_memory)
+        if not chat_ids:
+            return "No chat history to search."
+        filtered_chats = {cid: all_chats[cid] for cid in chat_ids if cid in all_chats}
+        query_lower = query.strip().lower()
+        results = []
+        for cid, history in filtered_chats.items():
+            chat_name = cid  # fallback if no name
+            try:
+                chat_name = backend.get_chat_name(cid, username)
+            except Exception:
+                pass
+            matching_messages = []
+            for pair in history:
+                user_msg = pair[0] if len(pair) > 0 else ""
+                bot_msg = pair[1] if len(pair) > 1 else ""
+                user_match = query_lower in user_msg.lower()
+                bot_match = query_lower in bot_msg.lower()
+                if user_match or bot_match:
+                    matching_messages.append(
+                        {
+                            "user_message": user_msg,
+                            "bot_message": bot_msg,
+                            "user_match": user_match,
+                            "bot_match": bot_match,
+                        }
+                    )
+            if matching_messages:
+                results.append(
+                    {
+                        "chat_id": cid,
+                        "chat_name": chat_name,
+                        "match_count": len(matching_messages),
+                        "chat_preview": matching_messages[0]["user_message"]
+                        if matching_messages
+                        else "",
+                        "matching_messages": matching_messages,
+                    }
+                )
+        if not results:
+            return f"No results found for '{query}'."
+        formatted_results = [f"# 🔍 Search Results for '{query}'\n"]
+        formatted_results.append(
+            f"Found {len(results)} chat(s) with matching content:\n"
+        )
+        for i, result in enumerate(results, 1):
+            chat_name = result["chat_name"]
+            match_count = result["match_count"]
+            chat_preview = result["chat_preview"]
+            formatted_results.append(f"## {i}. {chat_name}")
+            formatted_results.append(
+                f"**Matches:** {match_count} | **Preview:** {chat_preview}"
+            )
+            for match in result["matching_messages"][:2]:
+                user_msg = match["user_message"]
+                bot_msg = match["bot_message"]
+                if match["user_match"]:
+                    formatted_results.append(f"**User:** {user_msg}")
+                if match["bot_match"]:
+                    formatted_results.append(f"**Bot:** {bot_msg}")
+            if len(result["matching_messages"]) > 2:
+                remaining = len(result["matching_messages"]) - 2
+                formatted_results.append(f"*... and {remaining} more matches*")
+            formatted_results.append("---")
+        return "\n".join(formatted_results)
+
     # Event handlers (only set up if requested and in Blocks context)
     if setup_events:
         chat_selector.change(
@@ -437,48 +587,72 @@ def chatbot_ui(
             inputs=[username_state, chat_selector],
             outputs=[chatbot, chat_id_state],
         )
-
-        new_chat_btn.click(
-            fn=create_new_chat,
-            inputs=[username_state],
-            outputs=[chat_selector, chat_id_state, chatbot],
-        )
+        # new_chat_btn is removed, so no click event
 
         send_btn.click(
-            fn=send_message,
+            fn=send_message_and_update_memory,
             inputs=[username_state, chat_input, chatbot, chat_id_state],
             outputs=[chat_input, chatbot, debug_md, chat_selector, chat_id_state],
         )
 
-        # Search event handlers
+        # Search event handlers (use in-memory for instant UI update)
         search_btn.click(
-            fn=handle_search,
+            fn=handle_search_in_memory,
             inputs=[username_state, search_input],
             outputs=[search_results],
         )
 
         search_input.submit(
-            fn=handle_search,
+            fn=handle_search_in_memory,
             inputs=[username_state, search_input],
             outputs=[search_results],
         )
 
-        # Rename event handlers
+        # Rename event handlers (use in-memory for instant UI update)
         rename_btn.click(
-            fn=handle_rename,
+            fn=handle_rename_and_update_memory,
             inputs=[username_state, chat_id_state, rename_input],
             outputs=[debug_md, chat_selector, chat_id_state],
         )
 
         rename_input.submit(
-            fn=handle_rename,
+            fn=handle_rename_and_update_memory,
             inputs=[username_state, chat_id_state, rename_input],
             outputs=[debug_md, chat_selector, chat_id_state],
         )
 
-        # Initialize on username change
+        # Auto-create a new chat if none exists when user logs in or no chat is selected
+        def ensure_chat_on_login(username: str):
+            all_chats = load_all_chats(username)
+            chat_ids = list(all_chats.keys())
+            if not chat_ids:
+                # No chats exist, create one
+                dropdown_update, new_chat_id, messages_history = create_new_chat(
+                    username
+                )
+                return dropdown_update, new_chat_id, messages_history
+            else:
+                # Chats exist, select the first one
+                selected = chat_ids[0]
+                tuple_history = all_chats.get(selected, [])
+                messages_history = []
+                for user_msg, bot_msg in tuple_history:
+                    messages_history.append({"role": "user", "content": user_msg})
+                    messages_history.append({"role": "assistant", "content": bot_msg})
+                return (
+                    gr.update(choices=chat_ids, value=selected),
+                    selected,
+                    messages_history,
+                )
+
+        # Patch ensure_chat_on_login to update memory
+        def ensure_chat_on_login_and_update_memory(username: str):
+            update_chat_memory_and_dropdown(username)
+            return ensure_chat_on_login(username)
+
+        # Replace username_state.change to use ensure_chat_on_login
         username_state.change(
-            fn=initialize_chats,
+            fn=ensure_chat_on_login_and_update_memory,
             inputs=[username_state],
             outputs=[chat_selector, chat_id_state, chatbot],
         )
@@ -488,7 +662,7 @@ def chatbot_ui(
 
     return (
         chat_selector,
-        new_chat_btn,
+        # new_chat_btn removed from return tuple
         chatbot,
         chat_input,
         send_btn,

@@ -114,8 +114,17 @@ def format_sensitivity_level(sensitivity: str) -> str:
         "ERROR": "❌ **ERROR**",
     }
 
+    # Defensive: ensure sensitivity is a string
+    if not isinstance(sensitivity, str):
+        import logging
+
+        logging.warning(
+            f"format_sensitivity_level: expected string, got {type(sensitivity)}: {sensitivity}"
+        )
+        sensitivity = str(sensitivity) if sensitivity is not None else "UNKNOWN"
+
     normalized = sensitivity.upper().strip()
-    formatted = sensitivity_mapping.get(normalized, f"⚪ **{sensitivity.upper()}**")
+    formatted = sensitivity_mapping.get(normalized, f"⚪ **{normalized}**")
 
     return formatted
 

@@ -23,7 +23,7 @@ def test_fast_keyword_extraction():
     print("🔍 Testing Fast Keyword Extraction...")
 
     try:
-        from llm.dataProcessing import FastKeyBERTMetadataTagger
+        from llm.dataProcessing import FastYAKEMetadataTagger
         from langchain.schema import Document
 
         # Create test document
@@ -34,7 +34,7 @@ def test_fast_keyword_extraction():
 
         # Test performance
         start_time = time.time()
-        result = FastKeyBERTMetadataTagger([test_doc])
+        result = FastYAKEMetadataTagger([test_doc])
         duration = time.time() - start_time
 
         # Verify results
@@ -218,7 +218,7 @@ def test_complete_pipeline_performance():
             # to avoid database pollution
             from llm.dataProcessing import (
                 ExtractText,
-                FastKeyBERTMetadataTagger,
+                FastYAKEMetadataTagger,
                 optimizedRecursiveChunker,
             )
 
@@ -226,7 +226,7 @@ def test_complete_pipeline_performance():
             documents = ExtractText(temp_file)
 
             # Step 2: Extract keywords
-            documents = FastKeyBERTMetadataTagger(documents)
+            documents = FastYAKEMetadataTagger(documents)
 
             # Step 3: Chunk documents
             chunks = optimizedRecursiveChunker(documents)

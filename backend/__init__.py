@@ -85,7 +85,7 @@ from .audio import (
 )
 
 from .database import (
-    get_chroma_db,
+    get_chat_db,
     get_llm_functions,
     get_data_processing,
     get_classification,
@@ -175,7 +175,7 @@ __all__ = [
     "hash_password",
     "verify_password",
     # Database functions
-    "get_chroma_db",
+    "get_chat_db",
     "get_llm_functions",
     "get_data_processing",
     "get_classification",

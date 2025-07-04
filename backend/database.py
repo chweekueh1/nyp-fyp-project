@@ -139,7 +139,7 @@ class DuckDBRetriever(BaseRetriever):
     def __init__(self, vector_store: DuckDBVectorStore, search_kwargs: Dict[str, Any]):
         super().__init__()
         self._vector_store = vector_store
-        self.search_kwargs = search_kwargs
+        self._search_kwargs = search_kwargs
 
     @property
     def vector_store(self):
@@ -149,8 +149,8 @@ class DuckDBRetriever(BaseRetriever):
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
         """Get relevant documents for a query."""
-        k = self.search_kwargs.get("k", 5)
-        keyword_filter = self.search_kwargs.get("filter", {}).get("keywords", None)
+        k = self._search_kwargs.get("k", 5)
+        keyword_filter = self._search_kwargs.get("filter", {}).get("keywords", None)
 
         results = self.vector_store.query(query, k=k, keyword_filter=keyword_filter)
         return [
@@ -159,8 +159,8 @@ class DuckDBRetriever(BaseRetriever):
 
     def get_relevant_documents(self, query: str) -> List[Document]:
         """Get relevant documents for a query (legacy compatibility method)."""
-        k = self.search_kwargs.get("k", 5)
-        keyword_filter = self.search_kwargs.get("filter", {}).get("keywords", None)
+        k = self._search_kwargs.get("k", 5)
+        keyword_filter = self._search_kwargs.get("filter", {}).get("keywords", None)
 
         results = self.vector_store.query(query, k=k, keyword_filter=keyword_filter)
         return [
@@ -177,23 +177,20 @@ def get_duckdb_collection(collection_name: str) -> DuckDBVectorStore:
     )
 
 
-# --- Compatibility shims for old API ---
-def get_chroma_db():
-    """Shim for old ChromaDB getter, returns DuckDB chat collection."""
+# For chat collection:
+def get_chat_db():
+    """Get DuckDB chat collection."""
     return get_duckdb_collection("chat")
 
 
+# For classification collection:
 def get_classification_db():
-    """Shim for classification collection."""
+    """Get DuckDB classification collection."""
     return get_duckdb_collection("classification")
 
 
 # --- Other lazy loading functions (unchanged) ---
 def get_llm_functions():
-    return lazy_loader.load_module("llm_functions", lambda: _init_llm_functions())
-
-
-def _init_llm_functions():
     from llm import chatModel
 
     # Return a dictionary of functions instead of the module
@@ -205,20 +202,12 @@ def _init_llm_functions():
 
 
 def get_data_processing():
-    return lazy_loader.load_module("data_processing", lambda: _init_data_processing())
-
-
-def _init_data_processing():
     from llm import dataProcessing
 
     return dataProcessing
 
 
 def get_classification():
-    return lazy_loader.load_module("classification", lambda: _init_classification())
-
-
-def _init_classification():
     from llm import classificationModel
 
     return classificationModel

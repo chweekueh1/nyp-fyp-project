@@ -290,6 +290,7 @@ def test_chat_history_search():
                 # Verify result structure
                 for result in results:
                     assert "chat_id" in result, "Result should have chat_id"
+                    assert "chat_name" in result, "Result should have chat_name"
                     assert "message" in result, "Result should have message"
                     assert "timestamp" in result, "Result should have timestamp"
                     # Verify message content contains the query

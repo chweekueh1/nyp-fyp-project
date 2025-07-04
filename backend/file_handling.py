@@ -204,21 +204,23 @@ async def upload_file(file_content: bytes, filename: str, username: str) -> dict
         return {"error": str(e)}
 
 
-async def data_classification(content: str) -> dict:
-    """Classify the content of a text file."""
+async def data_classification(content: str, keywords: str = None) -> dict:
+    """Classify the content of a text file, using filtered keywords if provided."""
     try:
         # Get classification functions lazily
         classification_funcs = get_classification()
         if not classification_funcs:
             return {"error": "Classification functions not available"}
 
-        # Perform classification
-        result = classification_funcs.classify_text(content)
+        # Perform classification using keywords if provided
+        if keywords:
+            result = classification_funcs.classify_text(content, keywords=keywords)
+        else:
+            result = classification_funcs.classify_text(content)
 
         return {
             "classification": result,
             "content_length": len(content),
-            "processed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

@@ -94,7 +94,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements.txt && \
     uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
-    uv pip install --prerelease=allow --no-deps keybert && \
+    ${VENV_PATH}/bin/python -c "import yake; print('YAKE import OK')" && \
     uv pip install --prerelease=allow --no-deps unstructured
 
 # Copy all application files in a single layer to reduce layers and improve caching

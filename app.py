@@ -86,9 +86,12 @@ except Exception as e:
 import llm.classificationModel as classificationModel
 import llm.dataProcessing as dataProcessing
 
+
+# Inject dependencies for classification workflow
 classificationModel.llm = llm
 classificationModel.embedding = embedding
 classificationModel.db = classification_db
+classificationModel.initialize_classification_workflow()
 
 dataProcessing.embedding = embedding
 dataProcessing.classification_db = classification_db
@@ -299,7 +302,6 @@ def create_main_app():
                             selected_chat_id = gr.State("")
                             (
                                 chat_selector,
-                                new_chat_btn,
                                 chatbot,
                                 chat_input,
                                 send_btn,
@@ -609,6 +611,13 @@ def create_main_app():
                 status = get_backend_status()
 
                 if status == "ready":
+                    # Backend is ready, initialize LLM and DB for UI context
+                    try:
+                        from llm.chatModel import initialize_llm_and_db
+
+                        initialize_llm_and_db()
+                    except Exception as e:
+                        logger.error(f"❌ Failed to initialize LLM and DB in UI: {e}")
                     # Backend is ready, show login interface
                     return (
                         gr.update(visible=False),  # Hide loading screen

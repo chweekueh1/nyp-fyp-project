@@ -168,14 +168,19 @@ def test_chat_renaming():
 
         # Test renaming
         new_name = "My Awesome Chat"
-        result = backend.rename_chat(original_chat_id, new_name, username)
 
+        result = backend.rename_chat(original_chat_id, new_name, username)
         assert result["success"], (
             f"Rename failed: {result.get('error', 'Unknown error')}"
         )
         new_name_returned = result["new_name"]
-
-        print(f"  ✅ Renamed to: '{new_name_returned}'")
+        new_chat_id_returned = result.get("new_chat_id", None)
+        print(
+            f"  ✅ Renamed to: '{new_name_returned}' (chat_id: {new_chat_id_returned})"
+        )
+        assert new_chat_id_returned == original_chat_id, (
+            "Returned chat_id should match original"
+        )
 
         # Verify the name was actually changed in the session file
         assert os.path.exists(session_file), "Session file should still exist"

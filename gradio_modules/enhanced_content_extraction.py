@@ -206,6 +206,7 @@ def extract_with_pandoc(
         if file_ext in {".txt", ".md", ".markdown", ".csv", ".log"}:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
+            # Apply keyword filtering before sending to Pandoc
             processed_content = apply_text_processing(content, file_ext)
             tmp = tempfile.NamedTemporaryFile(
                 delete=False, suffix=file_ext, mode="w", encoding="utf-8"
@@ -238,10 +239,11 @@ def extract_with_pandoc(
                 )
                 return content
         else:
-            logger.warning(f"Pandoc extraction failed for {file_path}: {result.stderr}")
+            logger.warning(f"Pandoc extraction failed: {result.stderr}")
+            return None
     except Exception as e:
-        logger.error(f"Error in pandoc extraction for {file_path}: {e}")
-    return None
+        logger.error(f"Error extracting with pandoc: {e}")
+        return None
 
 
 def extract_with_tesseract(file_path: str) -> Optional[str]:
@@ -373,24 +375,24 @@ def extract_text_file_content(
             if pre_stripped_temp and file_ext in {".md", ".markdown"}
             else file_path
         )
-        # Read up to 100 lines or 1000 characters, whichever is more
+        # Read up to CHUNK_CHAR_THRESHOLD characters only
         max_chars = CHUNK_CHAR_THRESHOLD
         content_chars = []
         char_count = 0
         with open(target_path, "r", encoding="utf-8") as f:
-            for i, line in enumerate(f):
-                content_chars.append(line)
-                char_count += len(line)
-                # If we've reached the threshold, break
-                if char_count >= max_chars:
-                    break
-            # If we hit the threshold but not 1000 chars, keep reading until 1000 chars
             while char_count < max_chars:
                 next_line = f.readline()
                 if not next_line:
                     break
-                content_chars.append(next_line)
-                char_count += len(next_line)
+                # Only add up to the remaining allowed characters
+                remaining = max_chars - char_count
+                if len(next_line) > remaining:
+                    content_chars.append(next_line[:remaining])
+                    char_count += remaining
+                    break
+                else:
+                    content_chars.append(next_line)
+                    char_count += len(next_line)
         content = "".join(content_chars)
 
         # Apply text processing (special character cleaning and keyword filtering) for text-based files
@@ -580,9 +582,66 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
             "confidence": 0.0,
         }
 
-    # Apply keyword filtering to the content before classification
-    # This helps remove filler words that might interfere with classification accuracy
-    filtered_content = filter_filler_words(content)
+    # Defensive: ensure content is string
+    if not isinstance(content, str):
+        logger.warning(
+            f"classify_file_content: expected string content, got {type(content)}: {content}"
+        )
+        content = str(content)
+
+    import collections
+    import yake  # Import the actual yake library if you're directly using its KeywordExtractor
+
+    # --- Inside your classification function ---
+    # Defensive: ensure content is string
+    if not isinstance(content, str):
+        logger.warning(
+            f"classify_file_content: expected string content, got {type(content)}: {content}"
+        )
+        content = str(content)
+
+    # Apply keyword filtering if `YAKEMetadataTagger` doesn't handle it or you need an extra layer
+    # This `filter_filler_words` might be redundant or integrated into YAKE's stopwords
+    filtered_content = filter_filler_words(
+        content
+    )  # Assuming this also lowercases the content
+
+    # Initialize YAKE Keyword Extractor with desired parameters
+    # Consider if `YAKEMetadataTagger` already does this internally and exposes parameters
+    kw_extractor = yake.KeywordExtractor(
+        lan="en",
+        n=3,  # Max 3-word keywords (1-gram, 2-gram, 3-gram)
+        dedupLim=0.9,  # Less aggressive deduplication to keep more candidates
+        top=50,  # Get a larger pool of top keywords from YAKE to then filter by frequency
+        stopwords=None,  # Or pass your custom stopwords if filter_filler_words doesn't handle this
+    )
+
+    # YAKE returns a list of (keyword, score) tuples
+    yake_output = kw_extractor.extract_keywords(filtered_content)
+
+    # Process YAKE output: Decide how to treat multi-word keywords
+    all_relevant_terms = []
+    for keyword, score in yake_output:
+        # Option 1: Treat multi-word keywords as single units (Recommended for retaining context)
+        all_relevant_terms.append(keyword.lower())  # Normalize to lowercase
+
+        # Option 2 (If you specifically need single words from multi-word phrases):
+        # This is what you were doing, but potentially losing context.
+        # If using this, ensure normalization and short word filtering are applied here.
+        for word in keyword.split():
+            if len(word) > 2:
+                all_relevant_terms.append(word.lower())
+
+    # Count frequencies of the chosen terms (can be single words or multi-word phrases)
+    word_counts = collections.Counter(all_relevant_terms)
+
+    # Get the top 20 most frequent terms (which could now be multi-word phrases)
+    top_20_final_terms = [w for w, _ in word_counts.most_common(20)]
+
+    # The `top_20_final_terms` list is what you should now feed into your classifier's vectorization step.
+    # Avoid joining into a single string if your classifier expects a list or numerical vector.
+    # If your classifier *does* expect a single string, then:
+    top_20_str = ", ".join(top_20_final_terms)
 
     # Hash the filtered content for caching
     content_hash = hashlib.sha256(filtered_content.encode("utf-8")).hexdigest()
@@ -604,7 +663,8 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
         perf_monitor.start_timer("classification_llm_call")
         from llm.classificationModel import classify_text
 
-        result = classify_text(filtered_content)
+        # Pass the full filtered content as text, and the 20 keywords as the keywords argument
+        result = classify_text(filtered_content, keywords=top_20_str)
         perf_monitor.end_timer("classification_llm_call")
         # Extract the answer which should be JSON
         answer = result.get("answer", "{}")
@@ -613,10 +673,28 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
                 classification_result = json.loads(answer)
             else:
                 classification_result = answer
+            # Defensive: ensure classification_result is a dict
+            if not isinstance(classification_result, dict):
+                logger.warning(
+                    f"classify_file_content: classification_result not dict: {classification_result}"
+                )
+                classification_result = {
+                    "classification": "Unknown",
+                    "sensitivity": "Unknown",
+                    "reasoning": str(classification_result),
+                    "confidence": 0.0,
+                }
             if "classification" not in classification_result:
                 classification_result["classification"] = "Official(Open)"
-            if "sensitivity" not in classification_result:
-                classification_result["sensitivity"] = "Non-Sensitive"
+            if "sensitivity" not in classification_result or not isinstance(
+                classification_result["sensitivity"], str
+            ):
+                logger.warning(
+                    f"classify_file_content: sensitivity not string or missing: {classification_result.get('sensitivity')}"
+                )
+                classification_result["sensitivity"] = str(
+                    classification_result.get("sensitivity", "Non-Sensitive")
+                )
             if "reasoning" not in classification_result:
                 classification_result["reasoning"] = (
                     "Classification completed successfully"
@@ -634,6 +712,7 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
         cache[content_hash] = classification_result.copy()
         return classification_result
     except Exception as e:
+        logger.error(f"classify_file_content: Exception during classification: {e}")
         return {
             "classification": "Error",
             "sensitivity": "Error",

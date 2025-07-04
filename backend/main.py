@@ -6,7 +6,7 @@ Contains initialization functions and main entry points.
 
 import logging
 from .utils import _ensure_db_and_folders_async
-from .database import get_llm_functions, get_chroma_db
+from .database import get_llm_functions, get_chat_db
 from performance_utils import perf_monitor
 
 # Set up logging
@@ -21,16 +21,22 @@ async def init_backend():
         # Ensure database and folders exist
         await _ensure_db_and_folders_async()
 
-        # Initialize LLM functions
-        llm_funcs = get_llm_functions()
-        if llm_funcs:
-            logger.info("✅ LLM functions initialized")
-        else:
-            logger.warning("⚠️ LLM functions not available")
+        # Initialize LLM functions and LLM/DB directly (no lazy loading)
+        try:
+            llm_funcs = get_llm_functions()
+            if llm_funcs:
+                logger.info("✅ LLM functions initialized")
+                # Explicitly initialize LLM and DB
+                llm_funcs["initialize_llm_and_db"]()
+                logger.info("✅ LLM and DB initialized after backend startup")
+            else:
+                logger.warning("⚠️ LLM functions not available")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize LLM and DB: {e}")
 
         # Initialize DuckDB vector store
         try:
-            db = get_chroma_db()  # This now returns DuckDB collection
+            db = get_chat_db()  # Use DuckDB chat collection directly
             if db:
                 logger.info("✅ DuckDB vector store initialized")
             else:
@@ -64,7 +70,7 @@ async def init_backend_async_internal():
         # Initialize DuckDB vector store with performance monitoring
         with perf_monitor("duckdb_initialization"):
             try:
-                db = get_chroma_db()  # This now returns DuckDB collection
+                db = get_chat_db()  # Use DuckDB chat collection directly
                 if db:
                     logger.info("✅ DuckDB vector store initialized successfully")
                 else:
@@ -125,7 +131,7 @@ def get_backend_status() -> dict:
 
         # Check DuckDB vector store
         try:
-            db = get_chroma_db()  # This now returns DuckDB collection
+            db = get_chat_db()  # Use DuckDB chat collection directly
             status["components"]["duckdb_vectorstore"] = {"available": db is not None}
         except Exception as e:
             status["components"]["duckdb_vectorstore"] = {

@@ -19,22 +19,12 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from backend.database import DuckDBVectorStore
 
-import openai
 import os
 import sys
 from glob import glob
 from dotenv import load_dotenv
 
-# Optional KeyBERT imports - fallback to simple implementation if not available
-try:
-    from keybert import KeyBERT
-    from keybert.llm import OpenAI
-    from keybert import KeyLLM
-
-    KEYBERT_AVAILABLE = True
-except ImportError:
-    KEYBERT_AVAILABLE = False
-    logging.warning("KeyBERT not available, using fast keyword extraction fallback")
+import yake
 import warnings
 import shelve
 from infra_utils import create_folders, get_chatbot_dir
@@ -227,7 +217,7 @@ def dataProcessing(file: str, collection: "DuckDBVectorStore" = None) -> None:
         if doc_hash in cache:
             doc.metadata["keywords"] = cache[doc_hash]
         else:
-            doc = FastKeyBERTMetadataTagger([doc])[0]
+            doc = FastYAKEMetadataTagger([doc])[0]
             cache[doc_hash] = doc.metadata.get("keywords", [])
         return doc
 
@@ -578,347 +568,93 @@ def OpenAIMetadataTagger(document: list[Document]):
     return enhanced_documents
 
 
-# function to create metadata keyword tags for document and chunk using keyBERT library
-def KeyBERTMetadataTagger(document: str | list[Document]) -> list[str]:
+# function to create metadata keyword tags for document and chunk using YAKE library
+def YAKEMetadataTagger(document: str | list[Document]) -> list[str]:
     """
-    Create metadata keyword tags for document and chunk using KeyBERT library.
+    Create metadata keyword tags for document and chunk using YAKE library.
 
     :param document: The document or text to extract keywords from.
     :type document: str | list[Document]
     :return: List of extracted keywords.
     :rtype: list[str]
     """
-    if not KEYBERT_AVAILABLE:
-        logging.warning("KeyBERT not available, using simple keyword extraction")
-        # Fallback to simple extraction
-        if isinstance(document, str):
-            text = document
-        elif isinstance(document, list) and len(document) > 0:
-            text = " ".join([doc.page_content for doc in document])
-        else:
-            return []
+    if isinstance(document, str):
+        text = document
+    elif isinstance(document, list) and len(document) > 0:
+        text = " ".join([doc.page_content for doc in document])
+    else:
+        return []
 
-        # Simple keyword extraction
-        import re
-        from collections import Counter
-
-        words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
-        stop_words = {
-            "the",
-            "and",
-            "for",
-            "are",
-            "but",
-            "not",
-            "you",
-            "all",
-            "can",
-            "had",
-            "her",
-            "was",
-            "one",
-            "our",
-            "out",
-            "day",
-            "get",
-            "has",
-            "him",
-            "his",
-            "how",
-            "man",
-            "new",
-            "now",
-            "old",
-            "see",
-            "two",
-            "way",
-            "who",
-            "boy",
-            "did",
-            "its",
-            "let",
-            "put",
-            "say",
-            "she",
-            "too",
-            "use",
-        }
-        filtered_words = [word for word in words if word not in stop_words]
-        word_counts = Counter(filtered_words)
-        return [word for word, count in word_counts.most_common(5)]
-
-    kw_model = KeyBERT()
-    keywords = kw_model.extract_keywords(
-        document,
-        keyphrase_ngram_range=(1, 2),
-        use_maxsum=True,
-        nr_candidates=20,
-        top_n=5,
-        stop_words="english",
-    )
-    return keywords
+    kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=5)
+    keywords = kw_extractor.extract_keywords(text)
+    # Return only the keyword strings, sorted by score (lowest is best)
+    return [kw for kw, score in sorted(keywords, key=lambda x: x[1])]
 
 
 # Lightning-fast keyword extractor using simple text analysis (no ML models)
-def FastKeyBERTMetadataTagger(documents: list[Document]) -> list[Document]:
+
+
+# Lightning-fast keyword extractor using YAKE (no ML models, fast and Alpine compatible)
+def FastYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
     """
-    Lightning-fast keyword extraction using simple text analysis instead of ML models.
+    Lightning-fast keyword extraction using YAKE (no ML models, fast and Alpine compatible).
 
     :param documents: List of Document objects to extract keywords from.
     :type documents: list[Document]
     :return: List of Document objects with keywords added to metadata.
     :rtype: list[Document]
     """
-    import re
-    from collections import Counter
-
-    def extract_keywords_simple(text):
-        """Extract keywords using simple text analysis - extremely fast."""
-        # Common stop words to filter out
-        stop_words = {
-            "the",
-            "a",
-            "an",
-            "and",
-            "or",
-            "but",
-            "in",
-            "on",
-            "at",
-            "to",
-            "for",
-            "of",
-            "with",
-            "by",
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "do",
-            "does",
-            "did",
-            "will",
-            "would",
-            "could",
-            "should",
-            "may",
-            "might",
-            "can",
-            "this",
-            "that",
-            "these",
-            "those",
-            "i",
-            "you",
-            "he",
-            "she",
-            "it",
-            "we",
-            "they",
-            "me",
-            "him",
-            "her",
-            "us",
-            "them",
-            "my",
-            "your",
-            "his",
-            "its",
-            "our",
-            "their",
-            "from",
-            "up",
-            "about",
-            "into",
-            "through",
-            "during",
-            "before",
-            "after",
-            "above",
-            "below",
-            "between",
-            "among",
-            "all",
-            "any",
-            "both",
-            "each",
-            "few",
-            "more",
-            "most",
-            "other",
-            "some",
-            "such",
-            "no",
-            "nor",
-            "not",
-            "only",
-            "own",
-            "same",
-            "so",
-            "than",
-            "too",
-            "very",
-            "just",
-            "now",
-            "here",
-            "there",
-            "when",
-            "where",
-            "why",
-            "how",
-        }
-
-        # Extract words (alphanumeric, 3+ characters)
-        words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
-
-        # Filter out stop words and get word frequencies
-        filtered_words = [word for word in words if word not in stop_words]
-        word_counts = Counter(filtered_words)
-
-        # Get top 5 most frequent words as keywords
-        keywords = [word for word, count in word_counts.most_common(5) if count > 1]
-
-        return keywords[:3]  # Return top 3 keywords
-
-    try:
-        enhanced_documents = []
-
-        for doc in documents:
-            # Skip very short documents
-            if len(doc.page_content.strip()) < 50:
-                doc.metadata["keywords"] = []
-            else:
-                # Extract keywords using simple text analysis
-                keywords = extract_keywords_simple(doc.page_content)
-                doc.metadata["keywords"] = keywords
-
-            enhanced_documents.append(doc)
-
-        total_keywords = sum(
-            len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
-        )
-        logging.info(
-            f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (simple analysis)"
-        )
-
-        return enhanced_documents
-
-    except Exception as e:
-        logging.warning(
-            f"Simple keyword extraction failed: {e}, falling back to no keywords"
-        )
-        # Fallback: return documents without keywords
-        for doc in documents:
+    enhanced_documents = []
+    for doc in documents:
+        if len(doc.page_content.strip()) < 50:
             doc.metadata["keywords"] = []
-        return documents
+            enhanced_documents.append(doc)
+            continue
+        kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=5)
+        keywords = kw_extractor.extract_keywords(doc.page_content)
+        keyword_list = [kw for kw, score in sorted(keywords, key=lambda x: x[1])]
+        doc.metadata["keywords"] = keyword_list
+        enhanced_documents.append(doc)
+    total_keywords = sum(
+        len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
+    )
+    logging.info(
+        f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (YAKE fast)"
+    )
+    return enhanced_documents
 
 
-# Optional: Keep KeyBERT version for high-quality extraction when performance is not critical
-def HighQualityKeyBERTMetadataTagger(documents: list[Document]):
+def HighQualityYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
     """
-    High-quality KeyBERT-based metadata tagger (slower but better quality).
+    High-quality YAKE-based metadata tagger (slower but better quality).
 
     :param documents: List of Document objects to extract keywords from.
     :type documents: list[Document]
     :return: List of Document objects with keywords added to metadata.
     :rtype: list[Document]
     """
-    if not KEYBERT_AVAILABLE:
-        logging.warning("KeyBERT not available, falling back to fast extraction")
-        return FastKeyBERTMetadataTagger(documents)
 
-    try:
-        from functools import lru_cache
-
-        # Cache KeyBERT model to avoid re-initialization
-        @lru_cache(maxsize=1)
-        def get_keybert_model():
-            return KeyBERT()
-
-        kw_model = get_keybert_model()
-        enhanced_documents = []
-
-        for doc in documents:
-            # Skip very short documents
-            if len(doc.page_content.strip()) < 50:
-                doc.metadata["keywords"] = []
-                enhanced_documents.append(doc)
-                continue
-
-            # Extract keywords with KeyBERT
-            keywords = kw_model.extract_keywords(
-                doc.page_content,
-                keyphrase_ngram_range=(1, 2),
-                use_maxsum=True,
-                nr_candidates=8,
-                top_n=3,
-                stop_words="english",
-            )
-
-            # Convert to list of keyword strings
-            keyword_list = []
-            for kw in keywords:
-                if isinstance(kw, tuple) and len(kw) >= 2:
-                    keyword_list.append(str(kw[0]))
-                else:
-                    keyword_list.append(str(kw))
-
-            doc.metadata["keywords"] = keyword_list
+    enhanced_documents = []
+    for doc in documents:
+        if len(doc.page_content.strip()) < 50:
+            doc.metadata["keywords"] = []
             enhanced_documents.append(doc)
-
-        total_keywords = sum(
-            len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
-        )
-        logging.info(
-            f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (KeyBERT)"
-        )
-
-        return enhanced_documents
-
-    except Exception as e:
-        logging.warning(
-            f"KeyBERT tagging failed: {e}, falling back to simple extraction"
-        )
-        return FastKeyBERTMetadataTagger(documents)
+            continue
+        kw_extractor = yake.KeywordExtractor(lan="en", n=2, top=5)
+        keywords = kw_extractor.extract_keywords(doc.page_content)
+        keyword_list = [kw for kw, score in sorted(keywords, key=lambda x: x[1])]
+        doc.metadata["keywords"] = keyword_list
+        enhanced_documents.append(doc)
+    total_keywords = sum(
+        len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
+    )
+    logging.info(
+        f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (YAKE high-quality)"
+    )
+    return enhanced_documents
 
 
-# function to create metadata keyword tags for document and chunk using keyBERT library extended with openAI through langchain
-# This function outputs the same results as OpenAIMetadataTagger except it seems to have an issue of counting punctuation as a keyword
-# This is likely due to the how the KeyLLM is implemented in the keyBERT library
-# This function is kept here as an archive and for future reference but will not be used in the final implementation
-client = openai.OpenAI(api_key=openai.api_key)
-
-
-def KeyBERTOpenAIMetadataTagger(document: str | list[Document]) -> list[str]:
-    """
-    Create metadata keyword tags for document and chunk using KeyBERT library extended with OpenAI.
-
-    :param document: The document or text to extract keywords from.
-    :type document: str | list[Document]
-    :return: List of extracted keywords.
-    :rtype: list[str]
-    """
-    if not KEYBERT_AVAILABLE:
-        logging.warning("KeyBERT not available, using simple keyword extraction")
-        return KeyBERTMetadataTagger(document)
-
-    # Create your LLM
-    llm = OpenAI(client)
-    kw_model = KeyLLM(llm)
-
-    # Load it in KeyLLM
-    kw_model = KeyLLM(llm)
-
-    # Extract keywords
-    keywords = kw_model.extract_keywords(document, check_vocab=True)
-
-    return keywords
+# KeyBERTOpenAIMetadataTagger and all KeyBERT-based taggers are deprecated and removed. Use YAKE-based taggers instead.
 
 
 # function to split documents into set smaller chunks for better retrieval processing

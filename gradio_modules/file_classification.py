@@ -18,10 +18,8 @@ from gradio_modules.enhanced_content_extraction import (
 from infra_utils import get_chatbot_dir, clear_uploaded_files
 import asyncio
 
-# Backend and LLM imports moved to function level to avoid early ChromaDB initialization
-# from infra_utils import get_chatbot_dir
-# from llm.dataProcessing import ExtractText  # Moved to function level
-# from llm.classificationModel import classify_text  # Moved to function level
+
+from backend import data_classification
 
 # Hardcoded list of allowed file extensions
 ALLOWED_EXTENSIONS = [
@@ -240,11 +238,13 @@ def handle_clear_uploaded_files() -> tuple:
 
 
 def call_backend_data_classification(content_text):
-    from backend import data_classification
-
-    loop = asyncio.get_event_loop()
-    result = loop.run_until_complete(data_classification(content_text))
-    return result
+    # Directly call the imported async function using asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(data_classification(content_text))
 
 
 def handle_upload_click(file_obj: Any, username: str) -> tuple:
