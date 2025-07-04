@@ -32,6 +32,7 @@ try:
     get_chatbot_dir = infra_utils_main.get_chatbot_dir
     setup_logging = infra_utils_main.setup_logging
     clear_chat_history = infra_utils_main.clear_chat_history
+    clear_uploaded_files = infra_utils_main.clear_uploaded_files
     cleanup_test_environment = infra_utils_main.cleanup_test_environment
     get_docker_venv_path = infra_utils_main.get_docker_venv_path
     get_docker_venv_python = infra_utils_main.get_docker_venv_python
@@ -44,6 +45,7 @@ try:
         "get_chatbot_dir",
         "setup_logging",
         "clear_chat_history",
+        "clear_uploaded_files",
         "cleanup_test_environment",
         "get_docker_venv_path",
         "get_docker_venv_python",
@@ -77,6 +79,9 @@ except Exception:
     def clear_chat_history():
         pass
 
+    def clear_uploaded_files():
+        pass
+
     def cleanup_test_environment():
         pass
 
@@ -93,6 +98,7 @@ except Exception:
         "get_chatbot_dir",
         "setup_logging",
         "clear_chat_history",
+        "clear_uploaded_files",
         "cleanup_test_environment",
         "get_docker_venv_path",
         "get_docker_venv_python",

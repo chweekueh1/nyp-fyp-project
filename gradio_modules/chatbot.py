@@ -9,6 +9,7 @@ Users can send messages, manage chat sessions, search history, and rename chats.
 from typing import Tuple, Any, List, Dict
 
 import gradio as gr
+
 from infra_utils import clear_chat_history
 
 # Backend import moved to function level to avoid early DuckDB vector store initialization
@@ -103,25 +104,11 @@ def handle_search(username: str, query: str) -> str:
 
 
 def chatbot_ui(
-    username_state: gr.State,
-    chat_history_state: gr.State,
-    chat_id_state: gr.State,
+    username_state,
+    chat_history_state,
+    chat_id_state,
     setup_events: bool = True,
-) -> Tuple[
-    gr.Dropdown,
-    gr.Button,
-    gr.Chatbot,
-    gr.Textbox,
-    gr.Button,
-    gr.Textbox,
-    gr.Button,
-    gr.Markdown,
-    gr.Textbox,
-    gr.Button,
-    gr.Markdown,
-    gr.Button,
-    gr.Markdown,
-]:
+) -> Tuple:
     """
     Create the chatbot interface components with chat history loading, search, and renaming.
 
@@ -136,9 +123,9 @@ def chatbot_ui(
     - Debug markdown for status messages
 
     Args:
-        username_state (gr.State): State component for the current username.
-        chat_history_state (gr.State): State component for the chat history.
-        chat_id_state (gr.State): State component for the current chat ID.
+        username_state (gr.State): State component for the current username (optional for testing).
+        chat_history_state (gr.State): State component for the chat history (optional for testing).
+        chat_id_state (gr.State): State component for the current chat ID (optional for testing).
         setup_events (bool): Whether to set up event handlers.
 
     Returns:
@@ -146,6 +133,7 @@ def chatbot_ui(
         Chat selector, new chat button, chatbot, message input, send button,
         search input, search button, search results, rename input, rename button, and debug markdown.
     """
+
     # Chat management components with wider styling
     with gr.Group(elem_classes=["chat-interface-container"]):
         gr.Markdown("### 💬 Chat Management")

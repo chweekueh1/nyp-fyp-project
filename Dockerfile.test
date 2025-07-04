@@ -121,12 +121,12 @@ COPY scripts/entrypoint.py /usr/local/bin/entrypoint.py
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; print('Python environment OK')" || exit 1
+    CMD ${VENV_PATH}/bin/python -c "import sys; print('Python environment OK')" || exit 1
 
 # Set the entrypoint and default command
 RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py"
-ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-test/bin/python", "/usr/local/bin/entrypoint.py"]
-CMD ["/bin/sh", "-c", "/home/appuser/.nypai-chatbot/venv-test/bin/python tests/comprehensive_test_suite.py"]
+ENTRYPOINT ["sh", "-c", "${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py \"$@\"", "--"]
+CMD ["sh", "-c", "${VENV_PATH}/bin/python tests/comprehensive_test_suite.py"]
 
 # Note: .env file should be passed at runtime via --env-file
 
@@ -134,9 +134,9 @@ CMD ["/bin/sh", "-c", "/home/appuser/.nypai-chatbot/venv-test/bin/python tests/c
 ENV PYTHONPATH=/app
 
 # Verify installation and show Python path
-RUN echo "[BUILD] Python executable: $(which python)" && \
-    echo "[BUILD] Python version: $(python --version)" && \
-    echo "[BUILD] Pip version: $(pip --version)"
+RUN echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
+    echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
+    echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)"
 
 # Set the shell so that the venv is always activated for RUN commands
 SHELL ["/bin/sh", "-c"]

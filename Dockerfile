@@ -109,21 +109,19 @@ COPY scripts/ ./scripts/
 # Set PYTHONPATH so all modules are importable
 ENV PYTHONPATH=/app
 
-# Install all dependencies (ensure this is after requirements.txt is copied)
-RUN ${VENV_PATH}/bin/pip install --upgrade pip && \
-    ${VENV_PATH}/bin/pip install -r requirements.txt
+# Dependencies already installed via uv above
 
 # Expose the port Gradio will listen on
 EXPOSE 7860
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:7860/')" || exit 1
+    CMD ${VENV_PATH}/bin/python -c "import requests; requests.get('http://localhost:7860/')" || exit 1
 
 # Set the entrypoint and default command
 RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py"
-ENTRYPOINT ["python", "/usr/local/bin/entrypoint.py"]
-CMD ["/bin/sh", "-c", "${VENV_PATH}/bin/python app.py"]
+ENTRYPOINT ["sh", "-c", "${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py \"$@\"", "--"]
+CMD ["sh", "-c", "${VENV_PATH}/bin/python app.py"]
 
 # Set the shell so that the venv is always activated for RUN commands
 SHELL ["/bin/sh", "-c"]

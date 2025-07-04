@@ -19,26 +19,12 @@ from infra_utils import setup_logging
 logger = setup_logging()
 
 
-def audio_interface(
-    username_state: gr.State, setup_events: bool = True
-) -> Tuple[
-    gr.Audio,
-    gr.Button,
-    gr.Textbox,
-    gr.Textbox,
-    gr.Markdown,
-    gr.Textbox,
-    gr.Button,
-    gr.Button,
-    gr.Markdown,
-    gr.Button,
-    gr.State,
-]:
+def audio_interface(username_state, setup_events: bool = True) -> Tuple:
     """
     Create audio input interface.
 
     Args:
-        username_state: Gradio state containing the current username
+        username_state: Gradio state containing the current username (optional for testing)
         setup_events: Whether to set up event handlers (default: True)
 
     Returns:
