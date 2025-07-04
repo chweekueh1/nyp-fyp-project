@@ -40,8 +40,13 @@ Examples:
   python setup.py --docker-build-prod     # Build production container
   python setup.py --docker-build-all      # Build all containers
 
-  # Run development container
+  # Run Docker container (prompts to choose dev/prod/test)
   python setup.py --docker-run
+
+  # Run specific container without prompt
+  python setup.py --docker-run --docker-mode dev     # Development container (port 7680)
+  python setup.py --docker-run --docker-mode prod    # Production container (port 7860)
+  python setup.py --docker-run --docker-mode test    # Test container (port 7861)
 
   # Run tests in test container
   python setup.py --docker-test                                    # Run environment verification
@@ -95,7 +100,7 @@ Examples:
     parser.add_argument(
         "--docker-run",
         action="store_true",
-        help="Run the development Docker container 'nyp-fyp-chatbot-dev'",
+        help="Run a Docker container (prompts to choose between dev, prod, or test)",
     )
     parser.add_argument(
         "--docker-test",
@@ -218,7 +223,10 @@ Examples:
         docker_build_all()
         return
     elif args.docker_run:
-        docker_run(mode=args.docker_mode)
+        # Check if docker_mode was explicitly set by user or is using default
+        # If using default "test", prompt user to choose
+        prompt_for_mode = "--docker-mode" not in sys.argv
+        docker_run(mode=args.docker_mode, prompt_for_mode=prompt_for_mode)
         return
     elif args.docker_test:
         ensure_test_docker_image()

@@ -272,29 +272,46 @@ def get_optimized_launch_config():
     # Determine Docker mode and set appropriate server configuration
     docker_mode = os.environ.get("DOCKER_MODE", "prod")
 
+    # Check for explicit environment variable overrides first
+    env_server_name = os.environ.get("GRADIO_SERVER_NAME")
+    env_server_port = os.environ.get("GRADIO_SERVER_PORT")
+
     # Configure server name and port based on Docker mode
     if docker_mode == "dev":
-        # Dev mode should use 127.0.0.1:7680 for local development
-        server_name = "127.0.0.1"
-        server_port = 7680
+        # Dev mode: use 0.0.0.0 in Docker containers, 127.0.0.1 for local development
+        # Check if running in Docker
+        in_docker = os.environ.get("IN_DOCKER") == "1"
+        server_name = env_server_name or ("0.0.0.0" if in_docker else "127.0.0.1")
+        server_port = int(env_server_port) if env_server_port else 7680
     elif docker_mode == "test":
         # Test mode uses standard Docker configuration
-        server_name = "0.0.0.0"
-        server_port = 7861  # Different port to avoid conflicts
+        server_name = env_server_name or "0.0.0.0"
+        server_port = int(env_server_port) if env_server_port else 7861
     else:  # prod mode
         # Production mode uses standard Docker configuration
-        server_name = "0.0.0.0"
-        server_port = 7860
+        server_name = env_server_name or "0.0.0.0"
+        server_port = int(env_server_port) if env_server_port else 7860
 
-    return {
+    # Debug output for troubleshooting
+    print(f"🔧 [DEBUG] Docker mode: {docker_mode}")
+    print(f"🔧 [DEBUG] IN_DOCKER: {os.environ.get('IN_DOCKER')}")
+    print(f"🔧 [DEBUG] GRADIO_SERVER_NAME env: {env_server_name}")
+    print(f"🔧 [DEBUG] GRADIO_SERVER_PORT env: {env_server_port}")
+    print(f"🔧 [DEBUG] Final server_name: {server_name}")
+    print(f"🔧 [DEBUG] Final server_port: {server_port}")
+
+    config = {
         "debug": False,  # Disable debug mode for production
         "share": False,  # Essential: Ensures it's not a public Gradio share link
         "inbrowser": False,  # Don't auto-open browser
-        "quiet": True,
+        "quiet": False,  # Enable output to see what's happening
         "show_error": True,
         "server_name": server_name,  # Mode-specific server name
         "server_port": server_port,  # Mode-specific port
     }
+
+    print(f"🚀 [DEBUG] Gradio launch config: {config}")
+    return config
 
 
 # And then in your main app file (e.g., app.py), you'd use it like:

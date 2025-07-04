@@ -709,45 +709,7 @@ def check_env_file(env_file_path=ENV_FILE_PATH):
         sys.exit(1)
 
 
-def docker_run():
-    check_env_file(ENV_FILE_PATH)
-    ensure_docker_image()
-    print("🐳 [DEBUG] Dockerfile installs venv at: /home/appuser/.nypai-chatbot/venv")
-    print(
-        f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
-    )
-    print("🐳 Starting development Docker container...")
-    logger.info("Starting development Docker container.")
-    chatbot_dir = os.path.expanduser("~/.nypai-chatbot")
-    docker_volume_path = get_docker_volume_path(chatbot_dir)
-    cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "-it",
-        "--env-file",
-        ENV_FILE_PATH,
-        "-v",
-        f"{docker_volume_path}:/home/appuser/.nypai-chatbot",
-        "-p",
-        "7860:7860",
-        "nyp-fyp-chatbot-dev",
-    ]
-    try:
-        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
-        logger.info("Development Docker container exited.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Development Docker container exited with an error: {e}")
-        logger.error(
-            f"Development Docker container exited with an error: {e}", exc_info=True
-        )
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ An unexpected error occurred during development Docker run: {e}")
-        logger.error(
-            f"Unexpected error during development Docker run: {e}", exc_info=True
-        )
-        sys.exit(1)
+# docker_run function moved to scripts/docker_utils.py
 
 
 def docker_test(test_target: Optional[str] = None) -> None:

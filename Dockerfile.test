@@ -119,6 +119,9 @@ COPY tests/ ./tests/
 # Copy and set up entrypoint script
 COPY scripts/entrypoint.py /usr/local/bin/entrypoint.py
 
+# Expose the port for test mode (if running web interface)
+EXPOSE 7861
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ${VENV_PATH}/bin/python -c "import sys; print('Python environment OK')" || exit 1

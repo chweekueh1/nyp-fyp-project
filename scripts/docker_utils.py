@@ -358,8 +358,34 @@ def get_docker_volume_path(local_path: str) -> str:
     return local_path
 
 
-def docker_run(mode="dev"):
+def docker_run(mode="dev", prompt_for_mode=False):
     check_env_file(ENV_FILE_PATH)
+
+    # If prompt_for_mode is True, ask user to choose container type
+    if prompt_for_mode:
+        print("🐳 Which Docker container would you like to run?")
+        print("1. Development (dev) - Port 7680")
+        print("2. Production (prod) - Port 7860")
+        print("3. Test (test) - Port 7861")
+        print()
+
+        while True:
+            try:
+                choice = input("Enter your choice (1-3) [default: 1]: ").strip()
+                if choice == "" or choice == "1":
+                    mode = "dev"
+                    break
+                elif choice == "2":
+                    mode = "prod"
+                    break
+                elif choice == "3":
+                    mode = "test"
+                    break
+                else:
+                    print("❌ Invalid choice. Please enter 1, 2, or 3.")
+            except (KeyboardInterrupt, EOFError):
+                print("\n❌ Operation cancelled by user.")
+                sys.exit(1)
 
     # Map mode to Docker image
     image_map = {

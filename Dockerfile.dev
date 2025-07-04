@@ -5,7 +5,7 @@ FROM python:3.11-alpine
 
 # Set environment variables for development
 ENV PYTHONUNBUFFERED=1
-ENV GRADIO_SERVER_NAME="127.0.0.1"
+ENV GRADIO_SERVER_NAME="0.0.0.0"
 ENV GRADIO_SERVER_PORT="7680"
 ENV IN_DOCKER="1"
 ENV DEVELOPMENT="true"
@@ -115,12 +115,12 @@ ENV PYTHONPATH=/app
 
 # Dependencies already installed via uv above
 
-# Expose the port Gradio will listen on
-EXPOSE 7860
+# Expose the port Gradio will listen on (dev mode uses 7680)
+EXPOSE 7680
 
-# Health check
+# Health check (dev mode uses port 7680)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ${VENV_PATH}/bin/python -c "import requests; requests.get('http://localhost:7860/')" || exit 1
+    CMD ${VENV_PATH}/bin/python -c "import requests; requests.get('http://localhost:7680/')" || exit 1
 
 # Set the entrypoint and default command
 RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /usr/local/bin/entrypoint.py"
