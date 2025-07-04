@@ -35,8 +35,66 @@ start_app_startup_tracking()
 apply_all_optimizations()
 mark_startup_milestone("optimizations_applied")
 
+
 # Start performance monitoring
 perf_monitor.start_timer("app_startup")
+
+# --- Centralized LLM, Embedding, DuckDB Vector Store, and OpenAI Client Initialization ---
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+import openai
+from backend.database import get_duckdb_collection
+from backend import config as backend_config
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+
+# Initialize OpenAI client
+client = None
+if OPENAI_API_KEY:
+    try:
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {e}")
+else:
+    logger.critical(
+        "OPENAI_API_KEY environment variable not set. Chat features will not work."
+    )
+
+# Initialize LLM and embedding
+llm = None
+embedding = None
+try:
+    llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
+    embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+except Exception as e:
+    logger.error(f"Failed to initialize LLM or embedding: {e}")
+
+# Initialize DuckDB vector stores
+classification_db = None
+chat_db = None
+try:
+    classification_db = get_duckdb_collection("classification")
+    chat_db = get_duckdb_collection("chat")
+except Exception as e:
+    logger.error(f"Failed to initialize DuckDB vector stores: {e}")
+
+# Inject into modules
+import llm.classificationModel as classificationModel
+import llm.dataProcessing as dataProcessing
+
+classificationModel.llm = llm
+classificationModel.embedding = embedding
+classificationModel.db = classification_db
+
+dataProcessing.embedding = embedding
+dataProcessing.classification_db = classification_db
+dataProcessing.chat_db = chat_db
+
+backend_config.client = client
 
 
 def initialize_backend_in_background():

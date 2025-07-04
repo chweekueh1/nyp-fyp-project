@@ -14,9 +14,9 @@ from datetime import datetime
 from performance_utils import perf_monitor
 from gradio_modules.enhanced_content_extraction import (
     enhanced_extract_file_content,
-    classify_file_content,
 )
 from infra_utils import get_chatbot_dir, clear_uploaded_files
+import asyncio
 
 # Backend and LLM imports moved to function level to avoid early ChromaDB initialization
 # from infra_utils import get_chatbot_dir
@@ -239,6 +239,14 @@ def handle_clear_uploaded_files() -> tuple:
         return (gr.update(visible=True, value=f"❌ Error clearing files: {str(e)}"),)
 
 
+def call_backend_data_classification(content_text):
+    from backend import data_classification
+
+    loop = asyncio.get_event_loop()
+    result = loop.run_until_complete(data_classification(content_text))
+    return result
+
+
 def handle_upload_click(file_obj: Any, username: str) -> tuple:
     """Handle file upload and classification.
 
@@ -288,7 +296,7 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
         perf_monitor.end_timer("extraction")
         content_text = extraction_result.get("content", "")
         perf_monitor.start_timer("classification")
-        classification = classify_file_content(content_text, username)
+        classification = call_backend_data_classification(content_text)
         perf_monitor.end_timer("classification")
         perf_monitor.start_timer("formatting")
         # Format results using enhanced formatter
@@ -318,31 +326,25 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
                 hide_loading(),
                 refresh_file_dropdown(username),
             )
-        except ImportError:
-            # Fallback to basic formatting if formatter not available
+        except Exception as e:
             perf_monitor.end_timer("formatting")
             perf_monitor.end_timer("file_classification_total")
             return (
-                gr.update(
-                    visible=True,
-                    value="✅ **File uploaded and classified successfully!**",
-                ),
-                gr.update(visible=True),
-                f"**Classification:** {classification.get('classification', 'Unknown')}",
-                f"**Sensitivity:** {classification.get('sensitivity', 'Unknown')}",
-                f"**File:** {original_filename}",
-                f"**Reasoning:** {classification.get('reasoning', 'No reasoning provided')}",
-                "**Summary:** Content extracted and classified",
+                gr.update(visible=True, value=f"❌ **Error:** {e}"),
+                gr.update(visible=False),
+                "",
+                "",
+                "",
+                "",
+                gr.update(visible=False, value=""),
                 get_upload_history(username),
                 hide_loading(),
                 refresh_file_dropdown(username),
             )
-
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
-        error_msg = f"❌ **Error processing file:** {str(e)}"
         return (
-            gr.update(visible=True, value=error_msg),
+            gr.update(visible=True, value=f"❌ **Error:** {e}"),
             gr.update(visible=False),
             "",
             "",
@@ -414,10 +416,9 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
         perf_monitor.end_timer("extraction")
         content_text = extraction_result.get("content", "")
         perf_monitor.start_timer("classification")
-        classification = classify_file_content(content_text, username)
+        classification = call_backend_data_classification(content_text)
         perf_monitor.end_timer("classification")
         perf_monitor.start_timer("formatting")
-
         # Format results using enhanced formatter
         try:
             from gradio_modules.classification_formatter import (
@@ -441,27 +442,24 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
                 get_upload_history(username),
                 hide_loading(),
             )
-        except ImportError:
-            # Fallback to basic formatting if formatter not available
+        except Exception as e:
             perf_monitor.end_timer("formatting")
             perf_monitor.end_timer("file_classification_total")
             return (
-                gr.update(visible=True, value="✅ **File classified successfully!**"),
-                gr.update(visible=True),
-                f"**Classification:** {classification.get('classification', 'Unknown')}",
-                f"**Sensitivity:** {classification.get('sensitivity', 'Unknown')}",
-                f"**File:** {selected_file}",
-                f"**Reasoning:** {classification.get('reasoning', 'No reasoning provided')}",
-                "**Summary:** Content extracted and classified",
+                gr.update(visible=True, value=f"❌ **Error:** {e}"),
+                gr.update(visible=False),
+                "",
+                "",
+                "",
+                "",
+                gr.update(visible=False, value=""),
                 get_upload_history(username),
                 hide_loading(),
             )
-
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
-        error_msg = f"❌ **Error classifying file:** {str(e)}"
         return (
-            gr.update(visible=True, value=error_msg),
+            gr.update(visible=True, value=f"❌ **Error:** {e}"),
             gr.update(visible=False),
             "",
             "",

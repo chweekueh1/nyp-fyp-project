@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
+from backend.database import DuckDBVectorStore
 
 import openai
 import os
@@ -186,31 +187,11 @@ def get_current_paths() -> tuple[str, str, str, str]:
     )
 
 
-# Validate OpenAI API key
+# LLM, embedding, and DuckDB vector store will be initialized in app.py
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    logging.critical(
-        "OPENAI_API_KEY environment variable not set. LLM features will not work."
-    )
-    raise ValueError("OPENAI_API_KEY environment variable not set")
-
-openai.api_key = OPENAI_API_KEY
-
-# Create necessary folders (parent directory of the keywords databank file)
-create_folders(os.path.dirname(get_keywords_databank_path()))
-
-# Initialize databases with proper error handling
-try:
-    embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-    from backend.database import get_duckdb_collection, DuckDBVectorStore
-
-    classification_db = get_duckdb_collection("classification")
-    chat_db = get_duckdb_collection("chat")
-
-    logging.info("Successfully initialized DuckDB vector stores")
-except Exception as e:
-    logging.critical(f"Failed to initialize DuckDB vector stores: {e}")
-    raise
+embedding = None
+classification_db = None
+chat_db = None
 
 
 # Add environment-configurable batch/thread settings
@@ -219,7 +200,7 @@ MAX_MEMORY_MB = int(os.getenv("LLM_MAX_MEMORY_MB", "50"))
 MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "4"))
 
 
-def dataProcessing(file: str, collection: DuckDBVectorStore = chat_db) -> None:
+def dataProcessing(file: str, collection: "DuckDBVectorStore" = None) -> None:
     """
     Ultra-optimized data processing with performance improvements.
     - Uses thread pool for parallel keyword extraction and chunking if many documents.
@@ -295,7 +276,10 @@ def dataProcessing(file: str, collection: DuckDBVectorStore = chat_db) -> None:
 
     # Step 5: Parallel database insertion
     perf_monitor.start_timer("database_insertion")
-    parallelDatabaseInsertion(batches=batches, collection=collection)
+    if collection is not None:
+        parallelDatabaseInsertion(batches=batches, collection=collection)
+    else:
+        logging.warning("No DuckDB vector store provided for data processing.")
     perf_monitor.end_timer("database_insertion")
 
     # Update keywords databank

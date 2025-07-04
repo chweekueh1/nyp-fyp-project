@@ -20,9 +20,9 @@ from infra_utils import (
     create_folders,
 )  # Ensure get_chatbot_dir is imported
 import logging  # Added for internal logging in this file
-import pickle
 import threading
 from llm.keyword_cache import get_cached_response, set_cached_response
+import traceback
 
 # Set up logging for this specific module
 logging.basicConfig(
@@ -169,9 +169,23 @@ def initialize_llm_and_db() -> None:
             logging.critical(f"Failed to load DuckDB vector store 'chat': {e}")
             db = None
 
-        # Initialize LangGraph workflow
+        # Initialize LangGraph workflow with detailed error logging
         try:
-            if llm and embedding and client and db:
+            missing_components = []
+            if not llm:
+                missing_components.append("llm")
+            if not embedding:
+                missing_components.append("embedding")
+            if not client:
+                missing_components.append("client")
+            if not db:
+                missing_components.append("db")
+            if missing_components:
+                logging.critical(
+                    f"Cannot initialize LangGraph workflow. Missing: {', '.join(missing_components)}"
+                )
+                app = None
+            else:
                 logging.info("🔗 Initializing LangGraph workflow...")
                 _initialize_langgraph_workflow()
                 logging.info("LangGraph workflow initialized successfully.")
@@ -495,13 +509,13 @@ def call_model(state: State) -> State:
         )
     try:
         # Build the prompt using qa_prompt, which includes the system prompt
-        prompt = qa_prompt.format(
+        messages = qa_prompt.format_messages(
             input=state["input"],
             chat_history=state["chat_history"],
             context=state.get("context", ""),
         )
-        # If llm.invoke expects a string, pass prompt; if it expects a list of messages, pass as needed
-        response = llm.invoke(prompt)
+        # Invoke the LLM with the formatted messages
+        response = llm.invoke(messages)
         if not response or not response.content:
             return _error_state(
                 state["input"],
@@ -556,72 +570,11 @@ CACHE_VERSION = "1.0"  # Add version for cache invalidation
 
 app: Optional[Any] = None  # Initialize app to None
 # Ensure llm, db, and client are all initialized before compiling the workflow
-if llm and db and client:
-    logging.info(
-        "LLM, DuckDB vector store, and OpenAI client initialized successfully."
-    )
-    # Try to load DuckDB vector store and LangGraph workflow from cache
-    duckdb_loaded = False
-    workflow_loaded = False
-
-    def load_from_cache(cache_path: str, cache_type: str) -> tuple[Optional[Any], bool]:
-        try:
-            if os.path.exists(cache_path):
-                with open(cache_path, "rb") as f:
-                    cached_data = pickle.load(f)
-                    if (
-                        isinstance(cached_data, dict)
-                        and cached_data.get("version") == CACHE_VERSION
-                    ):
-                        return cached_data.get("data"), True
-            return None, False
-        except Exception as e:
-            logging.warning(f"Failed to load {cache_type} from cache: {e}")
-            return None, False
-
-    def save_to_cache(cache_path: str, data: Any, cache_type: str) -> None:
-        try:
-            # For DuckDB vector store, we only cache the collection name and database path
-            if hasattr(data, "collection_name") and hasattr(data, "db_path"):
-                cache_data = {
-                    "collection_name": data.collection_name,
-                    "db_path": data.db_path,
-                }
-            else:
-                cache_data = data
-
-            with open(cache_path, "wb") as f:
-                pickle.dump({"version": CACHE_VERSION, "data": cache_data}, f)
-            logging.info(f"Saved {cache_type} to cache")
-        except Exception as e:
-            logging.warning(f"Failed to save {cache_type} to cache: {e}")
-
-    # Load from cache
-    prev_db = db
-    _db, duckdb_loaded = load_from_cache(DUCKDB_CACHE_PATH, "DuckDB vector store")
-    if duckdb_loaded and _db is not None:
-        logging.info("DuckDB vector store loaded from cache.")
-        # Recreate DuckDB vector store from cached data
-        try:
-            from backend.database import get_duckdb_collection
-
-            db = get_duckdb_collection(_db["collection_name"])
-            logging.info("Successfully recreated DuckDB vector store from cache")
-        except Exception as e:
-            logging.error(f"Failed to recreate DuckDB vector store from cache: {e}")
-            db = prev_db
-    else:
-        logging.info(
-            "DuckDB vector store not found in cache, using initialized instance."
-        )
-        # db is already initialized above
-
-    # Only save DuckDB vector store metadata to cache, not the full object
-    if db is not None:
-        save_to_cache(DUCKDB_CACHE_PATH, db, "DuckDB vector store")
-else:
+if not (llm and db and client):
+    tb = traceback.format_stack()
     logging.critical(
-        "LLM, DuckDB vector store, or OpenAI client not initialized. Chat functions will be limited."
+        "LLM, DuckDB vector store, or OpenAI client not initialized. Chat functions will be limited.\nTraceback (most recent call last):\n%s"
+        % ("".join(tb))
     )
 
 

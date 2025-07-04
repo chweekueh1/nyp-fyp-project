@@ -12,6 +12,9 @@ from typing import List, Dict, Any, Optional
 from performance_utils import lazy_loader
 from .config import DATABASE_PATH, EMBEDDING_MODEL
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from infra_utils import create_folders
 
 # --- DuckDB Vector Store Implementation ---
@@ -122,21 +125,46 @@ class DuckDBVectorStore:
         return DuckDBRetriever(self, search_kwargs or {})
 
 
-class DuckDBRetriever:
+class DuckDBRetriever(BaseRetriever):
+    @property
+    def lc_namespace(self):
+        return ["backend", "database", "DuckDBRetriever"]
+
+    @property
+    def lc_id(self):
+        return "duckdb_retriever"
+
     """Retriever interface for DuckDB vector store (compatible with LangChain)."""
 
     def __init__(self, vector_store: DuckDBVectorStore, search_kwargs: Dict[str, Any]):
-        self.vector_store = vector_store
+        super().__init__()
+        self._vector_store = vector_store
         self.search_kwargs = search_kwargs
 
-    def get_relevant_documents(self, query: str) -> List[Dict[str, Any]]:
+    @property
+    def vector_store(self):
+        return self._vector_store
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
         """Get relevant documents for a query."""
         k = self.search_kwargs.get("k", 5)
         keyword_filter = self.search_kwargs.get("filter", {}).get("keywords", None)
 
         results = self.vector_store.query(query, k=k, keyword_filter=keyword_filter)
         return [
-            {"page_content": r["content"], "metadata": r["metadata"]} for r in results
+            Document(page_content=r["content"], metadata=r["metadata"]) for r in results
+        ]
+
+    def get_relevant_documents(self, query: str) -> List[Document]:
+        """Get relevant documents for a query (legacy compatibility method)."""
+        k = self.search_kwargs.get("k", 5)
+        keyword_filter = self.search_kwargs.get("filter", {}).get("keywords", None)
+
+        results = self.vector_store.query(query, k=k, keyword_filter=keyword_filter)
+        return [
+            Document(page_content=r["content"], metadata=r["metadata"]) for r in results
         ]
 
 

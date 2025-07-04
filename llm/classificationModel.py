@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 import openai
 import os
 from langchain_core.prompts import ChatPromptTemplate
@@ -22,12 +21,11 @@ DATABASE_PATH = os.path.abspath(
 openai.api_key = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")
 
-# Initialize components
-llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
-embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-from backend.database import get_duckdb_collection
 
-db = get_duckdb_collection("classification")
+# LLM, embedding, and db will be initialized in app.py and injected or imported as needed
+llm = None
+embedding = None
+db = None
 
 # Define prompt templates
 multi_query_template = PromptTemplate(
@@ -42,11 +40,14 @@ multi_query_template = PromptTemplate(
     ),
     input_variables=["question"],
 )
-multiquery_retriever = MultiQueryRetriever.from_llm(
-    retriever=db.as_retriever(search_kwargs={"k": 3}),
-    llm=llm,
-    prompt=multi_query_template,
-)
+
+multiquery_retriever = None
+if db and llm:
+    multiquery_retriever = MultiQueryRetriever.from_llm(
+        retriever=db.as_retriever(search_kwargs={"k": 3}),
+        llm=llm,
+        prompt=multi_query_template,
+    )
 
 # Enhanced system prompt with detailed NYP CNC information
 system_prompt = (
@@ -90,9 +91,12 @@ classification_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-# Create the classification chain with multi-query retriever
-classification_chain = create_stuff_documents_chain(llm, classification_prompt)
-rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
+
+classification_chain = None
+rag_chain = None
+if llm and multiquery_retriever:
+    classification_chain = create_stuff_documents_chain(llm, classification_prompt)
+    rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
 
 
 class State(TypedDict):
@@ -102,6 +106,10 @@ class State(TypedDict):
 
 
 def call_model(state: State):
+    if not rag_chain:
+        raise RuntimeError(
+            "RAG chain not initialized. Ensure LLM and DB are set up in app.py."
+        )
     start = time.time()
     response = rag_chain.invoke(state)
     end = time.time()
@@ -112,11 +120,15 @@ def call_model(state: State):
     }
 
 
-workflow = StateGraph(state_schema=State)
-workflow.add_edge(START, "model")
-workflow.add_node("model", call_model)
 memory = MemorySaver()
-classify = workflow.compile(checkpointer=memory)
+
+workflow = None
+classify = None
+if rag_chain:
+    workflow = StateGraph(state_schema=State)
+    workflow.add_edge(START, "model")
+    workflow.add_node("model", call_model)
+    classify = workflow.compile(checkpointer=memory)
 
 config = {"configurable": {"thread_id": "Classification"}}
 
@@ -131,7 +143,12 @@ def classify_text(text: str, config: dict = config) -> dict:
     :type config: dict
     :return: The classification response.
     :rtype: dict
+    :raises RuntimeError: If the classification workflow is not initialized.
     """
+    if not classify:
+        raise RuntimeError(
+            "Classification workflow not initialized. Ensure LLM and DB are set up in app.py."
+        )
     state = {"input": text, "context": "", "answer": ""}
     response = classify.invoke(state, config=config)
     return response

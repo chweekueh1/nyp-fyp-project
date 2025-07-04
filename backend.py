@@ -70,6 +70,10 @@ from backend.config import (
     USER_DB_PATH,
     TEST_USER_DB_PATH,
 )
+from llm.chatModel import initialize_llm_and_db
+
+# Initialize LLM and DB at backend startup
+initialize_llm_and_db()
 
 # Export all functions and constants for backward compatibility
 __all__ = [

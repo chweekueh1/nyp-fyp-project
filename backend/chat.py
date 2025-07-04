@@ -211,6 +211,7 @@ def get_chat_history(chat_id: str, username: str) -> List[Tuple[str, str]]:
         user_folder = os.path.join(CHAT_DATA_PATH, username)
         chat_file = os.path.join(user_folder, f"{chat_id}.json")
 
+        # If chat file does not exist, just return empty history (do not create file)
         if not os.path.exists(chat_file):
             return []
 
@@ -436,17 +437,22 @@ def get_chat_name(chat_id: str, username: str) -> str:
     """Get the name of a specific chat."""
     try:
         session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-
         if os.path.exists(session_file):
             with open(session_file, "r") as f:
                 session_data = json.load(f)
             return session_data.get("name", "New Chat")
         else:
-            return "New Chat"
+            # If the chat is not persisted, display the current timestamp as its title
+            from .timezone_utils import now_singapore
 
+            timestamp = now_singapore().strftime("%Y-%m-%d %H:%M:%S")
+            return f"{timestamp}"
     except Exception as e:
         logger.error(f"Error in get_chat_name: {e}")
-        return "New Chat"
+        from .timezone_utils import now_singapore
+
+        timestamp = now_singapore().strftime("%Y-%m-%d %H:%M:%S")
+        return f"{timestamp}"
 
 
 def set_chat_name(chat_id: str, username: str, new_name: str) -> bool:
