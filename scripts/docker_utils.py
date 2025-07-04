@@ -331,19 +331,76 @@ def ensure_test_docker_image():
         sys.exit(1)
 
 
+def ensure_prod_docker_image():
+    try:
+        result = subprocess.run(
+            ["docker", "images", "-q", "nyp-fyp-chatbot-prod"],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            print("✅ Docker image 'nyp-fyp-chatbot-prod' exists.")
+            logger.info("Docker image 'nyp-fyp-chatbot-prod' exists.")
+            return
+        else:
+            print("🔨 Docker image 'nyp-fyp-chatbot-prod' not found. Building...")
+            logger.info("Docker image 'nyp-fyp-chatbot-prod' not found. Building.")
+            docker_build_prod()
+    except Exception as e:
+        print(f"❌ Error checking/building Docker prod image: {e}")
+        logger.error(f"Error checking/building Docker prod image: {e}", exc_info=True)
+        sys.exit(1)
+
+
 def get_docker_volume_path(local_path: str) -> str:
     if sys.platform == "win32":
         return local_path.replace("\\", "/")
     return local_path
 
 
-def docker_run():
+def docker_run(mode="dev"):
     check_env_file(ENV_FILE_PATH)
-    ensure_docker_image()
-    print("🐳 Running the development Docker container...")
-    logger.info("Running the development Docker container.")
-    chatbot_dir = os.path.expanduser("~/.nypai-chatbot")
-    docker_volume_path = get_docker_volume_path(chatbot_dir)
+
+    # Map mode to Docker image
+    image_map = {
+        "test": "nyp-fyp-chatbot-test",
+        "prod": "nyp-fyp-chatbot-prod",
+        "dev": "nyp-fyp-chatbot-dev",
+    }
+    image = image_map.get(mode, "nyp-fyp-chatbot-dev")
+
+    # Ensure the appropriate image exists
+    if mode == "test":
+        ensure_test_docker_image()
+    elif mode == "prod":
+        ensure_prod_docker_image()
+    else:
+        ensure_docker_image()
+
+    # Import here to avoid circular imports
+    from infra_utils import get_docker_venv_path
+
+    venv_path = get_docker_venv_path(mode)
+    print(f"🐳 [DEBUG] Dockerfile installs venv at: {venv_path}")
+    print(
+        f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
+    )
+    print(f"🐳 Starting {mode} Docker container...")
+    logger.info(f"Starting {mode} Docker container.")
+
+    # Configure port mapping based on Docker mode
+    if mode == "dev":
+        # Dev mode: map host 7680 to container 7680
+        port_mapping = "7680:7680"
+    elif mode == "test":
+        # Test mode: map host 7861 to container 7861
+        port_mapping = "7861:7861"
+    else:  # prod mode
+        # Prod mode: map host 7860 to container 7860
+        port_mapping = "7860:7860"
+
+    # For dev/test modes, we don't mount the volume to avoid overriding the venv
+    # Only mount specific directories that need persistence
     cmd = [
         "docker",
         "run",
@@ -351,24 +408,24 @@ def docker_run():
         "-it",
         "--env-file",
         ENV_FILE_PATH,
-        "-v",
-        f"{docker_volume_path}:/home/appuser/.nypai-chatbot",
         "-p",
-        "7860:7860",
-        "nyp-fyp-chatbot-dev",
+        port_mapping,
+        image,
     ]
+
     try:
         subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
-        logger.info("Development Docker container exited.")
+        logger.info(f"{mode.capitalize()} Docker container exited.")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Development Docker container exited with an error: {e}")
+        print(f"❌ {mode.capitalize()} Docker container exited with an error: {e}")
         logger.error(
-            f"Development Docker container exited with an error: {e}", exc_info=True
+            f"{mode.capitalize()} Docker container exited with an error: {e}",
+            exc_info=True,
         )
         sys.exit(1)
     except Exception as e:
-        print(f"❌ An unexpected error occurred during Docker run: {e}")
-        logger.error(f"Unexpected error during Docker run: {e}", exc_info=True)
+        print(f"❌ An unexpected error occurred during {mode} Docker run: {e}")
+        logger.error(f"Unexpected error during {mode} Docker run: {e}", exc_info=True)
         sys.exit(1)
 
 

@@ -164,7 +164,7 @@ Examples:
         docker_build_all()
         return
     elif args.docker_run:
-        docker_run()
+        docker_run(mode=args.docker_mode)
         return
     elif args.docker_test:
         ensure_test_docker_image()

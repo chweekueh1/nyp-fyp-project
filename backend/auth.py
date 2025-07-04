@@ -6,14 +6,14 @@ Contains user authentication, registration, and password management functions.
 
 import os
 import json
-import hashlib
 import re
 import logging
 from typing import Dict, Any
-from hashing import verify_password
+from hashing import verify_password, hash_password
 from .config import USER_DB_PATH, TEST_USER_DB_PATH, ALLOWED_EMAILS
 from .rate_limiting import check_rate_limit
 from .utils import sanitize_input
+from .timezone_utils import get_utc_timestamp
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -49,8 +49,8 @@ def _save_users(users: Dict[str, Any], db_path: str) -> bool:
 
 
 def _hash_password(password: str) -> str:
-    """Hash a password using SHA-256."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    """Hash a password using bcrypt (delegated to hashing.py)."""
+    return hash_password(password)
 
 
 def _validate_email(email: str) -> bool:
@@ -101,6 +101,7 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
         if not await check_rate_limit(username_or_email, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -111,6 +112,7 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
         if not username_or_email or not password:
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Username/email and password are required.",
             }
 
@@ -128,15 +130,24 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
                 break
 
         if not user:
-            return {"status": "error", "message": "Invalid username/email or password."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Invalid username/email or password.",
+            }
 
         # Verify password
         if not verify_password(password, user.get("password", "")):
-            return {"status": "error", "message": "Invalid username/email or password."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Invalid username/email or password.",
+            }
 
         logger.info(f"User {user['username']} logged in successfully")
         return {
             "status": "success",
+            "code": "200",
             "message": "Login successful.",
             "username": user["username"],
             "email": user.get("email", ""),
@@ -144,7 +155,11 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
 
     except Exception as e:
         logger.error(f"Login error: {e}")
-        return {"status": "error", "message": "An error occurred during login."}
+        return {
+            "status": "error",
+            "code": "500",
+            "message": "An error occurred during login.",
+        }
 
 
 async def do_register(username: str, password: str, email: str = "") -> Dict[str, str]:
@@ -154,6 +169,7 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
         if not await check_rate_limit(username, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -164,23 +180,30 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
 
         # Validate inputs
         if not username or not password:
-            return {"status": "error", "message": "Username and password are required."}
+            return {
+                "status": "error",
+                "code": "400",
+                "message": "Username and password are required.",
+            }
 
         if not _validate_username(username):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Username must be 3-20 characters, alphanumeric and underscores only.",
             }
 
         if not _validate_password(password):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Password must be at least 8 characters with letters and numbers.",
             }
 
         if email and not _validate_email(email):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Invalid email format or domain not allowed.",
             }
 
@@ -197,7 +220,11 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
                 }
 
             if email and user_data.get("email") == email:
-                return {"status": "error", "message": "Email already registered."}
+                return {
+                    "status": "error",
+                    "code": "409",
+                    "message": "Email already registered.",
+                }
 
         # Create new user
         user_id = str(len(users) + 1)
@@ -207,11 +234,7 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
             "username": username,
             "password": hashed_password,
             "email": email,
-            "created_at": str(
-                int(os.path.getctime(USER_DB_PATH))
-                if os.path.exists(USER_DB_PATH)
-                else 0
-            ),
+            "created_at": get_utc_timestamp(),
         }
 
         users[user_id] = new_user
@@ -221,16 +244,25 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
             logger.info(f"User {username} registered successfully")
             return {
                 "status": "success",
+                "code": "200",
                 "message": "Registration successful.",
                 "username": username,
                 "email": email,
             }
         else:
-            return {"status": "error", "message": "Failed to save user data."}
+            return {
+                "status": "error",
+                "code": "500",
+                "message": "Failed to save user data.",
+            }
 
     except Exception as e:
         logger.error(f"Registration error: {e}")
-        return {"status": "error", "message": "An error occurred during registration."}
+        return {
+            "status": "error",
+            "code": "500",
+            "message": "An error occurred during registration.",
+        }
 
 
 async def change_password(
@@ -242,6 +274,7 @@ async def change_password(
         if not await check_rate_limit(username, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -251,11 +284,16 @@ async def change_password(
         new_password = sanitize_input(new_password)
 
         if not username or not old_password or not new_password:
-            return {"status": "error", "message": "All fields are required."}
+            return {
+                "status": "error",
+                "code": "400",
+                "message": "All fields are required.",
+            }
 
         if not _validate_password(new_password):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "New password must be at least 8 characters with letters and numbers.",
             }
 
@@ -270,11 +308,15 @@ async def change_password(
                 break
 
         if not user_id:
-            return {"status": "error", "message": "User not found."}
+            return {"status": "error", "code": "404", "message": "User not found."}
 
         # Verify old password
         if not verify_password(old_password, users[user_id].get("password", "")):
-            return {"status": "error", "message": "Current password is incorrect."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Current password is incorrect.",
+            }
 
         # Update password
         users[user_id]["password"] = _hash_password(new_password)
@@ -282,14 +324,23 @@ async def change_password(
         # Save users
         if _save_users(users, USER_DB_PATH):
             logger.info(f"Password changed successfully for user {username}")
-            return {"status": "success", "message": "Password changed successfully."}
+            return {
+                "status": "success",
+                "code": "200",
+                "message": "Password changed successfully.",
+            }
         else:
-            return {"status": "error", "message": "Failed to save password change."}
+            return {
+                "status": "error",
+                "code": "500",
+                "message": "Failed to save password change.",
+            }
 
     except Exception as e:
         logger.error(f"Password change error: {e}")
         return {
             "status": "error",
+            "code": "500",
             "message": "An error occurred while changing password.",
         }
 
@@ -304,6 +355,7 @@ async def do_register_test(
         if not await check_rate_limit(username, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -314,17 +366,23 @@ async def do_register_test(
 
         # Validate inputs
         if not username or not password:
-            return {"status": "error", "message": "Username and password are required."}
+            return {
+                "status": "error",
+                "code": "400",
+                "message": "Username and password are required.",
+            }
 
         if not _validate_username(username):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Username must be 3-20 characters, alphanumeric and underscores only.",
             }
 
         if not _validate_password(password):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Password must be at least 8 characters with letters and numbers.",
             }
 
@@ -341,7 +399,11 @@ async def do_register_test(
                 }
 
             if email and user_data.get("email") == email:
-                return {"status": "error", "message": "Email already registered."}
+                return {
+                    "status": "error",
+                    "code": "409",
+                    "message": "Email already registered.",
+                }
 
         # Create new test user
         user_id = str(len(users) + 1)
@@ -351,11 +413,7 @@ async def do_register_test(
             "username": username,
             "password": hashed_password,
             "email": email,
-            "created_at": str(
-                int(os.path.getctime(TEST_USER_DB_PATH))
-                if os.path.exists(TEST_USER_DB_PATH)
-                else 0
-            ),
+            "created_at": get_utc_timestamp(),
             "is_test_user": True,
         }
 
@@ -366,17 +424,23 @@ async def do_register_test(
             logger.info(f"Test user {username} registered successfully")
             return {
                 "status": "success",
+                "code": "200",
                 "message": "Test registration successful.",
                 "username": username,
                 "email": email,
             }
         else:
-            return {"status": "error", "message": "Failed to save test user data."}
+            return {
+                "status": "error",
+                "code": "500",
+                "message": "Failed to save test user data.",
+            }
 
     except Exception as e:
         logger.error(f"Test registration error: {e}")
         return {
             "status": "error",
+            "code": "500",
             "message": "An error occurred during test registration.",
         }
 
@@ -388,6 +452,7 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
         if not await check_rate_limit(username_or_email, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -398,6 +463,7 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
         if not username_or_email or not password:
             return {
                 "status": "error",
+                "code": "400",
                 "message": "Username/email and password are required.",
             }
 
@@ -415,15 +481,24 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
                 break
 
         if not user or not user.get("is_test_user", False):
-            return {"status": "error", "message": "Invalid username/email or password."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Invalid username/email or password.",
+            }
 
         # Verify password
         if not verify_password(password, user.get("password", "")):
-            return {"status": "error", "message": "Invalid username/email or password."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Invalid username/email or password.",
+            }
 
         logger.info(f"Test user {user['username']} logged in successfully")
         return {
             "status": "success",
+            "code": "200",
             "message": "Test login successful.",
             "username": user["username"],
             "email": user.get("email", ""),
@@ -431,7 +506,11 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
 
     except Exception as e:
         logger.error(f"Test login error: {e}")
-        return {"status": "error", "message": "An error occurred during test login."}
+        return {
+            "status": "error",
+            "code": "500",
+            "message": "An error occurred during test login.",
+        }
 
 
 async def change_password_test(
@@ -443,6 +522,7 @@ async def change_password_test(
         if not await check_rate_limit(username, "auth"):
             return {
                 "status": "error",
+                "code": "429",
                 "message": "Rate limit exceeded. Please try again later.",
             }
 
@@ -452,11 +532,16 @@ async def change_password_test(
         new_password = sanitize_input(new_password)
 
         if not username or not old_password or not new_password:
-            return {"status": "error", "message": "All fields are required."}
+            return {
+                "status": "error",
+                "code": "400",
+                "message": "All fields are required.",
+            }
 
         if not _validate_password(new_password):
             return {
                 "status": "error",
+                "code": "400",
                 "message": "New password must be at least 8 characters with letters and numbers.",
             }
 
@@ -473,11 +558,15 @@ async def change_password_test(
                 break
 
         if not user_id:
-            return {"status": "error", "message": "Test user not found."}
+            return {"status": "error", "code": "404", "message": "Test user not found."}
 
         # Verify old password
         if not verify_password(old_password, users[user_id].get("password", "")):
-            return {"status": "error", "message": "Current password is incorrect."}
+            return {
+                "status": "error",
+                "code": "401",
+                "message": "Current password is incorrect.",
+            }
 
         # Update password
         users[user_id]["password"] = _hash_password(new_password)
@@ -487,11 +576,13 @@ async def change_password_test(
             logger.info(f"Password changed successfully for test user {username}")
             return {
                 "status": "success",
+                "code": "200",
                 "message": "Test password changed successfully.",
             }
         else:
             return {
                 "status": "error",
+                "code": "500",
                 "message": "Failed to save test password change.",
             }
 
@@ -499,6 +590,7 @@ async def change_password_test(
         logger.error(f"Test password change error: {e}")
         return {
             "status": "error",
+            "code": "500",
             "message": "An error occurred while changing test password.",
         }
 

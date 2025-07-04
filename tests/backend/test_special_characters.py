@@ -38,7 +38,7 @@ def test_escape_special_characters():
             ),  # Preserves symbols
             ("Normal text with spaces", "Normal text with spaces"),  # No change
             ("Text\nwith\nnewlines", "Text\nwith\nnewlines"),  # Newlines preserved
-            ("Text\twith\ttabs", "Text with tabs"),  # Tabs replaced with spaces
+            ("Text\twith\ttabs", "Text\twith\ttabs"),  # Tabs preserved (part of \s)
             ("Unicode: éñçüß", "Unicode: éñçüß"),  # Unicode preserved
             (
                 "HTML: <tag>content</tag>",

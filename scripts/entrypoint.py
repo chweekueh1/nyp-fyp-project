@@ -27,7 +27,8 @@ if os.name != "nt" and is_root():
         sys.exit(1)
 
 # Set venv_bin to the correct venv for this container
-venv_path = os.environ.get("VENV_PATH", get_docker_venv_path())
+docker_mode = os.environ.get("DOCKER_MODE", "prod")
+venv_path = os.environ.get("VENV_PATH", get_docker_venv_path(docker_mode))
 if os.name == "nt":
     venv_bin = os.path.expanduser(os.path.join(venv_path, "Scripts"))
     os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")

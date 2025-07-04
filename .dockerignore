@@ -45,6 +45,7 @@ README.md
 docs/
 
 # Docker files (except the main Dockerfile)
+Dockerfile
 Dockerfile.dev
 Dockerfile.test
 docker-compose*.yml
@@ -68,4 +69,8 @@ htmlcov/
 # Note: setup.py is included for all builds
 # Test files are excluded by default but can be explicitly copied in test builds
 
-/home/appuser/.nypai-chatbot/venv
+__pycache__/
+.ruff_cache/
+.pre-commit-config.yaml
+.markdownlint.yaml
+.env.dev

@@ -26,7 +26,12 @@ from .config import (
     EMBEDDING_MODEL,
 )
 
-from .rate_limiting import check_rate_limit, get_rate_limit_info, RateLimiter
+from .rate_limiting import (
+    check_rate_limit,
+    get_rate_limit_info,
+    RateLimiter,
+    chat_rate_limiter,
+)
 
 from .auth import (
     do_login,
@@ -39,6 +44,9 @@ from .auth import (
     cleanup_all_test_users,
     delete_test_user,
 )
+
+# Import password functions from hashing module
+from hashing import hash_password, verify_password
 
 from .chat import (
     ask_question,
@@ -55,6 +63,8 @@ from .chat import (
     get_chat_name,
     set_chat_name,
     rename_chat,
+    rename_chat_file,
+    list_user_chat_ids,
     fuzzy_search_chats,
     render_all_chats,
 )
@@ -125,6 +135,8 @@ __all__ = [
     "get_chat_name",
     "set_chat_name",
     "rename_chat",
+    "rename_chat_file",
+    "list_user_chat_ids",
     "fuzzy_search_chats",
     "render_all_chats",
     # File handling
@@ -158,6 +170,10 @@ __all__ = [
     "check_rate_limit",
     "get_rate_limit_info",
     "RateLimiter",
+    "chat_rate_limiter",
+    # Password functions
+    "hash_password",
+    "verify_password",
     # Database functions
     "get_chroma_db",
     "get_llm_functions",

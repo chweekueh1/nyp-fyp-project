@@ -122,16 +122,18 @@ def run_all_tests() -> None:
         print(f"Login result: {login_result}")
 
         # Check if registration was successful first
-        if register_result.get("code") == "409":
+        if register_result.get(
+            "status"
+        ) == "error" and "already exists" in register_result.get("message", ""):
             # User already exists, login should succeed
             login_result = asyncio.run(do_login(test_username, complex_password))
-            assert login_result.get("code") == "200", (
+            assert login_result.get("status") == "success", (
                 f"Login should succeed for existing user. Got: {login_result}"
             )
         else:
             # Registration succeeded, login should also succeed
             login_result = asyncio.run(do_login(test_username, complex_password))
-            assert login_result.get("code") == "200", (
+            assert login_result.get("status") == "success", (
                 f"Login should succeed after registration. Got: {login_result}"
             )
 
@@ -377,12 +379,12 @@ async def test_transcribe_audio():
     print(f"Transcribe Audio Response: {response}")
 
     # Accept success or API-related errors (OpenAI might not be available in test environment)
-    acceptable_codes = ["200", "500"]
-    assert response.get("code") in acceptable_codes, (
-        f"Expected code in {acceptable_codes}, got {response.get('code')}: {response.get('error', 'Unknown')}"
+    acceptable_statuses = ["success", "error"]
+    assert response.get("status") in acceptable_statuses, (
+        f"Expected status in {acceptable_statuses}, got {response.get('status')}: {response.get('error', 'Unknown')}"
     )
 
-    if response.get("code") == "500":
+    if response.get("status") == "error":
         print(
             "  ⚠️ Audio transcription failed - this may be expected if OpenAI API is not available"
         )
@@ -402,12 +404,12 @@ async def test_upload_file():
     print(f"Upload File Response: {response}")
 
     # File upload should generally work unless there are permission issues
-    acceptable_codes = ["200", "500"]
-    assert response.get("code") in acceptable_codes, (
-        f"Expected code in {acceptable_codes}, got {response.get('code')}: {response.get('error', 'Unknown')}"
+    acceptable_statuses = ["success", "error"]
+    assert response.get("status") in acceptable_statuses, (
+        f"Expected status in {acceptable_statuses}, got {response.get('status')}: {response.get('error', 'Unknown')}"
     )
 
-    if response.get("code") == "500":
+    if response.get("status") == "error":
         print("  ⚠️ File upload failed - this may be due to file system permissions")
     else:
         print("  ✅ File upload succeeded")

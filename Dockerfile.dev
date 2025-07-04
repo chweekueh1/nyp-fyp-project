@@ -5,10 +5,11 @@ FROM python:3.11-alpine
 
 # Set environment variables for development
 ENV PYTHONUNBUFFERED=1
-ENV GRADIO_SERVER_NAME="0.0.0.0"
-ENV GRADIO_SERVER_PORT="7860"
+ENV GRADIO_SERVER_NAME="127.0.0.1"
+ENV GRADIO_SERVER_PORT="7680"
 ENV IN_DOCKER="1"
 ENV DEVELOPMENT="true"
+ENV DOCKER_MODE="dev"
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV TZ=Asia/Singapore
@@ -89,6 +90,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     export PATH="$HOME/.local/bin:$PATH" && \
     ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
     ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements.txt && \
     uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
@@ -111,9 +113,7 @@ COPY setup.py ./
 # Set PYTHONPATH so all modules are importable
 ENV PYTHONPATH=/app
 
-# Install all dependencies (ensure this is after requirements.txt is copied)
-RUN ${VENV_PATH}/bin/pip install --upgrade pip && \
-    ${VENV_PATH}/bin/pip install -r requirements.txt
+# Dependencies already installed via uv above
 
 # Expose the port Gradio will listen on
 EXPOSE 7860

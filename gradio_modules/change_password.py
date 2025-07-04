@@ -327,7 +327,7 @@ def change_password_interface(
 
         try:
             result = await change_password(username, old_password, new_password)
-            if result.get("code") == "200":
+            if result.get("status") == "success":
                 return (
                     gr.update(
                         visible=True,

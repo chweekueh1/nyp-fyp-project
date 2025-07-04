@@ -6,6 +6,7 @@ This script runs all tests in the project: backend, frontend, integration, and L
 """
 
 import sys
+import os
 import argparse
 import traceback
 from pathlib import Path
@@ -15,14 +16,25 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+# Check if running in Docker test environment
+if not os.environ.get("DOCKER_TEST_ENV"):
+    print("⚠️  WARNING: Tests should be run in Docker test environment!")
+    print(
+        "   Use: docker build -f Dockerfile.test -t nyp-fyp-test . && docker run --rm nyp-fyp-test"
+    )
+    print("   Continuing with local execution...\n")
+
 
 def run_backend_tests():
     """Run backend tests."""
     print("🔧 Running Backend Tests...")
     try:
-        from tests.backend.test_backend import run_backend_tests
+        import asyncio
+        from tests.backend.test_backend import (
+            run_backend_tests as async_run_backend_tests,
+        )
 
-        success = run_backend_tests()
+        success = asyncio.run(async_run_backend_tests())
         return success
     except ImportError as e:
         error_msg = f"Import error - {e}"

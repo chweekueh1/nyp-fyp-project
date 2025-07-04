@@ -22,6 +22,14 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+# Check if running in Docker test environment
+if not os.environ.get("DOCKER_TEST_ENV"):
+    print("⚠️  WARNING: Tests should be run in Docker test environment!")
+    print(
+        "   Use: docker build -f Dockerfile.test -t nyp-fyp-test . && docker run --rm nyp-fyp-test"
+    )
+    print("   Continuing with local execution...\n")
+
 
 class TestSuite:
     """
@@ -108,6 +116,7 @@ class TestSuite:
         unit_tests = [
             self.tests_dir / "frontend" / "test_ui_fixes.py",
             self.tests_dir / "backend" / "test_backend_fixes_and_rename.py",
+            self.tests_dir / "backend" / "test_auth_debug_integration.py",
             # Skip problematic backend test for now
             # self.tests_dir / "backend" / "test_backend.py",
             # Skip LLM test that requires full initialization

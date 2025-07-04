@@ -84,7 +84,7 @@ def test_simple_change_password():
             result = await backend_change_password(username, old_password, new_password)
             print(f"Backend change password result: {result}")
 
-            if result.get("code") == "200":
+            if result.get("status") == "success":
                 return "✅ Password changed successfully. You will be logged out."
             else:
                 return f"❌ Password change failed: {result.get('message', 'Unknown error')}"
@@ -224,7 +224,7 @@ def test_change_password_validation():
 
         try:
             result = await backend_change_password(username, old_password, new_password)
-            if result.get("code") == "200":
+            if result.get("status") == "success":
                 return f"✅ Scenario {scenario}: Password changed successfully."
             else:
                 return (
@@ -370,13 +370,13 @@ def run_change_password_tests():
                 result = await change_password_test(
                     "test_user", "TestPass123!", "NewPass456!"
                 )
-                if result.get("code") == "200":
+                if result.get("status") == "success":
                     print("✅ Backend change password functionality works")
                     # Change it back for future tests
                     reset_result = await change_password_test(
                         "test_user", "NewPass456!", "TestPass123!"
                     )
-                    if reset_result.get("code") == "200":
+                    if reset_result.get("status") == "success":
                         print("✅ Password reset to original for future tests")
                         return True
                     else:

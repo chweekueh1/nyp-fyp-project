@@ -61,7 +61,7 @@ def test_simple_login():
             result = await do_login(username, password)
             print(f"Backend login result: {result}")
 
-            if result.get("code") == "200":
+            if result.get("status") == "success":
                 return f"✅ Login successful! Welcome, {username}!"
             else:
                 return f"❌ Login failed: {result.get('message', 'Unknown error')}"
@@ -80,7 +80,7 @@ def test_simple_login():
             result = await do_register(username, password)
             print(f"Backend register result: {result}")
 
-            if result.get("code") == "200":
+            if result.get("status") == "success":
                 return "✅ Registration successful! Please log in."
             else:
                 return (

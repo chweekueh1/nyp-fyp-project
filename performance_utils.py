@@ -262,20 +262,38 @@ def optimize_gradio_performance():
 
 def get_optimized_launch_config():
     """
-    Get optimized launch configuration.
+    Get optimized launch configuration with Docker mode-specific ports.
 
     :return: Dictionary of launch configuration settings.
     :rtype: dict
     """
+    import os
+
+    # Determine Docker mode and set appropriate server configuration
+    docker_mode = os.environ.get("DOCKER_MODE", "prod")
+
+    # Configure server name and port based on Docker mode
+    if docker_mode == "dev":
+        # Dev mode should use 127.0.0.1:7680 for local development
+        server_name = "127.0.0.1"
+        server_port = 7680
+    elif docker_mode == "test":
+        # Test mode uses standard Docker configuration
+        server_name = "0.0.0.0"
+        server_port = 7861  # Different port to avoid conflicts
+    else:  # prod mode
+        # Production mode uses standard Docker configuration
+        server_name = "0.0.0.0"
+        server_port = 7860
+
     return {
         "debug": False,  # Disable debug mode for production
         "share": False,  # Essential: Ensures it's not a public Gradio share link
         "inbrowser": False,  # Don't auto-open browser
         "quiet": True,
         "show_error": True,
-        # --- ADD THESE TWO LINES FOR DOCKER EXPOSURE ---
-        "server_name": "0.0.0.0",  # Tells Gradio to listen on all available network interfaces
-        "server_port": 7860,  # Tells Gradio to listen on port 7860 inside the container
+        "server_name": server_name,  # Mode-specific server name
+        "server_port": server_port,  # Mode-specific port
     }
 
 

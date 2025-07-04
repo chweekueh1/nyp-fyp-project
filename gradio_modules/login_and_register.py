@@ -151,6 +151,7 @@ def login_interface(setup_events: bool = True) -> tuple:
             :type password: str
             :return: Tuple of (login_success, username, error_message)
             :rtype: tuple
+            :raises RuntimeError: When event loop is closed or other async operation fails
             """
             logger.info(f"Login attempt for user: {username}")
 
@@ -177,26 +178,77 @@ def login_interface(setup_events: bool = True) -> tuple:
                 else:
                     from backend import do_login as do_login_backend
 
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Use a more robust async approach
+                try:
+                    # Try to get existing event loop
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Event loop is closed")
+                except RuntimeError:
+                    # Create new event loop if none exists or is closed
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                # Execute the backend call
                 result = loop.run_until_complete(
                     do_login_backend(username.strip(), password)
                 )
-                loop.close()
 
-                if result.get("code") == "200":
-                    actual_username = result.get("username", username.strip())
-                    logger.info(f"Login successful for user: {actual_username}")
-                    return True, actual_username, gr.update(visible=False)
-                else:
-                    error_msg = result.get("message", "Login failed")
-                    logger.warning(f"Login failed for user {username}: {error_msg}")
+                # Debug logging to understand the exact response
+                logger.info(f"🔍 Backend login response for {username}: {result}")
+                logger.info(f"🔍 Response type: {type(result)}")
+                logger.info(f"🔍 Response repr: {repr(result)}")
+
+                # Validate result is a dictionary
+                if not isinstance(result, dict):
+                    logger.error(
+                        f"❌ Backend returned non-dict result: {type(result)} = {result}"
+                    )
                     return (
                         False,
                         "",
                         gr.update(
-                            visible=True, value=f"❌ **Login failed:** {error_msg}"
+                            visible=True,
+                            value="❌ **System error:** Invalid backend response format",
                         ),
+                    )
+
+                status_value = result.get("status")
+                message_value = result.get("message", "")
+                logger.info(
+                    f"🔍 CRITICAL DEBUG: status_value = '{status_value}' (type: {type(status_value)})"
+                )
+                logger.info(
+                    f"🔍 CRITICAL DEBUG: message_value = '{message_value}' (type: {type(message_value)})"
+                )
+                logger.info(
+                    f"🔍 CRITICAL DEBUG: status_value == 'success' = {status_value == 'success'}"
+                )
+
+                # Check for success with explicit string comparison
+                if status_value == "success":
+                    actual_username = result.get("username", username.strip())
+                    logger.info(
+                        f"✅ SUCCESS PATH: Login successful for user: {actual_username}"
+                    )
+                    logger.info(
+                        f"✅ SUCCESS PATH: Returning (True, '{actual_username}', gr.update(visible=False))"
+                    )
+                    return True, actual_username, gr.update(visible=False)
+                else:
+                    # Use the backend message directly without adding "Login failed:" prefix
+                    error_msg = (
+                        message_value if message_value else "Authentication failed"
+                    )
+                    logger.warning(f"❌ ERROR PATH: Login failed for user {username}")
+                    logger.warning(
+                        f"❌ ERROR PATH: Status: '{status_value}', Message: '{error_msg}'"
+                    )
+                    logger.warning(f"❌ ERROR PATH: Full result object: {result}")
+                    return (
+                        False,
+                        "",
+                        gr.update(visible=True, value=f"❌ **Error:** {error_msg}"),
                     )
             except Exception as e:
                 logger.error(f"Login error for user {username}: {e}")
@@ -221,6 +273,7 @@ def login_interface(setup_events: bool = True) -> tuple:
             :type confirm: str
             :return: Tuple of (registration_success, username, error_message)
             :rtype: tuple
+            :raises RuntimeError: When event loop is closed or other async operation fails
             """
             logger.info(f"Registration attempt for user: {username}")
 
@@ -269,15 +322,50 @@ def login_interface(setup_events: bool = True) -> tuple:
                 else:
                     from backend import do_register as do_register_backend
 
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Use a more robust async approach
+                try:
+                    # Try to get existing event loop
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Event loop is closed")
+                except RuntimeError:
+                    # Create new event loop if none exists or is closed
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                # Execute the backend call
                 result = loop.run_until_complete(
                     do_register_backend(username.strip(), password, email.strip())
                 )
-                loop.close()
 
-                if result.get("code") == "200":
-                    logger.info(f"Registration successful for user: {username}")
+                # Debug logging
+                logger.info(
+                    f"🔍 Backend registration response for {username}: {result}"
+                )
+                logger.info(f"🔍 Response type: {type(result)}")
+
+                # Validate result is a dictionary
+                if not isinstance(result, dict):
+                    logger.error(
+                        f"❌ Backend returned non-dict result: {type(result)} = {result}"
+                    )
+                    return (
+                        False,
+                        "",
+                        gr.update(
+                            visible=True,
+                            value="❌ **System error:** Invalid backend response format",
+                        ),
+                    )
+
+                status_value = result.get("status")
+                message_value = result.get("message", "")
+                logger.info(
+                    f"🔍 Registration status: '{status_value}', message: '{message_value}'"
+                )
+
+                if status_value == "success":
+                    logger.info(f"✅ Registration successful for user: {username}")
                     # Switch back to login mode and show success message
                     return (
                         False,
@@ -288,16 +376,19 @@ def login_interface(setup_events: bool = True) -> tuple:
                         ),
                     )
                 else:
-                    error_msg = result.get("message", "Registration failed")
+                    # Use the backend message directly without adding "Registration failed:" prefix
+                    error_msg = (
+                        message_value if message_value else "Registration failed"
+                    )
                     logger.warning(
-                        f"Registration failed for user {username}: {error_msg}"
+                        f"❌ Registration failed for user {username}: {error_msg}"
                     )
                     return (
                         False,
                         "",
                         gr.update(
                             visible=True,
-                            value=f"❌ **Registration failed:** {error_msg}",
+                            value=f"❌ **Error:** {error_msg}",
                         ),
                     )
             except Exception as e:

@@ -4,7 +4,6 @@ Test that all syntax and formatting errors have been fixed in the test suite and
 """
 
 import sys
-import subprocess
 import ast
 from pathlib import Path
 
@@ -14,7 +13,7 @@ sys.path.insert(0, str(project_root))
 
 
 def test_python_syntax_compilation():
-    """Test that all Python files compile without syntax errors."""
+    """Test that all Python files compile without syntax errors using AST parsing."""
     print("🔍 Testing Python Syntax Compilation...")
 
     try:
@@ -48,24 +47,24 @@ def test_python_syntax_compilation():
             full_path = project_root / file_path
             if full_path.exists():
                 try:
-                    # Test compilation
-                    result = subprocess.run(
-                        [sys.executable, "-m", "py_compile", str(full_path)],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
+                    # Use AST parsing instead of py_compile to avoid permission issues
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        source_code = f.read()
 
-                    if result.returncode == 0:
-                        print(f"  ✅ {file_path}")
-                        compilation_results.append((file_path, True, None))
-                    else:
-                        print(f"  ❌ {file_path}: {result.stderr}")
-                        compilation_results.append((file_path, False, result.stderr))
+                    # Parse the AST to check for syntax errors
+                    ast.parse(source_code, filename=str(full_path))
 
-                except subprocess.TimeoutExpired:
-                    print(f"  ⏰ {file_path}: Compilation timeout")
-                    compilation_results.append((file_path, False, "Timeout"))
+                    print(f"  ✅ {file_path}")
+                    compilation_results.append((file_path, True, None))
+
+                except SyntaxError as e:
+                    error_msg = f"Syntax error at line {e.lineno}: {e.msg}"
+                    print(f"  ❌ {file_path}: {error_msg}")
+                    compilation_results.append((file_path, False, error_msg))
+                except Exception as e:
+                    error_msg = f"Parse error: {str(e)}"
+                    print(f"  ❌ {file_path}: {error_msg}")
+                    compilation_results.append((file_path, False, error_msg))
 
             else:
                 print(f"  ⚠️ {file_path}: File not found")

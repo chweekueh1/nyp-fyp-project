@@ -11,10 +11,20 @@ from infra_utils import get_chatbot_dir
 # Load environment variables
 load_dotenv()
 
-# OpenAI client
-from openai import OpenAI
+# OpenAI client - conditional initialization
+client = None
+try:
+    from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        client = OpenAI(api_key=api_key)
+    else:
+        # Set to None if no API key - will be handled by functions that need it
+        client = None
+except ImportError:
+    # OpenAI package not available
+    client = None
 
 # Rate limiting configuration
 DEFAULT_RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
