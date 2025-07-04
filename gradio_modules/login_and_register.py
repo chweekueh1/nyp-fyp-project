@@ -228,9 +228,11 @@ def login_interface(setup_events: bool = True) -> tuple:
                 # Check for success with explicit string comparison
                 if status_value == "success":
                     actual_username = result.get("username", username.strip())
+                    user_email = result.get("email", "")
                     logger.info(
                         f"✅ SUCCESS PATH: Login successful for user: {actual_username}"
                     )
+                    logger.info(f"✅ SUCCESS PATH: Email: {user_email}")
                     logger.info(
                         f"✅ SUCCESS PATH: Returning (True, '{actual_username}', gr.update(visible=False))"
                     )
@@ -365,14 +367,19 @@ def login_interface(setup_events: bool = True) -> tuple:
                 )
 
                 if status_value == "success":
-                    logger.info(f"✅ Registration successful for user: {username}")
+                    registered_username = result.get("username", username.strip())
+                    registered_email = result.get("email", "")
+                    logger.info(
+                        f"✅ Registration successful for user: {registered_username}"
+                    )
+                    logger.info(f"✅ Registration email: {registered_email}")
                     # Switch back to login mode and show success message
                     return (
                         False,
                         "",
                         gr.update(
                             visible=True,
-                            value="✅ **Registration successful!** Please log in with your new account.",
+                            value=f"✅ **Registration successful!** Account created for **{registered_username}**. Please log in with your new account.",
                         ),
                     )
                 else:

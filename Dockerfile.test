@@ -66,9 +66,16 @@ RUN apk add --no-cache \
 RUN mkdir -p data && \
     addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
-    mkdir -p /home/appuser/.nypai-chatbot/data && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/cache && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/vector_store/chroma_db && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/memory_persistence && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/nltk_data && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/chat_sessions && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/user_info && \
     mkdir -p /home/appuser/.nypai-chatbot/uploads && \
     mkdir -p /home/appuser/.nypai-chatbot/test_uploads && \
+    mkdir -p /home/appuser/.nypai-chatbot/logs && \
+    mkdir -p /app/data && \
     chown -R appuser:appgroup /app && \
     chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
     chmod -R 755 /home/appuser/.nypai-chatbot && \
@@ -101,6 +108,7 @@ COPY gradio_modules/ ./gradio_modules/
 COPY llm/ ./llm/
 COPY styles/ ./styles/
 COPY scripts/ ./scripts/
+COPY infra_utils/ ./infra_utils/
 
 # Copy setup script for test execution
 COPY setup.py ./

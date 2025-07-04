@@ -28,53 +28,81 @@ def docker_test(test_target: Optional[str] = None, mode: str = "test") -> None:
     print(
         f"🐳 [DEBUG] Docker container will load environment variables from: {ENV_FILE_PATH} (via --env-file)"
     )
-    print("🔍 Running environment check (scripts/check_env.py) before tests...")
-    python_exe = "python"
-    env_check_result = subprocess.run([python_exe, "scripts/check_env.py"])
-    if env_check_result.returncode != 0:
-        print("❌ Environment check failed. Aborting tests.")
-        sys.exit(1)
-    else:
-        print("✅ Environment check passed.")
+
     if test_target:
         print(f"🧪 Running {test_target} in Docker container...")
         logger.info(f"Running {test_target} inside Docker container.")
         if test_target == "all":
-            print(
-                "🚀 Running all tests using scripts/bootstrap_tests.sh for full integration..."
-            )
-            bootstrap_result = subprocess.run(["bash", "scripts/bootstrap_tests.sh"])
-            if bootstrap_result.returncode == 0:
-                print("✅ All tests passed via bootstrap_tests.sh.")
-                sys.exit(0)
-            else:
-                print(
-                    "❌ Some tests failed via bootstrap_tests.sh. See logs/test_results.log for details."
-                )
-                sys.exit(1)
+            print("🚀 Running all tests using comprehensive test suite...")
+            cmd = [
+                "docker",
+                "run",
+                "--rm",
+                "-it",
+                "--env-file",
+                ENV_FILE_PATH,
+                image,
+                "python",
+                "tests/comprehensive_test_suite.py",
+                "--suite",
+                "all",
+            ]
         elif test_target.startswith("tests/") and test_target.endswith(".py"):
-            result = subprocess.run(["python", test_target])
-            sys.exit(result.returncode)
+            cmd = [
+                "docker",
+                "run",
+                "--rm",
+                "-it",
+                "--env-file",
+                ENV_FILE_PATH,
+                image,
+                "python",
+                test_target,
+            ]
         else:
-            result = subprocess.run(
-                [
-                    "python",
-                    "tests/comprehensive_test_suite.py",
-                    "--suite",
-                    test_target,
-                ]
-            )
+            cmd = [
+                "docker",
+                "run",
+                "--rm",
+                "-it",
+                "--env-file",
+                ENV_FILE_PATH,
+                image,
+                "python",
+                "tests/comprehensive_test_suite.py",
+                "--suite",
+                test_target,
+            ]
+        try:
+            result = subprocess.run(cmd)
             sys.exit(result.returncode)
+        except Exception as e:
+            print(f"❌ Failed to run {test_target} in Docker: {e}")
+            logger.error(f"Failed to run {test_target} in Docker: {e}", exc_info=True)
+            sys.exit(1)
     else:
         print("🧪 Running Docker environment verification...")
         logger.info("Running Docker environment verification.")
-        result = subprocess.run(
-            [
-                "python",
-                "scripts/test_docker_environment.py",
-            ]
-        )
-        sys.exit(result.returncode)
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-it",
+            "--env-file",
+            ENV_FILE_PATH,
+            image,
+            "python",
+            "tests/test_docker_environment.py",
+        ]
+        try:
+            result = subprocess.run(cmd)
+            sys.exit(result.returncode)
+        except Exception as e:
+            print(f"❌ Failed to run Docker environment verification: {e}")
+            logger.error(
+                f"Failed to run Docker environment verification: {e}", exc_info=True
+            )
+            sys.exit(1)
 
 
 def docker_test_suite(suite_name: str, mode: str = "test") -> None:

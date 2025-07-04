@@ -10,19 +10,17 @@ import hashlib
 from typing import Optional
 import logging
 
-# Use nltk for stopwords
+# Use centralized NLTK configuration for stopwords
 try:
-    from nltk.corpus import stopwords
-    import nltk
+    from infra_utils.nltk_config import get_stopwords
 
-    try:
-        stop_words = set(stopwords.words("english"))
-    except LookupError:
-        nltk.download("stopwords")
-        stop_words = set(stopwords.words("english"))
+    stop_words = get_stopwords("english")
+    logging.info(f"Loaded {len(stop_words)} stopwords for keyword filtering")
 except ImportError:
     stop_words = set()
-    logging.warning("nltk not installed, stopword filtering will be skipped.")
+    logging.warning(
+        "NLTK configuration not available, stopword filtering will be skipped."
+    )
 
 # Use BASE_CHATBOT_DIR and env var for cache path
 BASE_CHATBOT_DIR = os.getenv("BASE_CHATBOT_DIR", os.getcwd())
@@ -35,22 +33,27 @@ CACHE_PATH = os.path.join(
 # Ensure cache directory exists and create empty cache file if it doesn't exist
 def _ensure_cache_exists():
     """Ensure the cache directory exists and create an empty cache file if it doesn't exist."""
-    cache_dir = os.path.dirname(CACHE_PATH)
-    os.makedirs(cache_dir, exist_ok=True)
+    try:
+        cache_dir = os.path.dirname(CACHE_PATH)
+        os.makedirs(cache_dir, exist_ok=True)
 
-    # Create empty cache file if it doesn't exist
-    if not os.path.exists(CACHE_PATH):
-        try:
-            with shelve.open(CACHE_PATH):
-                # This will create the cache file
-                pass
-            logging.info(f"Created empty keyword cache at {CACHE_PATH}")
-        except Exception as e:
-            logging.error(f"Failed to create keyword cache file: {e}")
+        # Create empty cache file if it doesn't exist
+        if not os.path.exists(CACHE_PATH):
+            try:
+                with shelve.open(CACHE_PATH):
+                    # This will create the cache file
+                    pass
+                logging.info(f"Created empty keyword cache at {CACHE_PATH}")
+            except Exception as e:
+                logging.warning(f"Failed to create keyword cache file: {e}")
+    except PermissionError as e:
+        logging.warning(f"Permission denied creating cache directory: {e}")
+    except Exception as e:
+        logging.warning(f"Failed to ensure cache exists: {e}")
 
 
-# Initialize cache on module import
-_ensure_cache_exists()
+# Cache initialization flag
+_cache_initialized = False
 
 
 def filter_filler_words(text: str) -> str:
@@ -69,18 +72,28 @@ def _keyword_hash(keyword: str) -> str:
 
 def get_cached_response(keyword: str) -> Optional[str]:
     """Get a cached response for a keyword (after filtering filler words)."""
+    global _cache_initialized
+    if not _cache_initialized:
+        _ensure_cache_exists()
+        _cache_initialized = True
+
     cleaned = filter_filler_words(keyword)
     key = _keyword_hash(cleaned)
     try:
         with shelve.open(CACHE_PATH) as db:
             return db.get(key)
     except Exception as e:
-        logging.error(f"Error reading from keyword cache: {e}")
+        logging.warning(f"Error reading from keyword cache: {e}")
         return None
 
 
 def set_cached_response(keyword: str, response: str) -> None:
     """Set a cached response for a keyword (after filtering filler words) only if it's unique."""
+    global _cache_initialized
+    if not _cache_initialized:
+        _ensure_cache_exists()
+        _cache_initialized = True
+
     cleaned = filter_filler_words(keyword)
     key = _keyword_hash(cleaned)
 

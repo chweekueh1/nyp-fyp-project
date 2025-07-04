@@ -121,13 +121,19 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
 
         # Find user by username or email
         user = None
-        for user_data in users.values():
-            if (
-                user_data.get("username") == username_or_email
-                or user_data.get("email") == username_or_email
-            ):
-                user = user_data
-                break
+        username_key = None
+
+        # Check if username_or_email is a direct username key
+        if username_or_email in users:
+            user = users[username_or_email]
+            username_key = username_or_email
+        else:
+            # Search by email in user data
+            for uname, user_data in users.items():
+                if user_data.get("email") == username_or_email:
+                    user = user_data
+                    username_key = uname
+                    break
 
         if not user:
             return {
@@ -144,12 +150,12 @@ async def do_login(username_or_email: str, password: str) -> Dict[str, str]:
                 "message": "Invalid username/email or password.",
             }
 
-        logger.info(f"User {user['username']} logged in successfully")
+        logger.info(f"User {username_key} logged in successfully")
         return {
             "status": "success",
             "code": "200",
             "message": "Login successful.",
-            "username": user["username"],
+            "username": username_key,
             "email": user.get("email", ""),
         }
 
@@ -211,33 +217,33 @@ async def do_register(username: str, password: str, email: str = "") -> Dict[str
         users = _load_users(USER_DB_PATH)
 
         # Check if username already exists
-        for user_data in users.values():
-            if user_data.get("username") == username:
-                return {
-                    "status": "error",
-                    "message": "Username already exists.",
-                    "code": "409",
-                }
+        if username in users:
+            return {
+                "status": "error",
+                "message": "Username already exists.",
+                "code": "409",
+            }
 
-            if email and user_data.get("email") == email:
-                return {
-                    "status": "error",
-                    "code": "409",
-                    "message": "Email already registered.",
-                }
+        # Check if email already exists
+        if email:
+            for user_data in users.values():
+                if user_data.get("email") == email:
+                    return {
+                        "status": "error",
+                        "code": "409",
+                        "message": "Email already registered.",
+                    }
 
-        # Create new user
-        user_id = str(len(users) + 1)
+        # Create new user with username as key
         hashed_password = _hash_password(password)
 
         new_user = {
-            "username": username,
             "password": hashed_password,
             "email": email,
             "created_at": get_utc_timestamp(),
         }
 
-        users[user_id] = new_user
+        users[username] = new_user
 
         # Save users
         if _save_users(users, USER_DB_PATH):
@@ -301,17 +307,11 @@ async def change_password(
         users = _load_users(USER_DB_PATH)
 
         # Find user
-        user_id = None
-        for uid, user_data in users.items():
-            if user_data.get("username") == username:
-                user_id = uid
-                break
-
-        if not user_id:
+        if username not in users:
             return {"status": "error", "code": "404", "message": "User not found."}
 
         # Verify old password
-        if not verify_password(old_password, users[user_id].get("password", "")):
+        if not verify_password(old_password, users[username].get("password", "")):
             return {
                 "status": "error",
                 "code": "401",
@@ -319,7 +319,7 @@ async def change_password(
             }
 
         # Update password
-        users[user_id]["password"] = _hash_password(new_password)
+        users[username]["password"] = _hash_password(new_password)
 
         # Save users
         if _save_users(users, USER_DB_PATH):
@@ -390,34 +390,34 @@ async def do_register_test(
         users = _load_users(TEST_USER_DB_PATH)
 
         # Check if username already exists
-        for user_data in users.values():
-            if user_data.get("username") == username:
-                return {
-                    "status": "error",
-                    "message": "Username already exists.",
-                    "code": "409",
-                }
+        if username in users:
+            return {
+                "status": "error",
+                "message": "Username already exists.",
+                "code": "409",
+            }
 
-            if email and user_data.get("email") == email:
-                return {
-                    "status": "error",
-                    "code": "409",
-                    "message": "Email already registered.",
-                }
+        # Check if email already exists
+        if email:
+            for user_data in users.values():
+                if user_data.get("email") == email:
+                    return {
+                        "status": "error",
+                        "code": "409",
+                        "message": "Email already registered.",
+                    }
 
-        # Create new test user
-        user_id = str(len(users) + 1)
+        # Create new test user with username as key
         hashed_password = _hash_password(password)
 
         new_user = {
-            "username": username,
             "password": hashed_password,
             "email": email,
             "created_at": get_utc_timestamp(),
             "is_test_user": True,
         }
 
-        users[user_id] = new_user
+        users[username] = new_user
 
         # Save test users
         if _save_users(users, TEST_USER_DB_PATH):
@@ -472,15 +472,25 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
 
         # Find test user by username or email
         user = None
-        for user_data in users.values():
-            if (
-                user_data.get("username") == username_or_email
-                or user_data.get("email") == username_or_email
-            ):
-                user = user_data
-                break
+        username_key = None
 
-        if not user or not user.get("is_test_user", False):
+        # Check if username_or_email is a direct username key
+        if username_or_email in users and users[username_or_email].get(
+            "is_test_user", False
+        ):
+            user = users[username_or_email]
+            username_key = username_or_email
+        else:
+            # Search by email in user data
+            for uname, user_data in users.items():
+                if user_data.get("email") == username_or_email and user_data.get(
+                    "is_test_user", False
+                ):
+                    user = user_data
+                    username_key = uname
+                    break
+
+        if not user:
             return {
                 "status": "error",
                 "code": "401",
@@ -495,12 +505,12 @@ async def do_login_test(username_or_email: str, password: str) -> Dict[str, str]
                 "message": "Invalid username/email or password.",
             }
 
-        logger.info(f"Test user {user['username']} logged in successfully")
+        logger.info(f"Test user {username_key} logged in successfully")
         return {
             "status": "success",
             "code": "200",
             "message": "Test login successful.",
-            "username": user["username"],
+            "username": username_key,
             "email": user.get("email", ""),
         }
 
@@ -549,19 +559,11 @@ async def change_password_test(
         users = _load_users(TEST_USER_DB_PATH)
 
         # Find test user
-        user_id = None
-        for uid, user_data in users.items():
-            if user_data.get("username") == username and user_data.get(
-                "is_test_user", False
-            ):
-                user_id = uid
-                break
-
-        if not user_id:
+        if username not in users or not users[username].get("is_test_user", False):
             return {"status": "error", "code": "404", "message": "Test user not found."}
 
         # Verify old password
-        if not verify_password(old_password, users[user_id].get("password", "")):
+        if not verify_password(old_password, users[username].get("password", "")):
             return {
                 "status": "error",
                 "code": "401",
@@ -569,7 +571,7 @@ async def change_password_test(
             }
 
         # Update password
-        users[user_id]["password"] = _hash_password(new_password)
+        users[username]["password"] = _hash_password(new_password)
 
         # Save test users
         if _save_users(users, TEST_USER_DB_PATH):
@@ -601,16 +603,8 @@ def cleanup_test_user(username: str) -> bool:
         users = _load_users(TEST_USER_DB_PATH)
 
         # Find and remove test user
-        user_id = None
-        for uid, user_data in users.items():
-            if user_data.get("username") == username and user_data.get(
-                "is_test_user", False
-            ):
-                user_id = uid
-                break
-
-        if user_id:
-            del users[user_id]
+        if username in users and users[username].get("is_test_user", False):
+            del users[username]
             if _save_users(users, TEST_USER_DB_PATH):
                 logger.info(f"Test user {username} cleaned up successfully")
                 return True
@@ -628,17 +622,17 @@ def cleanup_all_test_users() -> bool:
         users = _load_users(TEST_USER_DB_PATH)
 
         # Remove all test users
-        test_user_ids = [
-            uid
-            for uid, user_data in users.items()
+        test_usernames = [
+            username
+            for username, user_data in users.items()
             if user_data.get("is_test_user", False)
         ]
 
-        for user_id in test_user_ids:
-            del users[user_id]
+        for username in test_usernames:
+            del users[username]
 
         if _save_users(users, TEST_USER_DB_PATH):
-            logger.info(f"Cleaned up {len(test_user_ids)} test users")
+            logger.info(f"Cleaned up {len(test_usernames)} test users")
             return True
 
         return False

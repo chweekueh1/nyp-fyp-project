@@ -2,6 +2,9 @@
 import os
 import sys
 
+# Add the parent directory to the path to find infra_utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # --- VENV PATH CHECK & DEBUG INFO ---
 from infra_utils import get_docker_venv_path
 

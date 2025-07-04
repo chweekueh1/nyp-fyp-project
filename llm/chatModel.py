@@ -55,14 +55,7 @@ LANGCHAIN_CHECKPOINT_PATH = rel2abspath(
     )
 )
 
-# Ensure necessary directories exist for persistent storage *before* use
-create_folders(os.path.dirname(DATABASE_PATH))  # For Chroma DB
-create_folders(
-    os.path.dirname(KEYWORDS_DATABANK_PATH)
-)  # For Shelve DB (it's a file, but its directory must exist)
-create_folders(
-    os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)
-)  # For LangGraph Checkpoint DB
+# Directory creation will be done lazily in initialize_llm_and_db()
 
 # Use capital letters for the API key variable
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -105,6 +98,22 @@ def initialize_llm_and_db() -> None:
             return
 
         try:
+            # Ensure necessary directories exist for persistent storage
+            try:
+                create_folders(os.path.dirname(DATABASE_PATH))  # For Chroma DB
+                create_folders(
+                    os.path.dirname(KEYWORDS_DATABANK_PATH)
+                )  # For Shelve DB (it's a file, but its directory must exist)
+                create_folders(
+                    os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)
+                )  # For LangGraph Checkpoint DB
+                create_folders(CACHE_DIR)  # For cache files
+            except PermissionError as e:
+                logging.warning(f"Permission denied creating directories: {e}")
+            except Exception as e:
+                logging.warning(f"Failed to create directories: {e}")
+
+            # Continue with LLM initialization
             # Initialize core components
             logging.info("🤖 Initializing LLM components...")
             llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
@@ -540,7 +549,7 @@ def _error_state(
 
 # --- LangGraph Workflow Setup ---
 CACHE_DIR = os.path.join(BASE_CHATBOT_DIR, "data", "cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
+# Cache directory creation will be done lazily in initialize_llm_and_db()
 DUCKDB_CACHE_PATH = os.path.join(CACHE_DIR, "duckdb_vectorstore.pkl")
 LANGCHAIN_CACHE_PATH = os.path.join(CACHE_DIR, "langchain_workflow.pkl")
 CACHE_VERSION = "1.0"  # Add version for cache invalidation

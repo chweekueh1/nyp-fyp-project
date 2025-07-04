@@ -487,3 +487,158 @@ def docker_export():
         print(f"❌ An unexpected error occurred during Docker export: {e}")
         logger.error(f"Unexpected error during Docker export: {e}", exc_info=True)
         sys.exit(1)
+
+
+def docker_cleanup(options=None):
+    """Clean up Docker resources with various options."""
+    if options is None:
+        options = ["all"]
+
+    print("🧹 Docker Cleanup Starting...")
+    logger.info("Starting Docker cleanup operation")
+
+    # Show current Docker status
+    try:
+        containers = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--format",
+                "table {{.Names}}\t{{.Status}}\t{{.Size}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        images = subprocess.run(
+            [
+                "docker",
+                "images",
+                "--format",
+                "table {{.Repository}}\t{{.Tag}}\t{{.Size}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        print("\n📊 Current Docker Status:")
+        print("Containers:")
+        print(containers if containers else "No containers found")
+        print("\nImages:")
+        print(images if images else "No images found")
+
+        # Get system info
+        system_df = subprocess.run(
+            ["docker", "system", "df"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        print(f"\nSystem Usage:\n{system_df}")
+
+    except subprocess.CalledProcessError:
+        print("⚠️  Could not get Docker status (Docker may not be running)")
+        logger.warning("Could not get Docker status - Docker may not be running")
+
+    if "all" in options or "containers" in options:
+        print("\n🗑️  Removing all containers...")
+        logger.info("Removing all Docker containers")
+        try:
+            subprocess.run(["docker", "container", "prune", "-f"], check=False)
+            subprocess.run(
+                "docker rm -f $(docker ps -aq) 2>/dev/null || true",
+                shell=True,
+                check=False,
+            )
+        except Exception as e:
+            logger.warning(f"Error removing containers: {e}")
+
+    if "all" in options or "images" in options:
+        print("🗑️  Removing all images...")
+        logger.info("Removing all Docker images")
+        try:
+            subprocess.run(["docker", "image", "prune", "-af"], check=False)
+            subprocess.run(
+                "docker rmi -f $(docker images -aq) 2>/dev/null || true",
+                shell=True,
+                check=False,
+            )
+        except Exception as e:
+            logger.warning(f"Error removing images: {e}")
+
+    if "all" in options or "cache" in options:
+        print("🗑️  Clearing build cache...")
+        logger.info("Clearing Docker build cache")
+        try:
+            subprocess.run(["docker", "builder", "prune", "-af"], check=False)
+        except Exception as e:
+            logger.warning(f"Error clearing build cache: {e}")
+
+    if "all" in options or "volumes" in options:
+        print("🗑️  Removing volumes...")
+        logger.info("Removing Docker volumes")
+        try:
+            subprocess.run(["docker", "volume", "prune", "-f"], check=False)
+        except Exception as e:
+            logger.warning(f"Error removing volumes: {e}")
+
+    if "all" in options or "networks" in options:
+        print("🗑️  Removing networks...")
+        logger.info("Removing Docker networks")
+        try:
+            subprocess.run(["docker", "network", "prune", "-f"], check=False)
+        except Exception as e:
+            logger.warning(f"Error removing networks: {e}")
+
+    if "all" in options:
+        print("🗑️  Complete system cleanup...")
+        logger.info("Performing complete Docker system cleanup")
+        try:
+            subprocess.run(
+                ["docker", "system", "prune", "-af", "--volumes"], check=False
+            )
+        except Exception as e:
+            logger.warning(f"Error in system cleanup: {e}")
+
+    print("\n✅ Docker cleanup completed!")
+    logger.info("Docker cleanup completed successfully")
+
+    # Show final status
+    try:
+        final_df = subprocess.run(
+            ["docker", "system", "df"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        print(f"\nFinal System Usage:\n{final_df}")
+    except Exception as e:
+        logger.warning(f"Could not get final Docker status: {e}")
+
+
+def docker_wipe():
+    """Complete Docker wipe - removes everything."""
+    print(
+        "🚨 WARNING: This will remove ALL Docker containers, images, volumes, networks, and cache!"
+    )
+    print("This action cannot be undone.")
+
+    # In non-interactive mode or if explicitly confirmed, proceed
+    if "--force" in sys.argv or "--docker-wipe" in sys.argv:
+        print("🧹 Proceeding with complete Docker wipe...")
+        logger.info("Starting complete Docker wipe operation")
+        docker_cleanup(["all"])
+    else:
+        try:
+            response = (
+                input("Are you sure you want to continue? (yes/no): ").lower().strip()
+            )
+            if response in ["yes", "y"]:
+                print("🧹 Proceeding with complete Docker wipe...")
+                logger.info("User confirmed complete Docker wipe operation")
+                docker_cleanup(["all"])
+            else:
+                print("❌ Docker wipe cancelled.")
+                logger.info("Docker wipe cancelled by user")
+                return
+        except KeyboardInterrupt:
+            print("\n❌ Docker wipe cancelled.")
+            logger.info("Docker wipe cancelled by user (KeyboardInterrupt)")
+            return

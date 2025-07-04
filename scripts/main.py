@@ -10,6 +10,8 @@ from docker_utils import (
     ensure_test_docker_image,
     docker_shell,
     docker_export,
+    docker_cleanup,
+    docker_wipe,
 )
 from test_utils import (
     docker_test,
@@ -55,6 +57,16 @@ Examples:
   # Development tools
   python setup.py --docker-shell
   python setup.py --setup-pre-commit
+
+  # Docker cleanup tools
+  python setup.py --docker-cleanup                                 # Clean up all Docker resources
+  python setup.py --docker-cleanup-containers                     # Clean up containers only
+  python setup.py --docker-cleanup-images                         # Clean up images only
+  python setup.py --docker-cleanup-cache                          # Clean up build cache only
+  python setup.py --docker-cleanup-volumes                        # Clean up volumes only
+  python setup.py --docker-cleanup-networks                       # Clean up networks only
+  python setup.py --docker-wipe                                   # Complete Docker wipe (WARNING: destructive)
+  python setup.py --docker-wipe --force                           # Force wipe without confirmation
         """,
     )
 
@@ -124,6 +136,48 @@ Examples:
         "--docker-export",
         action="store_true",
         help="Export the Docker image to a tar file",
+    )
+
+    # Docker cleanup commands
+    parser.add_argument(
+        "--docker-cleanup",
+        action="store_true",
+        help="Clean up Docker resources (containers, images, cache, volumes, networks)",
+    )
+    parser.add_argument(
+        "--docker-cleanup-containers",
+        action="store_true",
+        help="Clean up Docker containers only",
+    )
+    parser.add_argument(
+        "--docker-cleanup-images",
+        action="store_true",
+        help="Clean up Docker images only",
+    )
+    parser.add_argument(
+        "--docker-cleanup-cache",
+        action="store_true",
+        help="Clean up Docker build cache only",
+    )
+    parser.add_argument(
+        "--docker-cleanup-volumes",
+        action="store_true",
+        help="Clean up Docker volumes only",
+    )
+    parser.add_argument(
+        "--docker-cleanup-networks",
+        action="store_true",
+        help="Clean up Docker networks only",
+    )
+    parser.add_argument(
+        "--docker-wipe",
+        action="store_true",
+        help="Complete Docker wipe - removes ALL Docker resources (WARNING: destructive)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force operation without confirmation prompts",
     )
 
     # Development tools
@@ -210,6 +264,29 @@ Examples:
         return
     elif args.docker_export:
         docker_export()
+        return
+
+    # Handle Docker cleanup commands
+    elif args.docker_cleanup:
+        docker_cleanup(["all"])
+        return
+    elif args.docker_cleanup_containers:
+        docker_cleanup(["containers"])
+        return
+    elif args.docker_cleanup_images:
+        docker_cleanup(["images"])
+        return
+    elif args.docker_cleanup_cache:
+        docker_cleanup(["cache"])
+        return
+    elif args.docker_cleanup_volumes:
+        docker_cleanup(["volumes"])
+        return
+    elif args.docker_cleanup_networks:
+        docker_cleanup(["networks"])
+        return
+    elif args.docker_wipe:
+        docker_wipe()
         return
 
     # Handle development tools
