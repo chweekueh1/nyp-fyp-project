@@ -1,397 +1,236 @@
-from typing import Dict, Any, List, Optional
+import json
+from typing import Dict, Any, List
 from datetime import datetime
+import ast  # Required for literal_eval, use with caution for untrusted inputs
 
 
 def format_classification_response(
-    classification_data: Dict[str, Any],
+    classification_data_raw: Any,
     extraction_result: Dict[str, Any],
     original_filename: str,
 ) -> Dict[str, str]:
     """
     Formats the security classification and content extraction results for display
-    within a Gradio interface. This function ensures all output strings are
-    correctly cast to prevent potential 'AddableValuesDict' errors, provides
-    clear summaries, and includes basic styling for visibility.
+    within a Gradio interface.
 
-    :param classification_data: A dictionary containing the classification results
-                                 from the model. It might contain a top-level 'ANSWER'
-                                 key whose value is a JSON string of the actual
-                                 classification details, or it might directly contain
-                                 'classification', 'sensitivity', 'reasoning', etc.
-    :type classification_data: Dict[str, Any]
+    This function ensures all output strings are correctly cast to prevent potential
+    'AddableValuesDict' errors, provides clear summaries, and includes basic styling
+    for visibility. It also handles the case where the raw classification data
+    might be a string representation of a dictionary (e.g., JSON string), AND
+    where the nested 'answer' field might be a JSON string that needs parsing.
+
+    :param classification_data_raw: The raw classification results, which might be a
+                                   dictionary or a string representation of a dictionary.
+                                   The function will now also parse the 'answer' field
+                                   if it is a JSON string.
+    :type classification_data_raw: Any
     :param extraction_result: A dictionary containing details from the content
                                extraction process, expected to include 'content' (a
                                sample of the extracted text), 'file_size', and 'method'.
     :type extraction_result: Dict[str, Any]
     :param original_filename: The original name of the file that was processed.
     :type original_filename: str
-    :return: A dictionary containing formatted string outputs suitable for direct
-             display in Gradio components, including 'classification', 'sensitivity',
-             'file_info', 'reasoning', and 'summary'.
+    :return: A dictionary containing formatted string outputs suitable for
+             Gradio components.
     :rtype: Dict[str, str]
     """
+    # --- DEBUG PRINT AT THE START ---
+    print(
+        f"DEBUG: Entering format_classification_response with classification_data_raw: {classification_data_raw}"
+    )
+    print(
+        f"DEBUG: type(classification_data_raw) received: {type(classification_data_raw)}"
+    )
+    # --- END DEBUG PRINT ---
+
+    classification_data: Dict[
+        str, Any
+    ] = {}  # This will store the *parsed* outermost dictionary
+
+    if isinstance(classification_data_raw, str):
+        try:
+            # Attempt to parse as JSON first (as per system_prompts.py expectations)
+            classification_data = json.loads(classification_data_raw)
+            print("DEBUG: Successfully parsed classification_data_raw as JSON.")
+        except json.JSONDecodeError as e:
+            print(
+                f"ERROR: classification_data_raw is a string but not valid JSON. Attempting ast.literal_eval (risky). Error: {e}"
+            )
+            try:
+                # Fallback for Python dictionary string representation (e.g., output of str(some_dict))
+                # This should ideally be fixed upstream to output proper JSON.
+                classification_data = ast.literal_eval(classification_data_raw)
+                print(
+                    "DEBUG: Successfully parsed classification_data_raw using ast.literal_eval. Please ensure upstream provides valid JSON."
+                )
+            except (ValueError, SyntaxError) as e_ast:
+                print(
+                    f"CRITICAL ERROR: Could not parse classification_data_raw string. Ensure upstream provides valid JSON or a Python dictionary directly. Error: {e_ast}. Original string fragment: {str(classification_data_raw)[:200]}..."
+                )
+                classification_data = {}  # Fallback to empty dictionary if all parsing fails
+    elif isinstance(classification_data_raw, dict):
+        # If it's already a dictionary, use it directly
+        classification_data = classification_data_raw
+    else:
+        print(
+            f"CRITICAL ERROR: Unexpected type for classification_data_raw: {type(classification_data_raw)}. Expected str or dict."
+        )
+        classification_data = {}  # Fallback to empty dictionary
+
+    # Now 'classification_data' is guaranteed to be a dictionary (or empty if parsing failed).
+    # Proceed with the rest of the logic using this processed dictionary.
+
+    # Extract original text if available from 'input' field in the raw classification data
+    original_text_sample = ""
+    # Safely get the 'classification' dictionary first from classification_data
+    classification_details_from_raw = classification_data.get("classification")
+
+    if isinstance(classification_details_from_raw, dict):
+        original_text_sample = str(classification_details_from_raw.get("input", ""))
+        # Truncate for display if it's too long
+        if len(original_text_sample) > 500:
+            original_text_sample = original_text_sample[:500] + "..."
 
     # Determine the actual source of classification details
-    # Prioritize parsing 'ANSWER' if it's a JSON string
-    actual_classification_details = classification_data
+    potential_llm_output: Any = None
 
-    # --- Robustly convert classification and sensitivity to strings and then tocase ---
-    # Retrieve with a default, then convert to string, then apply ()
-    # Check both potential key names (e.g., "CLASSIFICATION" vs "classification")
-    classification_category = str(
-        actual_classification_details.get("classification", "Unknown")
-    )
-    sensitivity_level = str(
-        actual_classification_details.get("sensitivity", "Non-Sensitive")
-    )
-    reasoning = str(
-        actual_classification_details.get(
-            "reasoning", "No specific reasoning provided."
+    if isinstance(classification_details_from_raw, dict):
+        # Prioritize classification_data['classification']['answer']
+        if "answer" in classification_details_from_raw:
+            potential_llm_output = classification_details_from_raw["answer"]
+        else:
+            # Fallback to classification_data['classification'] if no 'answer' key
+            # This handles cases where the LLM output is directly under 'classification'
+            potential_llm_output = classification_details_from_raw
+
+    # If no classification details found yet, try top-level 'ANSWER'
+    if potential_llm_output is None:
+        potential_llm_output = classification_data.get("ANSWER")
+
+    # --- FIX START: Ensure the parsed LLM output (from 'answer' or 'ANSWER') is a dictionary ---
+    parsed_llm_output: Dict[str, Any] = {}
+    if isinstance(potential_llm_output, dict):
+        parsed_llm_output = potential_llm_output
+    elif isinstance(potential_llm_output, str):
+        print(
+            f"DEBUG: Inner classification output is a string. Attempting to parse it. Value: {potential_llm_output}"
         )
-    )
-
-    # Confidence can be a number, retrieve and handle accordingly for display
-    # Check both potential key names (e.g., "CONFIDENCE" vs "confidence")
-    confidence = str(actual_classification_details.get("confidence", "0"))
-    confidence_str = (
-        f"{confidence * 100:.2f}%" if isinstance(confidence, (int, float)) else "N/A"
-    )
-
-    # --- Robustly convert extracted_content_sample to string ---
-    extracted_content_sample = str(extraction_result.get("content", "")).strip()
-    if len(extracted_content_sample) > 500:
-        extracted_content_sample = extracted_content_sample[:500] + "..."
-
-    # --- Construct file information string, ensuring all parts are strings ---
-    file_info_str = (
-        f"**Original Filename:** {str(original_filename)}\n"
-        f"**File Size:** {str(extraction_result.get('file_size', 'N/A'))} bytes\n"
-        f"**Extraction Method:** {str(extraction_result.get('method', 'N/A'))}\n"
-        f"**Extracted Content Sample (first 500 chars):**\n```\n{extracted_content_sample}\n```"
-    )
-
-    # --- Construct summary text, ensuring all parts are strings ---
-    summary_text = (
-        f"## Classification Summary\n\n"
-        f"**File:** `{str(original_filename)}`\n"
-        f"**Security Classification:** **<span style='color: {'red' if 'RESTRICTED' in classification_category or 'CONFIDENTIAL' in classification_category else 'green'};'>{classification_category}</span>**\n"
-        f"**Sensitivity Level:** **<span style='color: {'orange' if 'SENSITIVE' in sensitivity_level else 'blue'};'>{sensitivity_level}</span>**\n\n"
-        f"**Reasoning:**\n{reasoning}\n\n"
-        f"**Confidence:** {confidence_str}\n"
-    )
-
-    return {
-        "classification": classification_category,
-        "sensitivity": sensitivity_level,
-        "file_info": file_info_str,
-        "reasoning": reasoning,
-        "summary": summary_text,
-    }
-
-
-def format_security_classification(classification: str) -> str:
-    """Format security classification with appropriate styling.
-
-    :param classification: The security classification string
-    :type classification: str
-    :return: Formatted classification with emoji and styling
-    :rtype: str
-    """
-
-    # Classification mapping with emojis and colors
-    class_mapping = {
-        "restricted": "🔴 **RESTRICTED**",
-        "confidential": "🟠 **CONFIDENTIAL**",
-        "secret": "🔴 **SECRET**",
-        "top secret": "⚫ **TOP SECRET**",
-        "official(open)": "🟢 **OFFICIAL (OPEN)**",
-        "official(closed)": "🟡 **OFFICIAL (CLOSED)**",
-        "official": "🟢 **OFFICIAL**",
-        "public": "🟢 **PUBLIC**",
-        "unclassified": "🟢 **UNCLASSIFIED**",
-        "unknown": "⚪ **UNKNOWN**",
-        "error": "❌ **ERROR**",
-    }
-
-    # Normalize classification
-    normalized = classification().lower().strip()
-
-    # Handle variations
-    if "official" in normalized and "open" in normalized:
-        normalized = "OFFICIAL(OPEN)"
-    elif "official" in normalized and "closed" in normalized:
-        normalized = "OFFICIAL(CLOSED)"
-    elif "top secret" in normalized:
-        normalized = "TOP SECRET"
-
-    formatted = class_mapping.get(normalized, f"⚪ **{classification()}**")
-
-    return formatted
-
-
-def format_sensitivity_level(sensitivity: str) -> str:
-    """Format sensitivity level with appropriate styling.
-
-    :param sensitivity: The sensitivity level string
-    :type sensitivity: str
-    :return: Formatted sensitivity with emoji and styling
-    :rtype: str
-    """
-
-    # Sensitivity mapping with emojis
-    sensitivity_mapping = {
-        "high": "🔥 **HIGH SENSITIVITY**",
-        "medium": "🟡 **MEDIUM SENSITIVITY**",
-        "low": "🟢 **LOW SENSITIVITY**",
-        "non-sensitive": "✅ **NON-SENSITIVE**",
-        "sensitive": "🟡 **SENSITIVE**",
-        "unknown": "⚪ **UNKNOWN SENSITIVITY**",
-        "error": "❌ **ERROR**",
-    }
-
-    # Defensive: ensure sensitivity is a string
-    if not isinstance(sensitivity, str):
-        import logging
-
-        logging.warning(
-            f"format_sensitivity_level: expected string, got {type(sensitivity)}: {sensitivity}"
-        )
-        sensitivity = str(sensitivity) if sensitivity is not None else "UNKNOWN"
-
-    normalized = sensitivity().lower().strip()
-    formatted = sensitivity_mapping.get(normalized, f"⚪ **{normalized}**")
-
-    return formatted
-
-
-def format_file_information(
-    file_info: Dict[str, str], extraction_info: Dict[str, Any]
-) -> str:
-    """Format file information with extraction details.
-
-    :param file_info: Basic file information dictionary
-    :type file_info: Dict[str, str]
-    :param extraction_info: Information about content extraction
-    :type extraction_info: Dict[str, Any]
-    :return: Formatted file information string
-    :rtype: str
-    """
-
-    lines = []
-
-    # Basic file info
-    if "filename" in file_info:
-        lines.append(f"📄 **Filename:** {file_info['filename']}")
-
-    if "size" in file_info:
-        size_bytes = int(file_info["size"])
-        size_formatted = format_file_size(size_bytes)
-        lines.append(f"📏 **Size:** {size_formatted}")
-
-    if "saved_name" in file_info:
-        lines.append(f"💾 **Saved as:** {file_info['saved_name']}")
-
-    # Extraction information
-    if extraction_info:
-        file_type = extraction_info.get("file_type", "unknown")
-        lines.append(f"📋 **Type:** {file_type()}")
-
-        method = extraction_info.get("method", "unknown")
-        method_formatted = format_extraction_method(method)
-        lines.append(f"🔧 **Extraction:** {method_formatted}")
-
-        # Content length
-        content = extraction_info.get("content", "")
-        if content:
-            char_count = len(content)
-            word_count = len(content.split())
-            lines.append(
-                f"📊 **Content:** {char_count:,} characters, {word_count:,} words"
+        try:
+            parsed_llm_output = json.loads(potential_llm_output)
+            print(
+                "DEBUG: Successfully parsed inner classification output string as JSON."
             )
+        except json.JSONDecodeError as e:
+            print(
+                f"ERROR: Could not parse inner classification output string as JSON. Error: {e}. Value: {potential_llm_output[:100]}..."
+            )
+            parsed_llm_output = {}  # Fallback to empty dict on parsing failure
+    else:
+        print(
+            f"Warning: Classification output (from 'answer' or 'ANSWER' field) is neither a dictionary nor a parseable string. Received type: {type(potential_llm_output)}. Value: {potential_llm_output}"
+        )
+        parsed_llm_output = {}  # Default to empty dict
+    # --- FIX END ---
 
-        # Methods tried
-        methods_tried = extraction_info.get("extraction_methods_tried", [])
-        if methods_tried:
-            methods_str = ", ".join(methods_tried)
-            lines.append(f"🔍 **Methods tried:** {methods_str}")
+    # Safely extract values using .get() with default fallbacks
+    # Ensure all extracted values are cast to string for Gradio compatibility
+    classification_category = str(parsed_llm_output.get("classification", "Unknown"))
+    sensitivity_level = str(parsed_llm_output.get("sensitivity", "Unknown"))
+    reasoning = str(parsed_llm_output.get("reasoning", "No reasoning provided."))
+    confidence = str(parsed_llm_output.get("confidence", "N/A"))
 
-    # Timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lines.append(f"⏰ **Processed:** {timestamp}")
+    # Extract keywords from the parsed LLM output, if available
+    llm_keywords = parsed_llm_output.get("keywords", [])
+    if isinstance(llm_keywords, list):
+        keywords_str = ", ".join(llm_keywords) if llm_keywords else "N/A"
+    else:
+        keywords_str = str(llm_keywords)  # In case it's not a list, cast whatever it is
+        if not keywords_str.strip():  # If it's empty after casting
+            keywords_str = "N/A"
 
-    return "\n\n".join(lines)
+    # Get file details from extraction_result
+    file_size_bytes = extraction_result.get("file_size", 0)
+    file_size_kb = file_size_bytes / 1024
+    extraction_method = extraction_result.get("method", "Unknown")
 
+    # Get any extraction error message
+    extraction_error = extraction_result.get("error", "")
+    extraction_error_display = (
+        f"<p style='color:red;'>Extraction Error: {extraction_error}</p>"
+        if extraction_error
+        else ""
+    )
 
-def format_extraction_method(method: str) -> str:
-    """Format extraction method with descriptive text.
+    # Format current timestamp
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    :param method: The extraction method name
-    :type method: str
-    :return: Formatted method description with emoji
-    :rtype: str
+    # --- Section for Recommendations ---
+    # Call the helper function to get handling recommendations
+    handling_recommendations = get_handling_recommendations(
+        security_class=classification_category,
+        sensitivity=sensitivity_level,
+    )
+    recommendations_html = ""
+    if handling_recommendations:
+        recommendations_html = (
+            "<h4>Handling Recommendations:</h4><ul>"
+            + "".join([f"<li>{rec}</li>" for rec in handling_recommendations])
+            + "</ul>"
+        )
+    else:
+        recommendations_html = "<p>No specific handling recommendations available for this classification.</p>"
+    # --- End Recommendations Section ---
+
+    # Format outputs for Gradio components
+    results_box_content = f"""
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; border-radius: 8px; background-color: #f9f9f9; border: 1px solid #e0e0e0; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <h3 style="color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 15px;">Classification Results</h3>
+        <p><strong>File:</strong> <span style="color: #0056b3;">{original_filename}</span> (Size: {file_size_kb:.2f} KB, Extracted by: {extraction_method})</p>
+        {extraction_error_display}
+        <p><strong>Timestamp:</strong> {current_time}</p>
+        <p><strong>Security Classification:</strong> <span style="font-weight: bold; color: {"red" if "restricted" in classification_category.lower() or "secret" in classification_category.lower() else "#28a745"};">{classification_category}</span></p>
+        <p><strong>Sensitivity Level:</strong> <span style="font-weight: bold; color: {"red" if "high" in sensitivity_level.lower() else "#28a745"};">{sensitivity_level}</span></p>
+        <p><strong>Confidence:</strong> {confidence}</p>
+        <p><strong>Keywords (LLM):</strong> {keywords_str}</p>
+        {recommendations_html}
+    </div>
     """
 
-    method_descriptions = {
-        "pandoc": "📚 Pandoc (Document Conversion)",
-        "tesseract_ocr": "👁️ Tesseract OCR (Image Text Recognition)",
-        "pdf_extraction": "📄 PDF Text Extraction",
-        "text_file": "📝 Plain Text Reading",
-        "fallback_original": "🔄 Legacy Extraction Method",
-        "excel_fallback": "📊 Excel Processing",
-        "none": "❌ No Extraction Performed",
-        "error": "❌ Extraction Failed",
+    classification_result_md = f"### Security Classification\n\n<span style='font-size: 1.2em; font-weight: bold; color: {'red' if 'restricted' in classification_category.lower() or 'secret' in classification_category.lower() else '#28a745'};'>{classification_category}</span>"
+    sensitivity_result_md = f"### Sensitivity Level\n\n<span style='font-size: 1.2em; font-weight: bold; color: {'red' if 'high' in sensitivity_level.lower() else '#28a745'};'>{sensitivity_level}</span>"
+    file_info_md = f"### File Information\n\n- **Original Filename:** {original_filename}\n- **Size:** {file_size_kb:.2f} KB\n- **Extraction Method:** {extraction_method}\n- **Extracted Content Sample:**\n```\n{original_text_sample}\n```\n{extraction_error_display}"
+    reasoning_md = f"### Reasoning\n\n{reasoning}"
+    summary_md = f"""
+    ### Classification Summary
+
+    Based on the content analysis, the document '{original_filename}' has been classified as **{classification_category}** with **{sensitivity_level}** sensitivity.
+
+    **Confidence Level:** {confidence}
+    **Keywords:** {keywords_str}
+
+    {recommendations_html}
+    """
+    returned_dict = {
+        "results_box": results_box_content,
+        "classification": classification_result_md,
+        "sensitivity": sensitivity_result_md,
+        "file_info": file_info_md,
+        "reasoning": reasoning_md,
+        "summary": summary_md,
     }
 
-    return method_descriptions.get(method, f"🔧 {method.replace('_', ' ').title()}")
-
-
-def format_file_size(size_bytes: int) -> str:
-    """Format file size in human-readable format.
-
-    :param size_bytes: File size in bytes
-    :type size_bytes: int
-    :return: Human-readable file size string
-    :rtype: str
-    """
-
-    if size_bytes < 1024:
-        return f"{size_bytes} bytes"
-    elif size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    elif size_bytes < 1024 * 1024 * 1024:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
-    else:
-        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
-
-
-def format_reasoning(reasoning: str, confidence: Optional[float] = None) -> str:
-    """Format classification reasoning with better structure.
-
-    :param reasoning: The reasoning text from classification
-    :type reasoning: str
-    :param confidence: Confidence score (0.0 to 1.0)
-    :type confidence: Optional[float]
-    :return: Formatted reasoning with confidence and structure
-    :rtype: str
-    """
-
-    lines = []
-
-    # Add confidence if available
-    if confidence is not None:
-        confidence_pct = confidence * 100
-        if confidence_pct >= 90:
-            conf_emoji = "🎯"
-            conf_desc = "Very High"
-        elif confidence_pct >= 75:
-            conf_emoji = "✅"
-            conf_desc = "High"
-        elif confidence_pct >= 60:
-            conf_emoji = "🟡"
-            conf_desc = "Medium"
-        else:
-            conf_emoji = "⚠️"
-            conf_desc = "Low"
-
-        lines.append(
-            f"{conf_emoji} **Confidence:** {conf_desc} ({confidence_pct:.1f}%)"
-        )
-        lines.append("")
-
-    # Format reasoning text
-    if reasoning and reasoning.strip():
-        lines.append("🧠 **Analysis:**")
-
-        # Try to structure the reasoning if it's unformatted
-        reasoning_lines = reasoning.strip().split("\n")
-        for line in reasoning_lines:
-            line = line.strip()
-            if line:
-                # Add bullet points if not already present
-                if not line.startswith(("•", "-", "*", "1.", "2.", "3.")):
-                    line = f"• {line}"
-                lines.append(f"  {line}")
-    else:
-        lines.append("🤔 **Analysis:** No detailed reasoning provided")
-
-    return "\n".join(lines)
-
-
-def format_classification_summary(
-    security_class: str,
-    sensitivity: str,
-    confidence: Optional[float] = None,
-    extraction_info: Optional[Dict[str, Any]] = None,
-) -> str:
-    """Create a formatted summary of the classification.
-
-    :param security_class: The security classification
-    :type security_class: str
-    :param sensitivity: The sensitivity level
-    :type sensitivity: str
-    :param confidence: Confidence score (0.0 to 1.0)
-    :type confidence: Optional[float]
-    :param extraction_info: Information about content extraction
-    :type extraction_info: Optional[Dict[str, Any]]
-    :return: Formatted summary markdown
-    :rtype: str
-    """
-
-    lines = []
-    lines.append("## 📋 Classification Summary")
-    lines.append("")
-
-    # Main classification
-    security_formatted = format_security_classification(security_class)
-    sensitivity_formatted = format_sensitivity_level(sensitivity)
-
-    lines.append(f"**Security Level:** {security_formatted}")
-    lines.append(f"**Sensitivity:** {sensitivity_formatted}")
-
-    if confidence is not None:
-        lines.append(f"**Confidence:** {confidence * 100:.1f}%")
-
-    lines.append("")
-
-    # Extraction status
-    if extraction_info:
-        method = extraction_info.get("method", "unknown")
-        if method != "none" and method != "error":
-            lines.append("✅ **Status:** Content successfully extracted and analyzed")
-        else:
-            lines.append("⚠️ **Status:** Limited analysis due to extraction issues")
-
-        error = extraction_info.get("error")
-        if error:
-            lines.append(f"❌ **Issue:** {error}")
-
-    lines.append("")
-
-    # Recommendations based on classification
-    recommendations = get_handling_recommendations(security_class, sensitivity)
-    if recommendations:
-        lines.append("💡 **Handling Recommendations:**")
-        for rec in recommendations:
-            lines.append(f"  • {rec}")
-
-    return "\n\n".join(lines)
+    return returned_dict
 
 
 def get_handling_recommendations(security_class: str, sensitivity: str) -> List[str]:
-    """Get handling recommendations based on classification.
-
-    :param security_class: The security classification
-    :type security_class: str
-    :param sensitivity: The sensitivity level
-    :type sensitivity: str
-    :return: List of handling recommendations
-    :rtype: List[str]
+    """
+    Generates handling recommendations based on security classification and sensitivity.
     """
 
     recommendations = []
 
-    security = security_class().lower()
-    sensitivity = sensitivity().lower()
+    security = security_class.lower()
+    sensitivity = sensitivity.lower()
 
     if "restricted" in security or "secret" in security:
         recommendations.extend(

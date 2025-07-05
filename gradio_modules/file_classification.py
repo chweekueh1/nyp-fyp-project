@@ -156,7 +156,7 @@ def get_upload_history(username: str) -> str:
         if not files:
             return "No files uploaded yet."
 
-        history_lines = ["### 📋 Upload History\n"]
+        history_lines = []
         for filename in files:
             file_path = get_file_path(username, filename)
             if os.path.exists(file_path):
@@ -337,7 +337,7 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
         perf_monitor.end_timer("file_classification_total")
         # Ensure all outputs are provided even on error
         return (
-            gr.update(visible=True, value=f"❌ **Error:** {e}"),
+            gr.update(visible=True, value=f"❌ **Key Error:** {e}"),
             gr.update(visible=False),  # Hide results box on error
             "",  # Clear classification
             "",  # Clear sensitivity
