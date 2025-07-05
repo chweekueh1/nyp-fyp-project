@@ -9,6 +9,7 @@ import collections
 import concurrent.futures
 import warnings
 import shelve
+import subprocess
 from pathlib import Path
 from typing import Generator, Iterable, List, Optional  # Added Optional
 
@@ -167,12 +168,12 @@ def global_clean_text_for_classification(text: str) -> str:
 def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) -> None:
     """
     Ultra-optimized data processing with performance improvements,
-    including text cleaning and top 20 keyword processing per document.
+    including text cleaning and top 50 keyword processing per document.
     - Uses thread pool for parallel keyword extraction and chunking if many documents.
     - Caches embedding and keyword extraction results for repeated content.
     - All major steps are performance monitored.
     - Batch size and thread pool are configurable via env vars.
-    - Now includes cleaning of document content and extraction of top 20 words for metadata.
+    - Now includes cleaning of document content and extraction of top 50 words for metadata.
 
     :param file: The path to the file to be processed.
     :type file: str
@@ -205,7 +206,7 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
         cached_data = keyword_cache.get(doc_hash)
         if cached_data:
             doc.metadata["keywords"] = cached_data.get("keywords", [])
-            doc.metadata["top_20_keywords"] = cached_data.get("top_20_keywords", "")
+            doc.metadata["top_50_keywords"] = cached_data.get("top_50_keywords", "")
             return doc
 
         doc_with_yake_keywords = FastYAKEMetadataTagger([doc])[0]
@@ -223,14 +224,14 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
             )
 
         word_counts = collections.Counter(all_words_from_yake_keywords)
-        top_20_words_list = [w for w, _ in word_counts.most_common(20)]
+        top_50_words_list = [w for w, _ in word_counts.most_common(50)]
 
-        top_20_keywords_str = ", ".join(top_20_words_list)
-        doc.metadata["top_20_keywords"] = top_20_keywords_str
+        top_50_keywords_str = ", ".join(top_50_words_list)
+        doc.metadata["top_50_keywords"] = top_50_keywords_str
 
         keyword_cache[doc_hash] = {
             "keywords": doc.metadata["keywords"],
-            "top_20_keywords": top_20_keywords_str,
+            "top_50_keywords": top_50_keywords_str,
         }
 
         return doc
@@ -312,10 +313,95 @@ def strip_yaml_front_matter(md_path: str) -> str:
         return tmp.name
 
 
+def PandocTextExtraction(file_path: str) -> List[Document]:
+    """Extracts plain text content from a file using Pandoc.
+
+    This function leverages the Pandoc command-line tool to convert various
+    document formats (e.g., Markdown, HTML, plain text) into clean, plain text.
+    It includes basic error handling for Pandoc not being found or conversion
+    failures.
+
+    :param file_path: The path to the file from which to extract text.
+    :type file_path: str
+    :raises FileNotFoundError: If the Pandoc executable is not found in the system's PATH.
+    :raises subprocess.CalledProcessError: If Pandoc encounters an error during conversion.
+    :raises Exception: For any other unexpected errors during the extraction process.
+    :return: A list containing a single Document object with the extracted text
+             and relevant metadata.
+    :rtype: list[Document]
+    """
+    try:
+        file_extension = Path(file_path).suffix.lower()
+        input_format = "plain"  # Default for general text files
+
+        # Mapping common extensions to Pandoc input formats
+        if file_extension in [".md", ".markdown"]:
+            input_format = "markdown"
+        elif file_extension == ".html":
+            input_format = "html"
+        elif file_extension == ".rst":
+            input_format = "rst"
+        # Add more mappings as needed for other formats Pandoc supports
+
+        # Construct the Pandoc command
+        # -f <input_format>: specifies the input format
+        # -t plain: specifies the output format as plain text
+        # --wrap=none: prevents line wrapping in the output
+        # --strip-comments: removes comments from the input (e.g., HTML comments, Markdown comments)
+        command = [
+            "pandoc",
+            "-f",
+            input_format,
+            "-t",
+            "plain",
+            "--wrap=none",
+            "--strip-comments",
+            file_path,
+        ]
+
+        # Execute the Pandoc command
+        # stderr=subprocess.PIPE captures error messages
+        # text=True and encoding='utf-8' ensure output is handled as text
+        result = subprocess.check_output(
+            command, stderr=subprocess.PIPE, text=True, encoding="utf-8"
+        )
+        content = result.strip()
+
+        document = Document(
+            page_content=content,
+            metadata={
+                "source": file_path,
+                "extraction_method": "pandoc_text",
+                "original_format": input_format,
+                "file_size": len(content),
+            },
+        )
+        logging.debug(f"⚡ Pandoc extraction: {len(content)} chars from {file_path}")
+        return [document]
+
+    except FileNotFoundError:
+        logging.error(
+            "Pandoc executable not found. Please ensure Pandoc is installed and accessible in your system's PATH."
+        )
+        raise  # Re-raise to propagate the error
+    except subprocess.CalledProcessError as e:
+        logging.error(
+            f"Pandoc extraction failed for {file_path} (exit code: {e.returncode}): {e.stderr.strip()}"
+        )
+        raise  # Re-raise to propagate the error
+    except Exception as e:
+        # Catch any other unexpected errors
+        logging.error(
+            f"An unexpected error occurred during Pandoc text extraction for {file_path}: {e}"
+        )
+        raise  # Re-raise to propagate the error
+
+
 def ExtractText(path: str) -> List[Document]:
     """
     Ultra-fast text extraction with multiple fallback methods.
-    If the file is markdown, strip YAML front matter before passing to pandoc or other processors.
+    Integrates Pandoc for richer text document processing and falls back
+    to simpler methods or Unstructured for other file types.
 
     :param path: The path to the file to extract text from.
     :type path: str
@@ -325,24 +411,66 @@ def ExtractText(path: str) -> List[Document]:
     perf_monitor.start_timer("text_extraction_method")
 
     try:
-        if path.lower().endswith(
-            (".txt", ".md", ".py", ".js", ".html", ".css", ".json")
-        ):
-            if path.lower().endswith((".md", ".markdown")):
+        # Define which text-based file types should be processed by Pandoc.
+        # You can customize this list based on your needs.
+        pandoc_supported_text_types = (
+            ".md",
+            ".markdown",
+            ".txt",
+            ".html",
+            ".rst",
+            ".tex",
+            ".docx",
+            ".odt",
+            ".epub",
+        )
+        # Define file types that are better handled by simple text extraction
+        # (e.g., code files where Pandoc might add unwanted formatting).
+        fast_text_only_types = (".py", ".js", ".css", ".json")
+
+        file_extension_lower = path.lower()
+
+        if file_extension_lower.endswith(pandoc_supported_text_types):
+            temp_path = None
+            file_to_process = path  # Default to original path
+
+            # Special handling for Markdown files to strip YAML front matter
+            if file_extension_lower.endswith((".md", ".markdown")):
                 temp_path = strip_yaml_front_matter(path)
-                result = FastTextExtraction(temp_path)
-                os.unlink(temp_path)
-            else:
-                result = FastTextExtraction(path)
+                file_to_process = (
+                    temp_path  # Use the temporary file for Pandoc processing
+                )
+
+            try:
+                # Call the PandocTextExtraction function for these types
+                result = PandocTextExtraction(file_to_process)
+            finally:
+                # Clean up the temporary file if it was created
+                if temp_path and os.path.exists(temp_path):
+                    os.unlink(temp_path)
+
             perf_monitor.end_timer("text_extraction_method")
             return result
 
-        result = OptimizedUnstructuredExtraction(path)
-        perf_monitor.end_timer("text_extraction_method")
-        return result
+        elif file_extension_lower.endswith(fast_text_only_types):
+            # Use FastTextExtraction for specific file types where Pandoc might be overkill
+            # or introduce unwanted transformations (e.g., code files).
+            result = FastTextExtraction(path)
+            perf_monitor.end_timer("text_extraction_method")
+            return result
+
+        else:
+            # For other formats (e.g., PDFs, images if Unstructured supports them),
+            # use the optimized Unstructured loader first.
+            result = OptimizedUnstructuredExtraction(path)
+            perf_monitor.end_timer("text_extraction_method")
+            return result
 
     except Exception as e:
-        logging.warning(f"Fast extraction failed: {e}, falling back to standard method")
+        logging.warning(
+            f"Primary extraction methods failed for {path}: {e}. Falling back to standard Unstructured extraction."
+        )
+        # If any of the above methods fail, fall back to the standard Unstructured approach.
         result = StandardUnstructuredExtraction(path)
         perf_monitor.end_timer("text_extraction_method")
         return result
@@ -362,7 +490,7 @@ def FastTextExtraction(file_path: str) -> list[Document]:
 
     try:
         with open(file_path, "rb") as f:
-            raw_data = f.read(10000)
+            raw_data = f.read(400000)
             encoding = chardet.detect(raw_data)["encoding"] or "utf-8"
 
         with open(file_path, "r", encoding=encoding, errors="ignore") as f:

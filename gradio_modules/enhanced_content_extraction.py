@@ -20,9 +20,9 @@ except ImportError:
 # Set up logging
 logger = logging.getLogger(__name__)
 
-# CHUNK_CHAR_THRESHOLD now actively limits text file reads to the first 1000 characters.
-CHUNK_CHAR_THRESHOLD = 1000  # characters
-CLASSIFICATION_WORD_LIMIT = 20  # New constant for classification input word limit
+# CHUNK_CHAR_THRESHOLD now actively limits text file reads to the first 40000 characters.
+CHUNK_CHAR_THRESHOLD = 40000  # characters
+CLASSIFICATION_WORD_LIMIT = 50  # New constant for classification input word limit
 MAX_WORKERS = 8
 
 
@@ -322,7 +322,7 @@ def extract_text_file_content(
         content_chars = []
         char_count = 0
         with open(file_path, "r", encoding="utf-8") as f:
-            while char_count < CHUNK_CHAR_THRESHOLD:  # Loop until 1000 chars or EOF
+            while char_count < CHUNK_CHAR_THRESHOLD:  # Loop until 40000 chars or EOF
                 next_line = f.readline()
                 if not next_line:
                     break  # End of file
@@ -409,7 +409,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             )  # Placeholder for Excel
 
         # Handle Markdown and direct text files: Prioritize extract_text_file_content
-        # as it aligns with the user's explicit request for 1000 char limit for these.
+        # as it aligns with the user's explicit request for 40000 char limit for these.
         if file_ext in {".txt", ".csv", ".log", ".md", ".markdown"}:
             # Add at the beginning of the list to prioritize, then fallback to pandoc if applicable
             extraction_methods.insert(0, ("text_file", extract_text_file_content))
@@ -419,7 +419,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
                 extraction_methods.insert(1, ("pandoc", extract_with_pandoc))
 
         # General fallback: Try to read any file as a plain text file if no other method worked
-        # This will also respect the 1000 character limit due to extract_text_file_content's current logic.
+        # This will also respect the 40000 character limit due to extract_text_file_content's current logic.
         extraction_methods.append(("generic_text_fallback", extract_text_file_content))
 
         for method_name, method_func in extraction_methods:

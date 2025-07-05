@@ -306,8 +306,8 @@ def chatbot_ui(
                 bot_msg = history[i + 1].get("content", "")
                 tuple_history.append([user_msg, bot_msg])
 
-        # Extract top 20 keywords (phrases) from the message using YAKE
-        kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=20)
+        # Extract top 50 keywords (phrases) from the message using YAKE
+        kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=50)
         keywords_from_message = kw_extractor.extract_keywords(msg)
 
         # Join the extracted keyword phrases into a comma-separated string

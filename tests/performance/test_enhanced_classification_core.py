@@ -340,7 +340,7 @@ def test_performance_improvements():
             assert result["method"] == "text_file"
             assert (
                 len(result["content"]) > 500
-            )  # Should be substantial content (reduced from 1000 due to processing)
+            )  # Should be substantial content (reduced from 40000 due to processing)
 
             print(f"  ⏱️ Extraction time: {extraction_time:.3f} seconds")
             print(f"  📊 Content size: {len(result['content'])} characters")

@@ -17,7 +17,19 @@ from gradio_modules.enhanced_content_extraction import (
 )
 from infra_utils import get_chatbot_dir, clear_uploaded_files
 import asyncio
-import json
+
+# Import the enhanced classification formatter
+from gradio_modules.classification_formatter import (
+    format_classification_response,
+    # The individual formatters below are imported if they are needed elsewhere
+    # but format_classification_response is the primary one used here.
+    # format_security_classification,
+    # format_sensitivity_level,
+    # format_file_information,
+    # format_reasoning,
+    # format_classification_summary,
+)
+
 from backend import data_classification
 
 # Hardcoded list of allowed file extensions
@@ -48,7 +60,7 @@ def get_uploads_dir(username: str) -> str:
     :rtype: str
     """
     import os
-    # from infra_utils import get_chatbot_dir
+    # from infra_utils import get_chatbot_dir # Already imported above
 
     is_test_env = os.getenv("TESTING", "").lower() == "true"
 
@@ -243,36 +255,7 @@ def call_backend_data_classification(content_text):
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-
-    raw_classification_output = loop.run_until_complete(
-        data_classification(content_text)
-    )
-
-    # Check if the output is a dictionary and contains an 'ANSWER' field
-    if (
-        isinstance(raw_classification_output, dict)
-        and "ANSWER" in raw_classification_output
-    ):
-        # If 'ANSWER' is a string, attempt to parse it as JSON
-        if isinstance(raw_classification_output["ANSWER"], str):
-            try:
-                parsed_answer = json.loads(raw_classification_output["ANSWER"])
-                # Replace the string 'ANSWER' with the parsed dictionary
-                raw_classification_output["ANSWER"] = parsed_answer
-            except json.JSONDecodeError as e:
-                print(
-                    f"Warning: Could not parse ANSWER field as JSON: {e}. Raw: {raw_classification_output['ANSWER']}"
-                )
-                # Optionally, you might want to set an error message or specific structure here
-                raw_classification_output["ANSWER"] = {
-                    "error": f"Failed to parse JSON answer: {e}",
-                    "raw_content": raw_classification_output["ANSWER"],
-                }
-            except TypeError:
-                # Handle cases where ANSWER might not be a string at all, e.g., if it's already an object
-                pass  # Do nothing, assume it's already in the desired format or not meant for parsing
-
-    return raw_classification_output
+    return loop.run_until_complete(data_classification(content_text))
 
 
 def handle_upload_click(file_obj: Any, username: str) -> tuple:
@@ -289,15 +272,15 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
     if not username:
         return (
             gr.update(visible=True, value="❌ **Error:** Please log in first"),
-            gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            gr.update(visible=False, value=""),
-            "",
-            hide_loading(),
-            refresh_file_dropdown(username),
+            gr.update(visible=False),  # results_box visibility
+            "",  # classification_result
+            "",  # sensitivity_result
+            "",  # file_info
+            "",  # reasoning_result
+            "",  # summary_result
+            hide_loading(),  # loading_indicator after error
+            refresh_file_dropdown(username),  # file_dropdown after error
+            get_upload_history(username),  # history_md
         )
 
     if not file_obj:
@@ -310,10 +293,10 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
             "",
             "",
             "",
-            gr.update(visible=False, value=""),
-            get_upload_history(username),
+            "",
             hide_loading(),
             refresh_file_dropdown(username),
+            get_upload_history(username),
         )
 
     try:
@@ -327,61 +310,43 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
         classification = call_backend_data_classification(content_text)
         perf_monitor.end_timer("classification")
         perf_monitor.start_timer("formatting")
-        # Format results using enhanced formatter
-        try:
-            from gradio_modules.classification_formatter import (
-                format_classification_response,
-            )
 
-            formatted_results = format_classification_response(
-                classification, extraction_result, original_filename
-            )
-            perf_monitor.end_timer("formatting")
-            perf_monitor.end_timer("file_classification_total")
-
-            return (
-                gr.update(
-                    visible=True,
-                    value="✅ **File uploaded and classified successfully!**",
-                ),
-                gr.update(visible=True),
-                formatted_results["classification"],
-                formatted_results["sensitivity"],
-                formatted_results["file_info"],
-                formatted_results["reasoning"],
-                formatted_results["summary"],
-                get_upload_history(username),
-                hide_loading(),
-                refresh_file_dropdown(username),
-            )
-        except Exception as e:
-            perf_monitor.end_timer("formatting")
-            perf_monitor.end_timer("file_classification_total")
-            return (
-                gr.update(visible=True, value=f"❌ **Error:** {e}"),
-                gr.update(visible=False),
-                "",
-                "",
-                "",
-                "",
-                gr.update(visible=False, value=""),
-                get_upload_history(username),
-                hide_loading(),
-                refresh_file_dropdown(username),
-            )
-    except Exception as e:
+        # Use the improved format_classification_response
+        formatted_results = format_classification_response(
+            classification, extraction_result, original_filename
+        )
+        perf_monitor.end_timer("formatting")
         perf_monitor.end_timer("file_classification_total")
+
         return (
-            gr.update(visible=True, value=f"❌ **Error:** {e}"),
-            gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            gr.update(visible=False, value=""),
-            get_upload_history(username),
+            gr.update(
+                visible=True,
+                value="✅ **File uploaded and classified successfully!**",
+            ),
+            gr.update(visible=True),  # Make results box visible
+            formatted_results["classification"],
+            formatted_results["sensitivity"],
+            formatted_results["file_info"],
+            formatted_results["reasoning"],
+            formatted_results["summary"],  # This will directly contain markdown
             hide_loading(),
             refresh_file_dropdown(username),
+            get_upload_history(username),
+        )
+    except Exception as e:
+        perf_monitor.end_timer("file_classification_total")
+        # Ensure all outputs are provided even on error
+        return (
+            gr.update(visible=True, value=f"❌ **Error:** {e}"),
+            gr.update(visible=False),  # Hide results box on error
+            "",  # Clear classification
+            "",  # Clear sensitivity
+            "",  # Clear file_info
+            "",  # Clear reasoning
+            "",  # Clear summary
+            hide_loading(),
+            refresh_file_dropdown(username),
+            get_upload_history(username),
         )
 
 
@@ -399,14 +364,14 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
     if not username:
         return (
             gr.update(visible=True, value="❌ **Error:** Please log in first"),
-            gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            gr.update(visible=False, value=""),
-            get_upload_history(username),
+            gr.update(visible=False),  # results_box visibility
+            "",  # classification_result
+            "",  # sensitivity_result
+            "",  # file_info
+            "",  # reasoning_result
+            "",  # summary_result
             hide_loading(),
+            get_upload_history(username),
         )
 
     if not selected_file:
@@ -419,9 +384,9 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
             "",
             "",
             "",
-            gr.update(visible=False, value=""),
-            get_upload_history(username),
+            "",
             hide_loading(),
+            get_upload_history(username),
         )
 
     try:
@@ -434,9 +399,9 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
                 "",
                 "",
                 "",
-                gr.update(visible=False, value=""),
-                get_upload_history(username),
+                "",
                 hide_loading(),
+                get_upload_history(username),
             )
 
         perf_monitor.start_timer("extraction")
@@ -447,55 +412,38 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
         classification = call_backend_data_classification(content_text)
         perf_monitor.end_timer("classification")
         perf_monitor.start_timer("formatting")
-        # Format results using enhanced formatter
-        try:
-            from gradio_modules.classification_formatter import (
-                format_classification_response,
-            )
 
-            formatted_results = format_classification_response(
-                classification, extraction_result, selected_file
-            )
-            perf_monitor.end_timer("formatting")
-            perf_monitor.end_timer("file_classification_total")
+        # Use the improved format_classification_response
+        formatted_results = format_classification_response(
+            classification, extraction_result, selected_file
+        )
+        perf_monitor.end_timer("formatting")
+        perf_monitor.end_timer("file_classification_total")
 
-            return (
-                gr.update(visible=True, value="✅ **File classified successfully!**"),
-                gr.update(visible=True),
-                formatted_results["classification"],
-                formatted_results["sensitivity"],
-                formatted_results["file_info"],
-                formatted_results["reasoning"],
-                formatted_results["summary"],
-                get_upload_history(username),
-                hide_loading(),
-            )
-        except Exception as e:
-            perf_monitor.end_timer("formatting")
-            perf_monitor.end_timer("file_classification_total")
-            return (
-                gr.update(visible=True, value=f"❌ **Error:** {e}"),
-                gr.update(visible=False),
-                "",
-                "",
-                "",
-                "",
-                gr.update(visible=False, value=""),
-                get_upload_history(username),
-                hide_loading(),
-            )
+        return (
+            gr.update(visible=True, value="✅ **File classified successfully!**"),
+            gr.update(visible=True),  # Make results box visible
+            formatted_results["classification"],
+            formatted_results["sensitivity"],
+            formatted_results["file_info"],
+            formatted_results["reasoning"],
+            formatted_results["summary"],  # This will directly contain markdown
+            hide_loading(),
+            get_upload_history(username),
+        )
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
+        # Ensure all outputs are provided even on error
         return (
             gr.update(visible=True, value=f"❌ **Error:** {e}"),
-            gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            gr.update(visible=False, value=""),
-            get_upload_history(username),
+            gr.update(visible=False),  # Hide results box on error
+            "",  # Clear classification
+            "",  # Clear sensitivity
+            "",  # Clear file_info
+            "",  # Clear reasoning
+            "",  # Clear summary
             hide_loading(),
+            get_upload_history(username),
         )
 
 
@@ -528,8 +476,6 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
     uploads_dir = get_uploads_dir(username)
 
     # Generate unique filename to avoid conflicts
-    from datetime import datetime
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_ext = Path(original_filename).suffix
     base_name = Path(original_filename).stem
@@ -557,21 +503,19 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
 
 def file_classification_interface(username_state: gr.State) -> tuple:
     """Create the file upload and classification interface.
-
     :param username_state: Gradio state containing the current username
     :type username_state: gr.State
     :return: Tuple of Gradio components for the interface
     :rtype: tuple
     """
 
-    # Removed Column context manager to avoid Gradio 5.34.0 compatibility issues
-    # Header
     gr.Markdown("## 📁 File Upload & Classification")
     gr.Markdown(
         "Upload files for automatic security classification and sensitivity analysis."
     )
-
-    # File upload section - removed Group context manager
+    gr.Markdown(
+        "For the sake of performance, only the first 40 000 characters and the top 50 keywords are extracted for text based files. Non-text based files are handled normally"
+    )
     gr.Markdown("### 📤 Upload New File")
 
     # Show allowed file types
@@ -590,11 +534,9 @@ def file_classification_interface(username_state: gr.State) -> tuple:
     clear_files_btn = gr.Button("🗑️ Clear Uploaded Files", variant="stop", size="sm")
     clear_files_status = gr.Markdown(visible=False)
 
-    # File selection section for already uploaded files
     gr.Markdown("### 📂 Classify Existing Files")
     gr.Markdown("Select from previously uploaded files to classify:")
 
-    # Create dropdown without any context managers to avoid Gradio compatibility issue
     file_dropdown = gr.Dropdown(
         label="Select uploaded file",
         choices=[],
@@ -603,7 +545,6 @@ def file_classification_interface(username_state: gr.State) -> tuple:
         allow_custom_value=False,
     )
 
-    # Buttons without Row context manager
     refresh_files_btn = gr.Button("🔄 Refresh", variant="secondary", size="sm")
     classify_existing_btn = gr.Button(
         "Classify Selected File", variant="primary", size="lg"
@@ -614,65 +555,49 @@ def file_classification_interface(username_state: gr.State) -> tuple:
         value="", visible=False, elem_classes=["loading-indicator"]
     )
 
-    # Status and results section - removed all context managers
     status_md = gr.Markdown(visible=False)
 
-    # Classification results - simplified without nested context managers
-    results_section = gr.Column(visible=False)
     gr.Markdown("### 🔍 Classification Results")
 
-    classification_result = gr.Textbox(
+    # Define components. They are NOT rendered yet by simply being defined.
+    classification_result = gr.Markdown(
         label="Security Classification",
-        interactive=False,
-        placeholder="Classification will appear here...",
+        value="",  # Initial empty value
     )
-    sensitivity_result = gr.Textbox(
+    sensitivity_result = gr.Markdown(
         label="Sensitivity Level",
-        interactive=False,
-        placeholder="Sensitivity will appear here...",
+        value="",  # Initial empty value
     )
-
-    file_info = gr.Textbox(
+    file_info = gr.Markdown(
         label="File Information",
-        interactive=False,
-        placeholder="File details will appear here...",
-        lines=3,
+        value="",  # Initial empty value
     )
-
-    reasoning_result = gr.Textbox(
+    reasoning_result = gr.Markdown(
         label="Classification Reasoning",
-        interactive=False,
-        placeholder="Reasoning will appear here...",
-        lines=4,
+        value="",  # Initial empty value
     )
+    summary_result = gr.Markdown(value="", label="Classification Summary")
 
-    # Enhanced summary section
-    summary_result = gr.Markdown(
-        value="", label="Classification Summary", visible=False
-    )
+    # Use gr.Box (alias for gr.Group) to give the results a distinct visual container.
+    # The components inside this block will be implicitly rendered within the box.
+    with gr.Group(visible=False) as results_box:
+        # We can still use a Column inside the Box if we want specific vertical layout,
+        # but for now, just placing the components directly here works too.
+        classification_result
+        sensitivity_result
+        file_info
+        reasoning_result
+        summary_result
 
-    # Upload history section - removed Group context manager
     gr.Markdown("### 📋 Upload History")
     history_md = gr.Markdown("No files uploaded yet.")
     refresh_history_btn = gr.Button("Refresh History", variant="secondary")
-
-    # Functions are now defined at module level
-
-    # Note: Event handlers should be set up in the calling context (app.py)
-    # to ensure they are within a proper Gradio Blocks context
-    # The following functions are available for event handling:
-    # - handle_upload_click
-    # - handle_classify_existing
-    # - refresh_file_dropdown
-    # - get_upload_history
-    # - handle_clear_uploaded_files
-    # - show_loading
 
     return (
         file_upload,
         upload_btn,
         status_md,
-        results_section,
+        results_box,  # Changed from results_column to results_box
         classification_result,
         sensitivity_result,
         file_info,
@@ -708,7 +633,7 @@ def setup_file_classification_events(
         file_upload,
         upload_btn,
         status_md,
-        results_section,
+        results_box,  # <--- Changed variable name here
         classification_result,
         sensitivity_result,
         file_info,
@@ -724,23 +649,21 @@ def setup_file_classification_events(
         clear_files_status,
     ) = components
 
-    # Handler functions are defined in the same module scope
-
     # Event handlers with loading indicators
     upload_btn.click(fn=show_loading, outputs=[loading_indicator]).then(
         fn=handle_upload_click,
         inputs=[file_upload, username_state],
         outputs=[
             status_md,
-            results_section,
+            results_box,  # <--- Updated output here
             classification_result,
             sensitivity_result,
             file_info,
             reasoning_result,
             summary_result,
-            history_md,
             loading_indicator,
             file_dropdown,
+            history_md,
         ],
     )
 
@@ -749,14 +672,14 @@ def setup_file_classification_events(
         inputs=[file_dropdown, username_state],
         outputs=[
             status_md,
-            results_section,
+            results_box,  # <--- Updated output here
             classification_result,
             sensitivity_result,
             file_info,
             reasoning_result,
             summary_result,
-            history_md,
             loading_indicator,
+            history_md,
         ],
     )
 

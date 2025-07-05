@@ -169,7 +169,7 @@ classification_prompt = classification_prompt_initial
 
 class State(TypedDict):
     input: str
-    keywords_for_classification: str  # New field for your top 20 words string
+    keywords_for_classification: str  # New field for your top 50 words string
     context: str
     answer: str
 
@@ -210,13 +210,13 @@ def classify_text(
     This function now expects 'text' to be the already concise and cleaned content
     (e.g., `concise_content_for_llm` from data_classification.py)
     and 'keywords' to be the already processed keyword string
-    (e.g., `top_20_str` from data_classification.py).
+    (e.g., `top_50_str` from data_classification.py).
 
     :param text: The concise and cleaned content to be used for RAG input.
     :type text: str
     :param config: Configuration dictionary for the workflow.
     :type config: dict
-    :param keywords: The processed keyword string (e.g., top 20 words) for the final LLM prompt.
+    :param keywords: The processed keyword string (e.g., top 50 words) for the final LLM prompt.
     :type keywords: Optional[str]
     :return: The classification response.
     :rtype: dict
@@ -232,7 +232,7 @@ def classify_text(
     # which has been cleaned and filtered upstream. So no further processing on 'text' itself.
     rag_input_content = text
 
-    # The 'keywords' parameter here is expected to already be 'top_20_str'
+    # The 'keywords' parameter here is expected to already be 'top_50_str'
     # which has been generated and cleaned upstream.
     keywords_str_for_llm = keywords if keywords is not None else ""
 

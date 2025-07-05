@@ -32,8 +32,8 @@ def sanitize_input(input_text: str) -> str:
     cleaned = re.sub(r'[<>"\']', "", cleaned)
 
     # Limit length
-    if len(cleaned) > 10000:
-        cleaned = cleaned[:10000]
+    if len(cleaned) > 400000:
+        cleaned = cleaned[:400000]
 
     return cleaned.strip()
 

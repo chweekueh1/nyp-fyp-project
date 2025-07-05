@@ -78,10 +78,10 @@ def test_sanitize_input():
         assert result == expected, f"Expected '{expected}', got '{result}'"
         print("  ✅ Dangerous character removal passed")
 
-        # Test input length limit (actual limit is 10000, not 500)
+        # Test input length limit (actual limit is 400000, not 500)
         long_input = "A" * 12000
         result = sanitize_input(long_input)
-        assert len(result) <= 10000, f"Expected length <= 10000, got {len(result)}"
+        assert len(result) <= 400000, f"Expected length <= 400000, got {len(result)}"
         print("  ✅ Input length limit passed")
 
         print("✅ test_sanitize_input: PASSED")

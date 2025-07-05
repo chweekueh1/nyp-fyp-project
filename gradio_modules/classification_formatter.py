@@ -1,4 +1,3 @@
-import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -34,50 +33,26 @@ def format_classification_response(
 
     # Determine the actual source of classification details
     # Prioritize parsing 'ANSWER' if it's a JSON string
-    actual_classification_details = {}
-    if "ANSWER" in classification_data and isinstance(
-        classification_data["ANSWER"], str
-    ):
-        try:
-            actual_classification_details = json.loads(classification_data["ANSWER"])
-        except json.JSONDecodeError:
-            # If parsing fails, fall back to using classification_data directly,
-            # assuming it might contain the keys at the top level or for error reporting
-            actual_classification_details = classification_data
-    else:
-        # If 'ANSWER' key is not present or not a string, assume classification_data
-        # itself contains the classification details directly.
-        actual_classification_details = classification_data
+    actual_classification_details = classification_data
 
-    # --- Robustly convert classification and sensitivity to strings and then to uppercase ---
-    # Retrieve with a default, then convert to string, then apply .upper()
+    # --- Robustly convert classification and sensitivity to strings and then tocase ---
+    # Retrieve with a default, then convert to string, then apply ()
     # Check both potential key names (e.g., "CLASSIFICATION" vs "classification")
     classification_category = str(
-        actual_classification_details.get(
-            "CLASSIFICATION",
-            actual_classification_details.get("classification", "Unknown"),
-        )
-    ).upper()
+        actual_classification_details.get("classification", "Unknown")
+    )
     sensitivity_level = str(
-        actual_classification_details.get(
-            "SENSITIVITY",
-            actual_classification_details.get("sensitivity", "Non-Sensitive"),
-        )
-    ).upper()
+        actual_classification_details.get("sensitivity", "Non-Sensitive")
+    )
     reasoning = str(
         actual_classification_details.get(
-            "REASONING",
-            actual_classification_details.get(
-                "reasoning", "No specific reasoning provided."
-            ),
+            "reasoning", "No specific reasoning provided."
         )
     )
 
     # Confidence can be a number, retrieve and handle accordingly for display
     # Check both potential key names (e.g., "CONFIDENCE" vs "confidence")
-    confidence = actual_classification_details.get(
-        "CONFIDENCE", actual_classification_details.get("confidence", None)
-    )
+    confidence = str(actual_classification_details.get("confidence", "0"))
     confidence_str = (
         f"{confidence * 100:.2f}%" if isinstance(confidence, (int, float)) else "N/A"
     )
@@ -125,31 +100,31 @@ def format_security_classification(classification: str) -> str:
 
     # Classification mapping with emojis and colors
     class_mapping = {
-        "RESTRICTED": "🔴 **RESTRICTED**",
-        "CONFIDENTIAL": "🟠 **CONFIDENTIAL**",
-        "SECRET": "🔴 **SECRET**",
-        "TOP SECRET": "⚫ **TOP SECRET**",
-        "OFFICIAL(OPEN)": "🟢 **OFFICIAL (OPEN)**",
-        "OFFICIAL(CLOSED)": "🟡 **OFFICIAL (CLOSED)**",
-        "OFFICIAL": "🟢 **OFFICIAL**",
-        "PUBLIC": "🟢 **PUBLIC**",
-        "UNCLASSIFIED": "🟢 **UNCLASSIFIED**",
-        "UNKNOWN": "⚪ **UNKNOWN**",
-        "ERROR": "❌ **ERROR**",
+        "restricted": "🔴 **RESTRICTED**",
+        "confidential": "🟠 **CONFIDENTIAL**",
+        "secret": "🔴 **SECRET**",
+        "top secret": "⚫ **TOP SECRET**",
+        "official(open)": "🟢 **OFFICIAL (OPEN)**",
+        "official(closed)": "🟡 **OFFICIAL (CLOSED)**",
+        "official": "🟢 **OFFICIAL**",
+        "public": "🟢 **PUBLIC**",
+        "unclassified": "🟢 **UNCLASSIFIED**",
+        "unknown": "⚪ **UNKNOWN**",
+        "error": "❌ **ERROR**",
     }
 
     # Normalize classification
-    normalized = classification.upper().strip()
+    normalized = classification().lower().strip()
 
     # Handle variations
-    if "OFFICIAL" in normalized and "OPEN" in normalized:
+    if "official" in normalized and "open" in normalized:
         normalized = "OFFICIAL(OPEN)"
-    elif "OFFICIAL" in normalized and "CLOSED" in normalized:
+    elif "official" in normalized and "closed" in normalized:
         normalized = "OFFICIAL(CLOSED)"
-    elif "TOP SECRET" in normalized:
+    elif "top secret" in normalized:
         normalized = "TOP SECRET"
 
-    formatted = class_mapping.get(normalized, f"⚪ **{classification.upper()}**")
+    formatted = class_mapping.get(normalized, f"⚪ **{classification()}**")
 
     return formatted
 
@@ -165,13 +140,13 @@ def format_sensitivity_level(sensitivity: str) -> str:
 
     # Sensitivity mapping with emojis
     sensitivity_mapping = {
-        "HIGH": "🔥 **HIGH SENSITIVITY**",
-        "MEDIUM": "🟡 **MEDIUM SENSITIVITY**",
-        "LOW": "🟢 **LOW SENSITIVITY**",
-        "NON-SENSITIVE": "✅ **NON-SENSITIVE**",
-        "SENSITIVE": "🟡 **SENSITIVE**",
-        "UNKNOWN": "⚪ **UNKNOWN SENSITIVITY**",
-        "ERROR": "❌ **ERROR**",
+        "high": "🔥 **HIGH SENSITIVITY**",
+        "medium": "🟡 **MEDIUM SENSITIVITY**",
+        "low": "🟢 **LOW SENSITIVITY**",
+        "non-sensitive": "✅ **NON-SENSITIVE**",
+        "sensitive": "🟡 **SENSITIVE**",
+        "unknown": "⚪ **UNKNOWN SENSITIVITY**",
+        "error": "❌ **ERROR**",
     }
 
     # Defensive: ensure sensitivity is a string
@@ -183,7 +158,7 @@ def format_sensitivity_level(sensitivity: str) -> str:
         )
         sensitivity = str(sensitivity) if sensitivity is not None else "UNKNOWN"
 
-    normalized = sensitivity.upper().strip()
+    normalized = sensitivity().lower().strip()
     formatted = sensitivity_mapping.get(normalized, f"⚪ **{normalized}**")
 
     return formatted
@@ -219,7 +194,7 @@ def format_file_information(
     # Extraction information
     if extraction_info:
         file_type = extraction_info.get("file_type", "unknown")
-        lines.append(f"📋 **Type:** {file_type.upper()}")
+        lines.append(f"📋 **Type:** {file_type()}")
 
         method = extraction_info.get("method", "unknown")
         method_formatted = format_extraction_method(method)
@@ -244,7 +219,7 @@ def format_file_information(
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines.append(f"⏰ **Processed:** {timestamp}")
 
-    return "\n".join(lines)
+    return "\n\n".join(lines)
 
 
 def format_extraction_method(method: str) -> str:
@@ -399,7 +374,7 @@ def format_classification_summary(
         for rec in recommendations:
             lines.append(f"  • {rec}")
 
-    return "\n".join(lines)
+    return "\n\n".join(lines)
 
 
 def get_handling_recommendations(security_class: str, sensitivity: str) -> List[str]:
@@ -415,10 +390,10 @@ def get_handling_recommendations(security_class: str, sensitivity: str) -> List[
 
     recommendations = []
 
-    security_upper = security_class.upper()
-    sensitivity_upper = sensitivity.upper()
+    security = security_class().lower()
+    sensitivity = sensitivity().lower()
 
-    if "RESTRICTED" in security_upper or "SECRET" in security_upper:
+    if "restricted" in security or "secret" in security:
         recommendations.extend(
             [
                 "Store in secure, access-controlled location",
@@ -427,7 +402,7 @@ def get_handling_recommendations(security_class: str, sensitivity: str) -> List[
                 "Follow organizational security protocols",
             ]
         )
-    elif "CONFIDENTIAL" in security_upper:
+    elif "confidential" in security:
         recommendations.extend(
             [
                 "Restrict access to need-to-know basis",
@@ -435,16 +410,14 @@ def get_handling_recommendations(security_class: str, sensitivity: str) -> List[
                 "Store in protected systems",
             ]
         )
-    elif "OFFICIAL" in security_upper and "CLOSED" in security_upper:
+    elif "official" in security and "closed" in security:
         recommendations.extend(
             [
                 "Limit distribution within organization",
                 "Follow internal sharing guidelines",
             ]
         )
-    elif "PUBLIC" in security_upper or (
-        "OFFICIAL" in security_upper and "OPEN" in security_upper
-    ):
+    elif "public" in security or ("official" in security and "open" in security):
         recommendations.extend(
             [
                 "May be shared publicly as appropriate",
@@ -452,9 +425,9 @@ def get_handling_recommendations(security_class: str, sensitivity: str) -> List[
             ]
         )
 
-    if "HIGH" in sensitivity_upper:
+    if "high" in sensitivity:
         recommendations.append("Exercise extra caution in handling and sharing")
-    elif "MEDIUM" in sensitivity_upper:
+    elif "medium" in sensitivity:
         recommendations.append("Apply standard sensitivity controls")
 
     return recommendations
