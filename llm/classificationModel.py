@@ -49,8 +49,11 @@ from langchain.prompts import PromptTemplate
 import time
 from infra_utils import get_chatbot_dir
 from typing import Optional
-from keyword_cache import filter_filler_words
-
+from llm.keyword_cache import filter_filler_words
+from system_prompts import (
+    get_classification_system_prompt,
+    get_classification_prompt_template,
+)
 
 # Constants
 load_dotenv()
@@ -68,15 +71,7 @@ db = None
 
 # Define prompt templates
 multi_query_template = PromptTemplate(
-    template=(
-        "The user has provided the text content of a file: {question}.\n"
-        "1. First, check if the text contains multiple sections or topics. "
-        "If yes, split the text into distinct sections if there are multiple and move on to point 2."
-        "Else, just return the text, and break.\n"
-        "2. Then, for each distinct section, generate 3 rephrasings that would return "
-        "similar but slightly different relevant results.\n"
-        "Return each section on a new line with its rephrasings.\n"
-    ),
+    template=get_classification_prompt_template(),
     input_variables=["question"],
 )
 
@@ -89,44 +84,7 @@ if db and llm:
     )
 
 # Enhanced system prompt with detailed NYP CNC information
-system_prompt = (
-    "You are the NYP FYP CNC Chatbot's classification system, designed to help NYP (Nanyang Polytechnic) staff and students identify and use the correct sensitivity labels in their communications. "
-    "## Your Role\n"
-    "You are an expert assistant for classifying the security level and sensitivity of text content within the NYP environment. "
-    "Your primary goal is to ensure proper information handling and data security compliance. "
-    "## Data Security Classification Levels\n"
-    "Classify the text into one of the following security categories:\n"
-    "1. **Official (Open)**: Public information, no restrictions, can be shared freely\n"
-    "2. **Official (Closed)**: Internal information, limited distribution within NYP\n"
-    "3. **Restricted**: Sensitive information, need-to-know basis, requires authorization\n"
-    "4. **Confidential**: Highly sensitive, authorized personnel only, strict handling\n"
-    "5. **Secret**: Critical information, strict access controls, special handling\n"
-    "6. **Top Secret**: Highest classification, extremely limited access, maximum security\n"
-    "## Sensitivity Categories\n"
-    "Also classify the sensitivity of the content into one of the following:\n"
-    "- **Non-Sensitive**: No special handling required, standard procedures\n"
-    "- **Sensitive Normal**: Standard security measures, routine protection\n"
-    "- **Sensitive High**: Enhanced security protocols, special attention required\n"
-    "## Classification Guidelines\n"
-    "- Use ONLY the following pieces of retrieved context to classify the text\n"
-    "- Classify conservatively at a higher security or sensitivity level if unsure\n"
-    "- The explicit content of the file should take precedence over surrounding context\n"
-    "- Consider the context and potential impact of information disclosure\n"
-    "- Avoid giving any harmful, inappropriate, or biased classifications\n"
-    "- Respond respectfully and ethically\n"
-    "- Do not classify inappropriate or harmful content\n"
-    "## Output Format\n"
-    "Provide your classification in JSON format with the following structure:\n"
-    '{{"classification": "security_level", "sensitivity": "sensitivity_level", "reasoning": "detailed_explanation"}}\n'
-    "Keep the classification concise but thorough.\n\n"
-    "- Use ONLY the following pieces of retrieved context to classify the text\n"
-    "- The explicit content of the file should take precedence over surrounding context\n"
-    "- **PRIORITIZE the following extracted keywords** when making your classification decision, "
-    "using them to focus on the core topics of the text, in conjunction with the retrieved context:\n"
-    "Keywords: {keywords_for_classification}\n"
-    "- Consider the context and potential impact of information disclosure\n"
-    "{context}"
-)
+system_prompt = get_classification_system_prompt()
 
 # Creating the prompt template for classification
 classification_prompt = ChatPromptTemplate.from_messages(

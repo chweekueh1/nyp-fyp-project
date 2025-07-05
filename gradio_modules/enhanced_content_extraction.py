@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Enhanced content extraction using pandoc and tesseract OCR for better file processing."""
-
 import os
 import subprocess
 import tempfile
@@ -10,6 +7,9 @@ import logging
 import shutil
 import concurrent.futures
 import re
+import collections
+import hashlib
+import json
 
 # Import keyword filtering functionality
 try:
@@ -23,94 +23,62 @@ except ImportError:
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# CHUNK_CHAR_THRESHOLD now actively limits text file reads to the first 1000 characters.
 CHUNK_CHAR_THRESHOLD = 1000  # characters
+CLASSIFICATION_WORD_LIMIT = 20  # New constant for classification input word limit
 MAX_WORKERS = 8
 
 
 def find_tool(tool_name: str) -> Optional[str]:
-    # Always prefer system PATH in Docker
     if os.getenv("IN_DOCKER", "false").lower() in ("1", "true"):
         path = shutil.which(tool_name)
         if path:
             return path
-        # In Docker, do not check local user paths
         return None
-    # Optionally, check local dependencies for non-Docker
     home = os.path.expanduser("~")
     local_path = os.path.join(
         home, ".nypai-chatbot", "data", "dependencies", tool_name, "bin", tool_name
     )
     if os.path.exists(local_path):
         return local_path
-    # Fallback to PATH
     return shutil.which(tool_name)
 
 
 def escape_special_characters(text: str) -> str:
-    """
-    Escape problematic special characters in the text while preserving useful punctuation.
-    Replace problematic characters with a space.
-    """
-    # More selective cleaning - preserve common punctuation and useful symbols
-    # Remove only problematic characters that might cause issues with pandoc or processing
     return re.sub(r"[^\w\s\n.,!?;:()\"'\-_+=<>[\]{}|\\/@#$%^&*~`]", " ", text)
 
 
 def apply_text_processing(content: str, file_ext: str) -> str:
-    """
-    Apply text processing (special character cleaning and keyword filtering) to text-based files.
-
-    :param content: The text content to process
-    :type content: str
-    :param file_ext: File extension to determine processing type
-    :type file_ext: str
-    :return: Processed text content
-    :rtype: str
-    """
-    # Define text-based file extensions that should receive processing
-    text_based_extensions = {".txt", ".md", ".markdown", ".csv", ".log"}
-
-    if file_ext.lower() not in text_based_extensions:
-        # For non-text-based files, return content as-is
-        return content
-
-    # Apply special character cleaning first
+    """Applies text cleaning and filler word filtering to extracted content."""
+    # This function should apply to any text content that has been extracted,
+    # regardless of whether the original file was text-based or binary.
     cleaned_content = escape_special_characters(content)
-
-    # Apply keyword filtering (remove filler words)
     filtered_content = filter_filler_words(cleaned_content)
-
     logger.info(
-        f"Applied text processing to {file_ext} file: special character cleaning and keyword filtering"
+        f"Applied text processing for '{file_ext}' file: special character cleaning and keyword filtering"
     )
     return filtered_content
 
 
 def split_markdown_chunks(md_path: str) -> list:
-    """Split markdown file into chunks by top-level headings or by lines if not structured."""
+    """Splits markdown file into chunks based on headers."""
     with open(md_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
-    # Try to split by top-level headings
     chunks = []
     current_chunk = []
     for line in lines:
         if line.startswith("# "):
             if current_chunk:
                 chunks.append("".join(current_chunk))
-                current_chunk = []
+            current_chunk = []
         current_chunk.append(line)
     if current_chunk:
         chunks.append("".join(current_chunk))
-    # If only one chunk, fallback to splitting by lines
-    if len(chunks) == 1 and len(lines) > CHUNK_CHAR_THRESHOLD:
-        chunks = []
-        for i in range(0, len(lines), CHUNK_CHAR_THRESHOLD):
-            chunks.append("".join(lines[i : i + CHUNK_CHAR_THRESHOLD]))
     return chunks
 
 
 def parallel_pandoc_chunks(md_path: str, input_format: str) -> str:
-    """Process markdown chunks in parallel with pandoc and concatenate results."""
+    """Processes markdown chunks in parallel using Pandoc."""
     chunks = split_markdown_chunks(md_path)
     results = [None] * len(chunks)
 
@@ -148,7 +116,7 @@ def parallel_pandoc_chunks(md_path: str, input_format: str) -> str:
 
 
 def parallel_plaintext_chunks(md_path: str) -> str:
-    """Process markdown chunks in parallel as plain text and concatenate results."""
+    """Processes markdown chunks in parallel as plain text."""
     chunks = split_markdown_chunks(md_path)
     results = [None] * len(chunks)
 
@@ -165,16 +133,7 @@ def parallel_plaintext_chunks(md_path: str) -> str:
 def extract_with_pandoc(
     file_path: str, pre_stripped_temp: Optional[str] = None
 ) -> Optional[str]:
-    """
-    Extract text content using pandoc.
-
-    :param file_path: Path to the file to extract content from
-    :type file_path: str
-    :param pre_stripped_temp: Optional path to a YAML-stripped temp file for markdown
-    :type pre_stripped_temp: Optional[str]
-    :return: Extracted text content or None if extraction failed
-    :rtype: Optional[str]
-    """
+    """Extracts content using Pandoc for various document types."""
     try:
         pandoc_path = find_tool("pandoc")
         if not pandoc_path:
@@ -201,12 +160,12 @@ def extract_with_pandoc(
         input_format = pandoc_formats[file_ext]
         temp_path = None
         file_to_use = file_path
-        # For text-based files, apply text processing (special character cleaning and keyword filtering) before Pandoc
-        # Note: PDF files are excluded as they are binary and should not be processed as text
-        if file_ext in {".txt", ".md", ".markdown", ".csv", ".log"}:
+
+        # For text-based files processed by Pandoc, read the full content,
+        # apply initial text processing, then pass to Pandoc via a temp file.
+        if file_ext in {".txt", ".md", ".markdown", ".csv", ".log", ".html", ".htm"}:
             with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            # Apply keyword filtering before sending to Pandoc
+                content = f.read()  # Read full content here for Pandoc processing
             processed_content = apply_text_processing(content, file_ext)
             tmp = tempfile.NamedTemporaryFile(
                 delete=False, suffix=file_ext, mode="w", encoding="utf-8"
@@ -215,6 +174,7 @@ def extract_with_pandoc(
             tmp.close()
             temp_path = tmp.name
             file_to_use = temp_path
+
         cmd = [
             pandoc_path,
             "-f",
@@ -225,19 +185,22 @@ def extract_with_pandoc(
             file_to_use,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        # Clean up temp file if used
         if temp_path:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Already logged warning if it fails in finally block
         if result.returncode == 0:
             content = result.stdout.strip()
             if content:
                 logger.info(
                     f"Successfully extracted content using pandoc from {file_path}"
                 )
-                return content
+                # Apply text processing again to the output of pandoc for consistency
+                return apply_text_processing(content, file_ext)
+            else:
+                logger.warning(f"Pandoc extracted empty content for {file_path}")
+                return None
         else:
             logger.warning(f"Pandoc extraction failed: {result.stderr}")
             return None
@@ -247,21 +210,13 @@ def extract_with_pandoc(
 
 
 def extract_with_tesseract(file_path: str) -> Optional[str]:
-    """Extract text from images using tesseract OCR.
-
-    :param file_path: Path to the image file to extract text from
-    :type file_path: str
-    :return: Extracted text content or None if extraction failed
-    :rtype: Optional[str]
-    """
+    """Extracts text from images using Tesseract OCR."""
     try:
         tesseract_path = find_tool("tesseract")
         if not tesseract_path:
             logger.warning("Tesseract is not installed or not in PATH.")
             return None
         file_ext = Path(file_path).suffix.lower()
-
-        # Image formats supported by tesseract
         image_formats = {
             ".png",
             ".jpg",
@@ -272,64 +227,46 @@ def extract_with_tesseract(file_path: str) -> Optional[str]:
             ".gif",
             ".webp",
         }
-
         if file_ext not in image_formats:
             return None
-
-        # Use tesseract to extract text
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False
         ) as tmp_output:
             output_path = tmp_output.name
-
         try:
-            # Remove the .txt extension as tesseract adds it automatically
             output_base = output_path[:-4]
-
             cmd = [tesseract_path, file_path, output_base, "-l", "eng"]
-
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-
             if result.returncode == 0:
-                # Read the output file
                 if os.path.exists(output_path):
                     with open(output_path, "r", encoding="utf-8") as f:
                         content = f.read().strip()
-
                     if content:
                         logger.info(
                             f"Successfully extracted text using tesseract from {file_path}"
                         )
-                        return content
+                        return apply_text_processing(content, file_ext)
+                    else:
+                        logger.warning(
+                            f"Tesseract extracted empty content for {file_path}"
+                        )
+                        return None
             else:
                 logger.warning(f"Tesseract OCR failed for {file_path}: {result.stderr}")
-
         finally:
-            # Clean up temporary file
             if os.path.exists(output_path):
                 os.unlink(output_path)
-
     except Exception as e:
         logger.error(f"Error in tesseract OCR for {file_path}: {e}")
-
     return None
 
 
 def extract_pdf_content(file_path: str) -> Optional[str]:
-    """Extract content from PDF files using multiple methods.
-
-    :param file_path: Path to the PDF file to extract content from
-    :type file_path: str
-    :return: Extracted text content or None if extraction failed
-    :rtype: Optional[str]
-    """
+    """Extracts content from PDF files, trying Pandoc first, then fallback."""
     try:
-        # Try pandoc first for PDF
         content = extract_with_pandoc(file_path)
         if content:
             return content
-
-        # Fallback to existing PDF extraction methods
         try:
             from llm.dataProcessing import ExtractText
 
@@ -340,13 +277,13 @@ def extract_pdf_content(file_path: str) -> Optional[str]:
                     logger.info(
                         f"Successfully extracted PDF content using fallback method from {file_path}"
                     )
-                    return content
+                    return apply_text_processing(
+                        content, Path(file_path).suffix.lower()
+                    )
         except Exception as e:
             logger.warning(f"Fallback PDF extraction failed for {file_path}: {e}")
-
     except Exception as e:
         logger.error(f"Error in PDF content extraction for {file_path}: {e}")
-
     return None
 
 
@@ -354,75 +291,52 @@ def extract_text_file_content(
     file_path: str, pre_stripped_temp: Optional[str] = None
 ) -> Optional[str]:
     """
-    Extract content from plain text files.
-
-    :param file_path: Path to the text file to extract content from
-    :type file_path: str
-    :param pre_stripped_temp: Optional path to a YAML-stripped temp file for markdown
-    :type pre_stripped_temp: Optional[str]
-    :return: Extracted text content or None if extraction failed
-    :rtype: Optional[str]
+    Extracts content from text-based files, limited to the first CHUNK_CHAR_THRESHOLD characters.
+    If the file is shorter than the threshold, the entire content is extracted.
     """
     try:
         file_ext = Path(file_path).suffix.lower()
         text_formats = {".txt", ".csv", ".log", ".md", ".markdown"}
-
         if file_ext not in text_formats:
             return None
 
-        target_path = (
-            pre_stripped_temp
-            if pre_stripped_temp and file_ext in {".md", ".markdown"}
-            else file_path
-        )
-        # Read up to CHUNK_CHAR_THRESHOLD characters only
-        max_chars = CHUNK_CHAR_THRESHOLD
         content_chars = []
         char_count = 0
-        with open(target_path, "r", encoding="utf-8") as f:
-            while char_count < max_chars:
+        with open(file_path, "r", encoding="utf-8") as f:
+            while char_count < CHUNK_CHAR_THRESHOLD:  # Loop until 1000 chars or EOF
                 next_line = f.readline()
                 if not next_line:
-                    break
-                # Only add up to the remaining allowed characters
-                remaining = max_chars - char_count
-                if len(next_line) > remaining:
-                    content_chars.append(next_line[:remaining])
-                    char_count += remaining
-                    break
+                    break  # End of file
+
+                remaining_chars = CHUNK_CHAR_THRESHOLD - char_count
+                if len(next_line) > remaining_chars:
+                    content_chars.append(next_line[:remaining_chars])
+                    char_count += remaining_chars
+                    break  # Reached limit within this line
                 else:
                     content_chars.append(next_line)
                     char_count += len(next_line)
+
         content = "".join(content_chars)
-
-        # Apply text processing (special character cleaning and keyword filtering) for text-based files
         processed_content = apply_text_processing(content, file_ext)
-
+        if len(content) < CHUNK_CHAR_THRESHOLD:
+            logger.info(
+                f"Successfully extracted full text content (less than {CHUNK_CHAR_THRESHOLD} chars) from {file_path}"
+            )
+        else:
+            logger.info(
+                f"Successfully extracted first {CHUNK_CHAR_THRESHOLD} characters from text file {file_path}"
+            )
         return processed_content
     except Exception as e:
         logger.error(f"Error reading text file {file_path}: {e}")
+        return None
     finally:
-        # Clean up temp file if used
-        if (
-            pre_stripped_temp
-            and pre_stripped_temp != file_path
-            and file_ext in {".md", ".markdown"}
-        ):
-            try:
-                os.unlink(pre_stripped_temp)
-            except Exception:
-                pass
-    return None
+        pass
 
 
 def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
-    """Enhanced file content extraction with multiple methods and detailed results.
-
-    :param file_path: Path to the file to extract content from
-    :type file_path: str
-    :return: Dictionary containing extracted content, method used, and metadata
-    :rtype: Dict[str, Any]
-    """
+    """Main function to extract content from various file types."""
     if not os.path.exists(file_path):
         return {
             "content": "",
@@ -431,10 +345,8 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             "file_size": 0,
             "file_type": "unknown",
         }
-
     file_ext = Path(file_path).suffix.lower()
     file_size = os.path.getsize(file_path)
-
     result = {
         "content": "",
         "method": "none",
@@ -443,15 +355,12 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
         "file_type": file_ext,
         "extraction_methods_tried": [],
     }
-
-    # Try different extraction methods based on file type
     extraction_methods = []
-    pre_stripped_temp = None
+
     try:
-        # PDF files
+        # Prioritize specific extractors
         if file_ext == ".pdf":
             extraction_methods.append(("pdf_extraction", extract_pdf_content))
-        # Image files (OCR)
         elif file_ext in {
             ".png",
             ".jpg",
@@ -463,7 +372,6 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             ".webp",
         }:
             extraction_methods.append(("tesseract_ocr", extract_with_tesseract))
-        # Document files
         elif file_ext in {
             ".docx",
             ".doc",
@@ -472,37 +380,35 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             ".html",
             ".htm",
             ".epub",
-            ".md",
-            ".markdown",
+            ".pptx",
+            ".ppt",  # Added pptx/ppt here, as they're also handled by pandoc
         }:
-            extraction_methods.append(
-                (
-                    "pandoc",
-                    lambda fp: extract_with_pandoc(
-                        fp, pre_stripped_temp=pre_stripped_temp
-                    ),
-                )
-            )
-        # Text files
-        elif file_ext in {".txt", ".csv", ".log"}:
-            extraction_methods.append(("text_file", extract_text_file_content))
-        # Excel files
-        elif file_ext in {".xlsx", ".xls"}:
-            extraction_methods.append(("excel_fallback", lambda _: None))  # Placeholder
-        # PowerPoint files
-        elif file_ext in {".pptx", ".ppt"}:
             extraction_methods.append(("pandoc", extract_with_pandoc))
+        elif file_ext in {".xlsx", ".xls"}:
+            extraction_methods.append(
+                ("excel_placeholder", lambda _: None)
+            )  # Placeholder for Excel
 
-        # Try extraction methods
+        # Handle Markdown and direct text files: Prioritize extract_text_file_content
+        # as it aligns with the user's explicit request for 1000 char limit for these.
+        if file_ext in {".txt", ".csv", ".log", ".md", ".markdown"}:
+            # Add at the beginning of the list to prioritize, then fallback to pandoc if applicable
+            extraction_methods.insert(0, ("text_file", extract_text_file_content))
+            # Also ensure pandoc is a fallback for markdown if the simple text read fails/is undesirable for some reason
+            if file_ext in {".md", ".markdown"}:
+                # Ensure pandoc is also available as a fallback for markdown, but after plain text
+                extraction_methods.insert(1, ("pandoc", extract_with_pandoc))
+
+        # General fallback: Try to read any file as a plain text file if no other method worked
+        # This will also respect the 1000 character limit due to extract_text_file_content's current logic.
+        extraction_methods.append(("generic_text_fallback", extract_text_file_content))
+
         for method_name, method_func in extraction_methods:
             result["extraction_methods_tried"].append(method_name)
             try:
-                if file_ext in {".md", ".markdown"} and method_name != "pandoc":
-                    content = extract_text_file_content(
-                        file_path, pre_stripped_temp=pre_stripped_temp
-                    )
-                else:
-                    content = method_func(file_path)
+                content = method_func(
+                    file_path
+                )  # No need for pre_stripped_temp here, handled internally.
                 if content and content.strip():
                     result["content"] = content.strip()
                     result["method"] = method_name
@@ -513,15 +419,11 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
                 )
                 continue
     finally:
-        # Clean up temp file if used
-        if pre_stripped_temp and os.path.exists(pre_stripped_temp):
-            try:
-                os.unlink(pre_stripped_temp)
-            except Exception:
-                pass
+        pass  # No global temp file cleanup needed here due to internal handling
 
-    # Fallback to original method if nothing worked
-    if not result["content"] and file_ext != ".pdf":  # Avoid double PDF processing
+    # Existing fallback for non-PDF files using llm.dataProcessing.ExtractText (if no content yet)
+    # Note: This fallback is *not* character limited by CHUNK_CHAR_THRESHOLD, as it uses ExtractText.
+    if not result["content"] and file_ext != ".pdf":
         result["extraction_methods_tried"].append("fallback_original")
         try:
             from llm.dataProcessing import ExtractText
@@ -530,7 +432,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             if documents:
                 content = "\n\n".join([doc.page_content for doc in documents])
                 if content.strip():
-                    result["content"] = content.strip()
+                    result["content"] = apply_text_processing(content, file_ext).strip()
                     result["method"] = "fallback_original"
         except Exception as e:
             result["error"] = f"All extraction methods failed. Last error: {str(e)}"
@@ -539,8 +441,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
         result["error"] = (
             result["error"] or "No content could be extracted from the file"
         )
-
-    # After all extraction attempts, if a required tool was missing, set error
+    # Refine error messages if specific tools are missing
     if not result["content"]:
         if result["method"] == "pandoc" and shutil.which("pandoc") is None:
             result["error"] = (
@@ -550,27 +451,14 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             result["error"] = (
                 "Tesseract is not installed or not in PATH. Please install tesseract-ocr for OCR."
             )
-
     return result
 
 
 def classify_file_content(content: str, username: Optional[str]) -> Dict[str, Any]:
-    """
-    Classify the extracted file content with enhanced error handling, request counting, and caching.
-    Shared utility for file classification.
-
-    :param content: The text content to classify
-    :type content: str
-    :param username: Optional username for per-user request counting
-    :type username: Optional[str]
-    :return: Dictionary containing classification results
-    :rtype: Dict[str, Any]
-    """
+    """Classifies file content based on keywords and sends a concise summary to LLM."""
     from performance_utils import perf_monitor, cache_manager
-    import json
-    import hashlib
+    import yake
 
-    # Use a per-user request counter
     if not hasattr(classify_file_content, "classification_request_counts"):
         classify_file_content.classification_request_counts = {}
     classification_request_counts = classify_file_content.classification_request_counts
@@ -581,77 +469,62 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
             "reasoning": "No content available for classification",
             "confidence": 0.0,
         }
-
-    # Defensive: ensure content is string
     if not isinstance(content, str):
         logger.warning(
             f"classify_file_content: expected string content, got {type(content)}: {content}"
         )
         content = str(content)
 
-    import collections
-    import yake  # Import the actual yake library if you're directly using its KeywordExtractor
+    # filter_filler_words should ideally already be applied during content extraction.
+    # Keeping it here as a safeguard ensures it's always applied before YAKE/LLM.
+    filtered_content = filter_filler_words(content)
 
-    # --- Inside your classification function ---
-    # Defensive: ensure content is string
-    if not isinstance(content, str):
-        logger.warning(
-            f"classify_file_content: expected string content, got {type(content)}: {content}"
-        )
-        content = str(content)
-
-    # Apply keyword filtering if `YAKEMetadataTagger` doesn't handle it or you need an extra layer
-    # This `filter_filler_words` might be redundant or integrated into YAKE's stopwords
-    filtered_content = filter_filler_words(
-        content
-    )  # Assuming this also lowercases the content
-
-    # Initialize YAKE Keyword Extractor with desired parameters
-    # Consider if `YAKEMetadataTagger` already does this internally and exposes parameters
     kw_extractor = yake.KeywordExtractor(
         lan="en",
-        n=3,  # Max 3-word keywords (1-gram, 2-gram, 3-gram)
-        dedupLim=0.9,  # Less aggressive deduplication to keep more candidates
-        top=50,  # Get a larger pool of top keywords from YAKE to then filter by frequency
-        stopwords=None,  # Or pass your custom stopwords if filter_filler_words doesn't handle this
+        n=3,
+        dedupLim=0.9,
+        top=50,
+        stopwords=None,
     )
-
-    # YAKE returns a list of (keyword, score) tuples
     yake_output = kw_extractor.extract_keywords(filtered_content)
 
-    # Process YAKE output: Decide how to treat multi-word keywords
     all_relevant_terms = []
     for keyword, score in yake_output:
-        # Option 1: Treat multi-word keywords as single units (Recommended for retaining context)
-        all_relevant_terms.append(keyword.lower())  # Normalize to lowercase
-
-        # Option 2 (If you specifically need single words from multi-word phrases):
-        # This is what you were doing, but potentially losing context.
-        # If using this, ensure normalization and short word filtering are applied here.
+        all_relevant_terms.append(keyword.lower())
         for word in keyword.split():
             if len(word) > 2:
                 all_relevant_terms.append(word.lower())
 
-    # Count frequencies of the chosen terms (can be single words or multi-word phrases)
     word_counts = collections.Counter(all_relevant_terms)
-
-    # Get the top 20 most frequent terms (which could now be multi-word phrases)
-    top_20_final_terms = [w for w, _ in word_counts.most_common(20)]
-
-    # The `top_20_final_terms` list is what you should now feed into your classifier's vectorization step.
-    # Avoid joining into a single string if your classifier expects a list or numerical vector.
-    # If your classifier *does* expect a single string, then:
+    top_20_final_terms = [
+        w for w, _ in word_counts.most_common(CLASSIFICATION_WORD_LIMIT)
+    ]
     top_20_str = ", ".join(top_20_final_terms)
 
-    # Hash the filtered content for caching
+    # --- Create a concise text summary for classification based on word limit ---
+    # This will be the primary text sent to the LLM for classification,
+    # ensuring it adheres to a strict word count.
+    words = filtered_content.split()
+    concise_content_for_llm = " ".join(words[:CLASSIFICATION_WORD_LIMIT])
+
+    # If filtered_content was very short, ensure concise_content_for_llm is not empty
+    if not concise_content_for_llm and filtered_content.strip():
+        concise_content_for_llm = filtered_content.strip()
+
+    # Add a fallback to the raw top_20_str if concise_content_for_llm is empty after processing
+    if not concise_content_for_llm and top_20_str:
+        concise_content_for_llm = top_20_str
+    # Ensure it's not completely empty, if all else fails, use a placeholder
+    if not concise_content_for_llm:
+        concise_content_for_llm = "No discernable content for classification"
+
     content_hash = hashlib.sha256(filtered_content.encode("utf-8")).hexdigest()
     cache = cache_manager.get_cache("classification_results")
     if content_hash in cache:
         result = cache[content_hash]
-        result = result.copy()  # Avoid mutating cached result
+        result = result.copy()
         result["cached"] = True
         return result
-    # Per-user request counting
     user_key = username or "__global__"
     if user_key not in classification_request_counts:
         classification_request_counts[user_key] = 0
@@ -663,17 +536,15 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
         perf_monitor.start_timer("classification_llm_call")
         from llm.classificationModel import classify_text
 
-        # Pass the full filtered content as text, and the 20 keywords as the keywords argument
-        result = classify_text(filtered_content, keywords=top_20_str)
+        # Pass the newly created concise_content_for_llm as the main text
+        result = classify_text(text=concise_content_for_llm, keywords=top_20_str)
         perf_monitor.end_timer("classification_llm_call")
-        # Extract the answer which should be JSON
         answer = result.get("answer", "{}")
         try:
             if isinstance(answer, str):
                 classification_result = json.loads(answer)
             else:
                 classification_result = answer
-            # Defensive: ensure classification_result is a dict
             if not isinstance(classification_result, dict):
                 logger.warning(
                     f"classify_file_content: classification_result not dict: {classification_result}"
@@ -708,7 +579,6 @@ def classify_file_content(content: str, username: Optional[str]) -> Dict[str, An
                 "reasoning": f"Classification completed. Raw response: {answer}",
                 "confidence": 0.5,
             }
-        # Cache the result
         cache[content_hash] = classification_result.copy()
         return classification_result
     except Exception as e:
