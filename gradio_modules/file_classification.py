@@ -17,8 +17,7 @@ from gradio_modules.enhanced_content_extraction import (
 )
 from infra_utils import get_chatbot_dir, clear_uploaded_files
 import asyncio
-
-
+import json
 from backend import data_classification
 
 # Hardcoded list of allowed file extensions
@@ -244,7 +243,36 @@ def call_backend_data_classification(content_text):
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    return loop.run_until_complete(data_classification(content_text))
+
+    raw_classification_output = loop.run_until_complete(
+        data_classification(content_text)
+    )
+
+    # Check if the output is a dictionary and contains an 'ANSWER' field
+    if (
+        isinstance(raw_classification_output, dict)
+        and "ANSWER" in raw_classification_output
+    ):
+        # If 'ANSWER' is a string, attempt to parse it as JSON
+        if isinstance(raw_classification_output["ANSWER"], str):
+            try:
+                parsed_answer = json.loads(raw_classification_output["ANSWER"])
+                # Replace the string 'ANSWER' with the parsed dictionary
+                raw_classification_output["ANSWER"] = parsed_answer
+            except json.JSONDecodeError as e:
+                print(
+                    f"Warning: Could not parse ANSWER field as JSON: {e}. Raw: {raw_classification_output['ANSWER']}"
+                )
+                # Optionally, you might want to set an error message or specific structure here
+                raw_classification_output["ANSWER"] = {
+                    "error": f"Failed to parse JSON answer: {e}",
+                    "raw_content": raw_classification_output["ANSWER"],
+                }
+            except TypeError:
+                # Handle cases where ANSWER might not be a string at all, e.g., if it's already an object
+                pass  # Do nothing, assume it's already in the desired format or not meant for parsing
+
+    return raw_classification_output
 
 
 def handle_upload_click(file_obj: Any, username: str) -> tuple:

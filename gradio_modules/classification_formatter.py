@@ -1,56 +1,116 @@
-#!/usr/bin/env python3
-"""Enhanced classification response formatting for better user experience."""
-
+import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 
 def format_classification_response(
-    classification: Dict[str, Any],
-    extraction_info: Dict[str, Any],
-    file_info: Dict[str, str],
+    classification_data: Dict[str, Any],
+    extraction_result: Dict[str, Any],
+    original_filename: str,
 ) -> Dict[str, str]:
-    """Format classification response with enhanced presentation.
+    """
+    Formats the security classification and content extraction results for display
+    within a Gradio interface. This function ensures all output strings are
+    correctly cast to prevent potential 'AddableValuesDict' errors, provides
+    clear summaries, and includes basic styling for visibility.
 
-    :param classification: Classification results from the model
-    :type classification: Dict[str, Any]
-    :param extraction_info: Information about content extraction
-    :type extraction_info: Dict[str, Any]
-    :param file_info: Basic file information
-    :type file_info: Dict[str, str]
-    :return: Dictionary with formatted strings for display
+    :param classification_data: A dictionary containing the classification results
+                                 from the model. It might contain a top-level 'ANSWER'
+                                 key whose value is a JSON string of the actual
+                                 classification details, or it might directly contain
+                                 'classification', 'sensitivity', 'reasoning', etc.
+    :type classification_data: Dict[str, Any]
+    :param extraction_result: A dictionary containing details from the content
+                               extraction process, expected to include 'content' (a
+                               sample of the extracted text), 'file_size', and 'method'.
+    :type extraction_result: Dict[str, Any]
+    :param original_filename: The original name of the file that was processed.
+    :type original_filename: str
+    :return: A dictionary containing formatted string outputs suitable for direct
+             display in Gradio components, including 'classification', 'sensitivity',
+             'file_info', 'reasoning', and 'summary'.
     :rtype: Dict[str, str]
     """
 
-    # Get classification details
-    security_class = classification.get("classification", "Unknown")
-    sensitivity = classification.get("sensitivity", "Unknown")
-    reasoning = classification.get("reasoning", "No reasoning provided")
-    confidence = classification.get("confidence", None)
+    # Determine the actual source of classification details
+    # Prioritize parsing 'ANSWER' if it's a JSON string
+    actual_classification_details = {}
+    if "ANSWER" in classification_data and isinstance(
+        classification_data["ANSWER"], str
+    ):
+        try:
+            actual_classification_details = json.loads(classification_data["ANSWER"])
+        except json.JSONDecodeError:
+            # If parsing fails, fall back to using classification_data directly,
+            # assuming it might contain the keys at the top level or for error reporting
+            actual_classification_details = classification_data
+    else:
+        # If 'ANSWER' key is not present or not a string, assume classification_data
+        # itself contains the classification details directly.
+        actual_classification_details = classification_data
 
-    # Format security classification with emoji and styling
-    security_formatted = format_security_classification(security_class)
+    # --- Robustly convert classification and sensitivity to strings and then to uppercase ---
+    # Retrieve with a default, then convert to string, then apply .upper()
+    # Check both potential key names (e.g., "CLASSIFICATION" vs "classification")
+    classification_category = str(
+        actual_classification_details.get(
+            "CLASSIFICATION",
+            actual_classification_details.get("classification", "Unknown"),
+        )
+    ).upper()
+    sensitivity_level = str(
+        actual_classification_details.get(
+            "SENSITIVITY",
+            actual_classification_details.get("sensitivity", "Non-Sensitive"),
+        )
+    ).upper()
+    reasoning = str(
+        actual_classification_details.get(
+            "REASONING",
+            actual_classification_details.get(
+                "reasoning", "No specific reasoning provided."
+            ),
+        )
+    )
 
-    # Format sensitivity with appropriate styling
-    sensitivity_formatted = format_sensitivity_level(sensitivity)
+    # Confidence can be a number, retrieve and handle accordingly for display
+    # Check both potential key names (e.g., "CONFIDENCE" vs "confidence")
+    confidence = actual_classification_details.get(
+        "CONFIDENCE", actual_classification_details.get("confidence", None)
+    )
+    confidence_str = (
+        f"{confidence * 100:.2f}%" if isinstance(confidence, (int, float)) else "N/A"
+    )
 
-    # Format file information with extraction details
-    file_info_formatted = format_file_information(file_info, extraction_info)
+    # --- Robustly convert extracted_content_sample to string ---
+    extracted_content_sample = str(extraction_result.get("content", "")).strip()
+    if len(extracted_content_sample) > 500:
+        extracted_content_sample = extracted_content_sample[:500] + "..."
 
-    # Format reasoning with better structure
-    reasoning_formatted = format_reasoning(reasoning, confidence)
+    # --- Construct file information string, ensuring all parts are strings ---
+    file_info_str = (
+        f"**Original Filename:** {str(original_filename)}\n"
+        f"**File Size:** {str(extraction_result.get('file_size', 'N/A'))} bytes\n"
+        f"**Extraction Method:** {str(extraction_result.get('method', 'N/A'))}\n"
+        f"**Extracted Content Sample (first 500 chars):**\n```\n{extracted_content_sample}\n```"
+    )
 
-    # Create summary section
-    summary_formatted = format_classification_summary(
-        security_class, sensitivity, confidence, extraction_info
+    # --- Construct summary text, ensuring all parts are strings ---
+    summary_text = (
+        f"## Classification Summary\n\n"
+        f"**File:** `{str(original_filename)}`\n"
+        f"**Security Classification:** **<span style='color: {'red' if 'RESTRICTED' in classification_category or 'CONFIDENTIAL' in classification_category else 'green'};'>{classification_category}</span>**\n"
+        f"**Sensitivity Level:** **<span style='color: {'orange' if 'SENSITIVE' in sensitivity_level else 'blue'};'>{sensitivity_level}</span>**\n\n"
+        f"**Reasoning:**\n{reasoning}\n\n"
+        f"**Confidence:** {confidence_str}\n"
     )
 
     return {
-        "classification": security_formatted,
-        "sensitivity": sensitivity_formatted,
-        "file_info": file_info_formatted,
-        "reasoning": reasoning_formatted,
-        "summary": summary_formatted,
+        "classification": classification_category,
+        "sensitivity": sensitivity_level,
+        "file_info": file_info_str,
+        "reasoning": reasoning,
+        "summary": summary_text,
     }
 
 

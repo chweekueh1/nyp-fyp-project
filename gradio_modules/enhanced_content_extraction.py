@@ -7,9 +7,6 @@ import logging
 import shutil
 import concurrent.futures
 import re
-import collections
-import hashlib
-import json
 
 # Import keyword filtering functionality
 try:
@@ -44,16 +41,38 @@ def find_tool(tool_name: str) -> Optional[str]:
     return shutil.which(tool_name)
 
 
-def escape_special_characters(text: str) -> str:
-    return re.sub(r"[^\w\s\n.,!?;:()\"'\-_+=<>[\]{}|\\/@#$%^&*~`]", " ", text)
+def clean_text_for_classification(text: str) -> str:
+    """
+    Applies comprehensive cleaning to text to remove redundant symbols,
+    markdown, and numerical prefixes, making it suitable for classification.
+    """
+    if not isinstance(text, str):
+        text = str(text)  # Ensure it's a string
+
+    # Remove common Markdown headings: e.g., "## Header", "# Title"
+    text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
+    # Remove horizontal rules: "---", "***"
+    text = re.sub(r"^\s*[-*]+\s*$", "", text, flags=re.MULTILINE)
+    # Remove list indicators: "1. ", "2. ", "- ", "* "
+    text = re.sub(r"^\s*((\d+\.)|[-*])\s+", "", text, flags=re.MULTILINE)
+    # Remove redundant spaces and newlines
+    text = re.sub(r"\s+", " ", text).strip()
+    # Remove any remaining leading/trailing punctuation that might occur after cleaning
+    text = re.sub(r"^[.,!?;:()\"']+|[.,!?;:()\"']+$", "", text).strip()
+    return text
 
 
 def apply_text_processing(content: str, file_ext: str) -> str:
     """Applies text cleaning and filler word filtering to extracted content."""
     # This function should apply to any text content that has been extracted,
     # regardless of whether the original file was text-based or binary.
-    cleaned_content = escape_special_characters(content)
+
+    # First, perform robust cleaning for redundant symbols
+    cleaned_content = clean_text_for_classification(content)
+
+    # Then, apply filler word filtering
     filtered_content = filter_filler_words(cleaned_content)
+
     logger.info(
         f"Applied text processing for '{file_ext}' file: special character cleaning and keyword filtering"
     )
@@ -166,7 +185,7 @@ def extract_with_pandoc(
         if file_ext in {".txt", ".md", ".markdown", ".csv", ".log", ".html", ".htm"}:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()  # Read full content here for Pandoc processing
-            processed_content = apply_text_processing(content, file_ext)
+            processed_content = apply_text_processing(content, file_ext)  # Apply here
             tmp = tempfile.NamedTemporaryFile(
                 delete=False, suffix=file_ext, mode="w", encoding="utf-8"
             )
@@ -197,7 +216,7 @@ def extract_with_pandoc(
                     f"Successfully extracted content using pandoc from {file_path}"
                 )
                 # Apply text processing again to the output of pandoc for consistency
-                return apply_text_processing(content, file_ext)
+                return apply_text_processing(content, file_ext)  # Apply again here
             else:
                 logger.warning(f"Pandoc extracted empty content for {file_path}")
                 return None
@@ -452,140 +471,3 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
                 "Tesseract is not installed or not in PATH. Please install tesseract-ocr for OCR."
             )
     return result
-
-
-def classify_file_content(content: str, username: Optional[str]) -> Dict[str, Any]:
-    """Classifies file content based on keywords and sends a concise summary to LLM."""
-    from performance_utils import perf_monitor, cache_manager
-    import yake
-
-    if not hasattr(classify_file_content, "classification_request_counts"):
-        classify_file_content.classification_request_counts = {}
-    classification_request_counts = classify_file_content.classification_request_counts
-    if not content or not content.strip():
-        return {
-            "classification": "Unknown",
-            "sensitivity": "Unknown",
-            "reasoning": "No content available for classification",
-            "confidence": 0.0,
-        }
-    if not isinstance(content, str):
-        logger.warning(
-            f"classify_file_content: expected string content, got {type(content)}: {content}"
-        )
-        content = str(content)
-
-    # filter_filler_words should ideally already be applied during content extraction.
-    # Keeping it here as a safeguard ensures it's always applied before YAKE/LLM.
-    filtered_content = filter_filler_words(content)
-
-    kw_extractor = yake.KeywordExtractor(
-        lan="en",
-        n=3,
-        dedupLim=0.9,
-        top=50,
-        stopwords=None,
-    )
-    yake_output = kw_extractor.extract_keywords(filtered_content)
-
-    all_relevant_terms = []
-    for keyword, score in yake_output:
-        all_relevant_terms.append(keyword.lower())
-        for word in keyword.split():
-            if len(word) > 2:
-                all_relevant_terms.append(word.lower())
-
-    word_counts = collections.Counter(all_relevant_terms)
-    top_20_final_terms = [
-        w for w, _ in word_counts.most_common(CLASSIFICATION_WORD_LIMIT)
-    ]
-    top_20_str = ", ".join(top_20_final_terms)
-
-    # --- Create a concise text summary for classification based on word limit ---
-    # This will be the primary text sent to the LLM for classification,
-    # ensuring it adheres to a strict word count.
-    words = filtered_content.split()
-    concise_content_for_llm = " ".join(words[:CLASSIFICATION_WORD_LIMIT])
-
-    # If filtered_content was very short, ensure concise_content_for_llm is not empty
-    if not concise_content_for_llm and filtered_content.strip():
-        concise_content_for_llm = filtered_content.strip()
-
-    # Add a fallback to the raw top_20_str if concise_content_for_llm is empty after processing
-    if not concise_content_for_llm and top_20_str:
-        concise_content_for_llm = top_20_str
-    # Ensure it's not completely empty, if all else fails, use a placeholder
-    if not concise_content_for_llm:
-        concise_content_for_llm = "No discernable content for classification"
-
-    content_hash = hashlib.sha256(filtered_content.encode("utf-8")).hexdigest()
-    cache = cache_manager.get_cache("classification_results")
-    if content_hash in cache:
-        result = cache[content_hash]
-        result = result.copy()
-        result["cached"] = True
-        return result
-    user_key = username or "__global__"
-    if user_key not in classification_request_counts:
-        classification_request_counts[user_key] = 0
-    classification_request_counts[user_key] += 1
-    print(
-        f"[INFO] File classification requests for '{user_key}': {classification_request_counts[user_key]}"
-    )
-    try:
-        perf_monitor.start_timer("classification_llm_call")
-        from llm.classificationModel import classify_text
-
-        # Pass the newly created concise_content_for_llm as the main text
-        result = classify_text(text=concise_content_for_llm, keywords=top_20_str)
-        perf_monitor.end_timer("classification_llm_call")
-        answer = result.get("answer", "{}")
-        try:
-            if isinstance(answer, str):
-                classification_result = json.loads(answer)
-            else:
-                classification_result = answer
-            if not isinstance(classification_result, dict):
-                logger.warning(
-                    f"classify_file_content: classification_result not dict: {classification_result}"
-                )
-                classification_result = {
-                    "classification": "Unknown",
-                    "sensitivity": "Unknown",
-                    "reasoning": str(classification_result),
-                    "confidence": 0.0,
-                }
-            if "classification" not in classification_result:
-                classification_result["classification"] = "Official(Open)"
-            if "sensitivity" not in classification_result or not isinstance(
-                classification_result["sensitivity"], str
-            ):
-                logger.warning(
-                    f"classify_file_content: sensitivity not string or missing: {classification_result.get('sensitivity')}"
-                )
-                classification_result["sensitivity"] = str(
-                    classification_result.get("sensitivity", "Non-Sensitive")
-                )
-            if "reasoning" not in classification_result:
-                classification_result["reasoning"] = (
-                    "Classification completed successfully"
-                )
-            if "confidence" not in classification_result:
-                classification_result["confidence"] = 0.8
-        except json.JSONDecodeError:
-            classification_result = {
-                "classification": "Official(Open)",
-                "sensitivity": "Non-Sensitive",
-                "reasoning": f"Classification completed. Raw response: {answer}",
-                "confidence": 0.5,
-            }
-        cache[content_hash] = classification_result.copy()
-        return classification_result
-    except Exception as e:
-        logger.error(f"classify_file_content: Exception during classification: {e}")
-        return {
-            "classification": "Error",
-            "sensitivity": "Error",
-            "reasoning": f"Classification failed: {str(e)}",
-            "confidence": 0.0,
-        }

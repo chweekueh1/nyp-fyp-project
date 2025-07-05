@@ -22,7 +22,6 @@ from infra_utils import (
 import logging  # Added for internal logging in this file
 import threading
 from llm.keyword_cache import get_cached_response, set_cached_response
-import traceback
 from system_prompts import (
     get_chat_prompt_template,
     get_chat_contextual_sys_prompt,
@@ -499,12 +498,6 @@ CACHE_VERSION = "1.0"  # Add version for cache invalidation
 
 app: Optional[Any] = None  # Initialize app to None
 # Ensure llm, db, and client are all initialized before compiling the workflow
-if not (llm and db and client):
-    tb = traceback.format_stack()
-    logging.critical(
-        "LLM, DuckDB vector store, or OpenAI client not initialized. Chat functions will be limited.\nTraceback (most recent call last):\n%s"
-        % ("".join(tb))
-    )
 
 
 # --- Main Answer Retrieval Function ---

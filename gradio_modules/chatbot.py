@@ -9,7 +9,7 @@ Users can send messages, manage chat sessions, search history, and rename chats.
 from typing import Tuple, Any, List, Dict
 
 import gradio as gr
-from llm.dataProcessing import YAKEMetadataTagger
+import yake
 
 from infra_utils import clear_chat_history
 
@@ -306,16 +306,12 @@ def chatbot_ui(
                 bot_msg = history[i + 1].get("content", "")
                 tuple_history.append([user_msg, bot_msg])
 
-        # Extract keywords from the message using YAKE (top 20 words only, split by whitespace)
-        keywords = YAKEMetadataTagger(msg)
-        import collections
+        # Extract top 20 keywords (phrases) from the message using YAKE
+        kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=20)
+        keywords_from_message = kw_extractor.extract_keywords(msg)
 
-        all_words = []
-        for kw in keywords:
-            all_words.extend([w for w in kw.split() if len(w) > 2])
-        word_counts = collections.Counter(all_words)
-        top_20_words = [w for w, _ in word_counts.most_common(20)]
-        filtered_keywords = ", ".join(top_20_words)
+        # Join the extracted keyword phrases into a comma-separated string
+        filtered_keywords = ", ".join([kw for kw, score in keywords_from_message])
 
         # Get response from backend (async function)
         import asyncio

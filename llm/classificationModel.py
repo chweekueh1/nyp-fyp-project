@@ -1,55 +1,28 @@
-# --- Workflow Re-initialization for Dependency Injection ---
-def initialize_classification_workflow():
-    """
-    (Re)initialize the classification workflow after llm, embedding, and db are injected.
-    Call this after setting classificationModel.llm, .embedding, and .db in app.py.
-    """
-    global multiquery_retriever, classification_chain, rag_chain, workflow, classify
-    multiquery_retriever = None
-    if db and llm:
-        from langchain.retrievers.multi_query import MultiQueryRetriever
-
-        multiquery_retriever = MultiQueryRetriever.from_llm(
-            retriever=db.as_retriever(search_kwargs={"k": 3}),
-            llm=llm,
-            prompt=multi_query_template,
-        )
-    classification_chain = None
-    rag_chain = None
-    if llm and multiquery_retriever:
-        from langchain.chains.combine_documents import create_stuff_documents_chain
-        from langchain.chains import create_retrieval_chain
-
-        classification_chain = create_stuff_documents_chain(llm, classification_prompt)
-        rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
-    memory = MemorySaver()
-    workflow = None
-    classify = None
-    if rag_chain:
-        from langgraph.graph import StateGraph
-
-        workflow = StateGraph(state_schema=State)
-        workflow.add_edge(START, "model")
-        workflow.add_node("model", call_model)
-        classify = workflow.compile(checkpointer=memory)
-
-
 #!/usr/bin/env python3
 import openai
 import os
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, StateGraph
+from langgraph.graph import START
 from typing_extensions import TypedDict
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
-from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.prompts import PromptTemplate
 import time
 from infra_utils import get_chatbot_dir
-from typing import Optional
-from llm.keyword_cache import filter_filler_words
+from typing import Optional, Dict, Any
+import re  # Import regex module for cleaning
+
+# Assuming filter_filler_words is available from llm.keyword_cache
+# If not, ensure it's defined or remove its usage if no longer needed here
+try:
+    from llm.keyword_cache import filter_filler_words
+except ImportError:
+    # Fallback if keyword_cache is not available or if this function
+    # is now only expected to receive already filtered text.
+    def filter_filler_words(text: str) -> str:
+        return text
+
+
 from system_prompts import (
     get_classification_system_prompt,
     get_classification_prompt_template,
@@ -69,37 +42,129 @@ llm = None
 embedding = None
 db = None
 
+
+# --- Helper Function for Text Cleaning ---
+def clean_text_for_classification(text: str) -> str:
+    """
+    Applies comprehensive cleaning to text to remove redundant symbols,
+    markdown, and numerical prefixes, making it suitable for classification.
+    """
+    if not isinstance(text, str):
+        text = str(text)
+
+    # Remove common Markdown headings: e.g., "## Header", "# Title"
+    text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
+    # Remove horizontal rules: "---", "***"
+    text = re.sub(r"^\s*[-*]+\s*$", "", text, flags=re.MULTILINE)
+    # Remove list indicators: "1. ", "2. ", "- ", "* "
+    text = re.sub(r"^\s*((\d+\.)|[-*])\s+", "", text, flags=re.MULTILINE)
+    # Remove redundant spaces and newlines
+    text = re.sub(r"\s+", " ", text).strip()
+    # Remove any remaining leading/trailing punctuation that might occur after cleaning
+    text = re.sub(r"^[.,!?;:()\"']+|[.,!?;:()\"']+$", "", text).strip()
+    return text
+
+
+# --- Workflow Re-initialization for Dependency Injection ---
+# Global variables for the workflow components
+multiquery_retriever = None
+classification_chain = None
+rag_chain = None
+workflow = None
+classify = None
+memory = MemorySaver()  # MemorySaver needs to be initialized here
+
+
+def initialize_classification_workflow():
+    """
+    (Re)initialize the classification workflow after llm, embedding, and db are injected.
+    Call this after setting classificationModel.llm, .embedding, and .db in app.py.
+    """
+    global \
+        multiquery_retriever, \
+        classification_chain, \
+        rag_chain, \
+        workflow, \
+        classify, \
+        llm, \
+        db, \
+        multi_query_template, \
+        classification_prompt
+
+    # Define prompt templates (re-defined here to ensure they use current system prompts)
+    # They should be defined outside this function or passed in if they change dynamically
+    # For now, let's assume they pick up the latest get_...() calls when the module loads
+    multi_query_template = PromptTemplate(
+        template=get_classification_prompt_template(),
+        input_variables=["question"],
+    )
+    system_prompt = get_classification_system_prompt()
+    classification_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            (
+                "human",
+                "{context}\n\n{input}\n\nKeywords for Classification: {keywords_for_classification}",
+            ),
+        ]
+    )
+
+    multiquery_retriever = None
+    if db and llm:
+        from langchain.retrievers.multi_query import MultiQueryRetriever
+
+        multiquery_retriever = MultiQueryRetriever.from_llm(
+            retriever=db.as_retriever(search_kwargs={"k": 3}),
+            llm=llm,
+            prompt=multi_query_template,
+        )
+
+    classification_chain = None
+    rag_chain = None
+    if llm and multiquery_retriever:
+        from langchain.chains.combine_documents import create_stuff_documents_chain
+        from langchain.chains import create_retrieval_chain
+
+        classification_chain = create_stuff_documents_chain(llm, classification_prompt)
+        rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
+
+    global workflow, classify  # Declare globals again to assign
+    workflow = None
+    classify = None
+    if rag_chain:
+        from langgraph.graph import StateGraph
+
+        workflow = StateGraph(state_schema=State)
+        workflow.add_edge(START, "model")
+        workflow.add_node("model", call_model)
+        classify = workflow.compile(checkpointer=memory)
+
+
 # Define prompt templates
-multi_query_template = PromptTemplate(
+# multi_query_template and classification_prompt are now set within initialize_classification_workflow()
+# but they need to be globally accessible for initialize_classification_workflow to reference
+# or defined outside and passed in. For simplicity, let's define them here and then
+# ensure initialize_classification_workflow updates them if they change
+multi_query_template_initial = PromptTemplate(
     template=get_classification_prompt_template(),
     input_variables=["question"],
 )
 
-multiquery_retriever = None
-if db and llm:
-    multiquery_retriever = MultiQueryRetriever.from_llm(
-        retriever=db.as_retriever(search_kwargs={"k": 3}),
-        llm=llm,
-        prompt=multi_query_template,
-    )
+system_prompt_initial = get_classification_system_prompt()
 
-# Enhanced system prompt with detailed NYP CNC information
-system_prompt = get_classification_system_prompt()
-
-# Creating the prompt template for classification
-classification_prompt = ChatPromptTemplate.from_messages(
+classification_prompt_initial = ChatPromptTemplate.from_messages(
     [
-        ("system", system_prompt),
-        ("human", "{input}"),
+        ("system", system_prompt_initial),
+        (
+            "human",
+            "{context}\n\n{input}\n\nKeywords for Classification: {keywords_for_classification}",
+        ),
     ]
 )
 
-
-classification_chain = None
-rag_chain = None
-if llm and multiquery_retriever:
-    classification_chain = create_stuff_documents_chain(llm, classification_prompt)
-    rag_chain = create_retrieval_chain(multiquery_retriever, classification_chain)
+# Assign to global variables for initial module load (will be overridden by initialize)
+multi_query_template = multi_query_template_initial
+classification_prompt = classification_prompt_initial
 
 
 class State(TypedDict):
@@ -110,10 +175,13 @@ class State(TypedDict):
 
 
 def call_model(state: State):
-    if not rag_chain:  # rag_chain here is create_retrieval_chain(multiquery_retriever, classification_chain)
+    """
+    Calls the RAG chain with the input and keywords for classification.
+    """
+    global rag_chain  # Ensure rag_chain is accessible
+    if not rag_chain:
         raise RuntimeError("RAG chain not initialized...")
     start = time.time()
-    # Pass the original input for retrieval, but add keywords for the *final* prompt
     response = rag_chain.invoke(
         {
             "input": state["input"],  # Original input for retrieval
@@ -130,67 +198,51 @@ def call_model(state: State):
     }
 
 
-memory = MemorySaver()
-
-workflow = None
-classify = None
-if rag_chain:
-    workflow = StateGraph(state_schema=State)
-    workflow.add_edge(START, "model")
-    workflow.add_node("model", call_model)
-    classify = workflow.compile(checkpointer=memory)
-
 config = {"configurable": {"thread_id": "Classification"}}
 
 
 def classify_text(
     text: str, config: dict = config, keywords: Optional[str] = None
-) -> dict:
+) -> Dict[str, Any]:
     """
-    Classify the given text using the classification workflow. If 'keywords' is provided, classify only the filtered keyword string(s).
+    Classify the given text using the classification workflow.
 
-    :param text: The text to classify.
+    This function now expects 'text' to be the already concise and cleaned content
+    (e.g., `concise_content_for_llm` from data_classification.py)
+    and 'keywords' to be the already processed keyword string
+    (e.g., `top_20_str` from data_classification.py).
+
+    :param text: The concise and cleaned content to be used for RAG input.
     :type text: str
     :param config: Configuration dictionary for the workflow.
     :type config: dict
-    :param keywords: Optional filtered keyword string(s) to classify instead of the full text.
+    :param keywords: The processed keyword string (e.g., top 20 words) for the final LLM prompt.
     :type keywords: Optional[str]
     :return: The classification response.
     :rtype: dict
     :raises RuntimeError: If the classification workflow is not initialized.
     """
+    global classify  # Ensure classify is accessible
     if not classify:
         raise RuntimeError(
             "Classification workflow not initialized. Ensure LLM and DB are set up in app.py."
         )
 
-    # Apply keyword filtering to the *original content* for RAG
-    # This filtered_content will be used for MultiQueryRetriever
-    rag_input_content = filter_filler_words(text)  # Assuming filter_filler_words exists
+    # The 'text' parameter here is expected to already be 'concise_content_for_llm'
+    # which has been cleaned and filtered upstream. So no further processing on 'text' itself.
+    rag_input_content = text
 
-    # Generate top 20 keywords from the original content (as per your new logic)
-    # Assuming YAKEMetadataTagger and your keyword processing is here
-    from llm.dataProcessing import YAKEMetadataTagger
-    import collections
+    # The 'keywords' parameter here is expected to already be 'top_20_str'
+    # which has been generated and cleaned upstream.
+    keywords_str_for_llm = keywords if keywords is not None else ""
 
-    yake_keywords = YAKEMetadataTagger(
-        rag_input_content
-    )  # Process the content used for RAG
-    all_words = []
-    for kw in yake_keywords:
-        # Decide if you're taking individual words or phrases from YAKE
-        all_words.extend(
-            [w.lower() for w in kw.split() if len(w) > 2]
-        )  # Example: individual words
-        # Or all_words.append(kw.lower()) if you want to keep phrases
-
-    word_counts = collections.Counter(all_words)
-    top_20_words_list = [w for w, _ in word_counts.most_common(20)]
-    keywords_str_for_llm = ", ".join(top_20_words_list)  # String for LLM
+    # Ensure even the input to the state is a string
+    rag_input_content = str(rag_input_content)
+    keywords_str_for_llm = str(keywords_str_for_llm)
 
     state = {
-        "input": rag_input_content,  # <-- Pass the (filtered) file content for RAG
-        "keywords_for_classification": keywords_str_for_llm,  # <-- Pass your processed keywords
+        "input": rag_input_content,  # Use the already processed text for RAG
+        "keywords_for_classification": keywords_str_for_llm,  # Use the provided keywords
         "context": "",
         "answer": "",
     }

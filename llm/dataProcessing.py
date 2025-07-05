@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 import logging
+import os
+import sys
+import re
+import tempfile
+import shutil
+import collections
+import concurrent.futures
+import warnings
+import shelve
+from pathlib import Path
+from typing import Generator, Iterable, List, Optional  # Added Optional
 
-# Optional unstructured import - fallback to simple text extraction if not available
 try:
     from langchain_community.document_loaders.unstructured import UnstructuredFileLoader
 
@@ -9,35 +19,25 @@ try:
 except ImportError:
     UNSTRUCTURED_AVAILABLE = False
     logging.warning("Unstructured not available, using simple text extraction fallback")
+
 from langchain_community.document_transformers.openai_functions import (
     create_metadata_tagger,
 )
 from langchain.schema import Document
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_openai.embeddings import OpenAIEmbeddings
 from backend.database import DuckDBVectorStore
 
-import os
-import sys
 from glob import glob
 from dotenv import load_dotenv
 
 import yake
-import warnings
-import shelve
 from infra_utils import create_folders, get_chatbot_dir
-import logging
-from typing import Generator, Iterable
 from performance_utils import perf_monitor, cache_manager
-import concurrent.futures
-import re
-import tempfile
+
 
 warnings.filterwarnings("ignore")
 
-# load environment variables for secure configuration
 load_dotenv()
 
 
@@ -50,11 +50,9 @@ def get_data_paths() -> tuple[str, str, str, str]:
     """
     base_dir = get_chatbot_dir()
 
-    # Check if we're in a test environment (only explicit TESTING env var)
     is_test_env = os.getenv("TESTING", "").lower() == "true"
 
     if is_test_env:
-        # Use test-specific paths
         chat_data_path = os.path.join(base_dir, "test_uploads", "txt_files")
         classification_data_path = os.path.join(
             base_dir, "test_uploads", "classification_files"
@@ -64,15 +62,8 @@ def get_data_paths() -> tuple[str, str, str, str]:
         )
         database_path = os.path.join(base_dir, "test_data", "vector_store", "chroma_db")
 
-        # Ensure test directories exist
-        os.makedirs(chat_data_path, exist_ok=True)
-        os.makedirs(classification_data_path, exist_ok=True)
-        os.makedirs(os.path.dirname(keywords_databank_path), exist_ok=True)
-        os.makedirs(database_path, exist_ok=True)
-
         logging.info(f"🧪 Using test data paths: {chat_data_path}")
     else:
-        # Use production paths
         chat_data_path = os.path.join(base_dir, "uploads", "txt_files")
         classification_data_path = os.path.join(
             base_dir, "uploads", "classification_files"
@@ -80,13 +71,12 @@ def get_data_paths() -> tuple[str, str, str, str]:
         keywords_databank_path = os.path.join(base_dir, "data", "keywords_databank")
         database_path = os.path.join(base_dir, "data", "vector_store", "chroma_db")
 
-        # Ensure production directories exist
-        os.makedirs(chat_data_path, exist_ok=True)
-        os.makedirs(classification_data_path, exist_ok=True)
-        os.makedirs(os.path.dirname(keywords_databank_path), exist_ok=True)
-        os.makedirs(database_path, exist_ok=True)
-
         logging.info(f"Using production data paths: {chat_data_path}")
+
+    os.makedirs(chat_data_path, exist_ok=True)
+    os.makedirs(classification_data_path, exist_ok=True)
+    os.makedirs(os.path.dirname(keywords_databank_path), exist_ok=True)
+    os.makedirs(database_path, exist_ok=True)
 
     return (
         chat_data_path,
@@ -136,31 +126,6 @@ def get_database_path() -> str:
     return get_data_paths()[3]
 
 
-# Legacy global variables for backward compatibility (use dynamic getters instead)
-def _update_global_paths() -> None:
-    """
-    Update global path variables (for backward compatibility).
-
-    :return: None
-    """
-    global \
-        CHAT_DATA_PATH, \
-        CLASSIFICATION_DATA_PATH, \
-        KEYWORDS_DATABANK_PATH, \
-        DATABASE_PATH
-    CHAT_DATA_PATH, CLASSIFICATION_DATA_PATH, KEYWORDS_DATABANK_PATH, DATABASE_PATH = (
-        get_data_paths()
-    )
-
-
-# Initialize paths
-_update_global_paths()
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL", "text-embedding-3-small"
-)  # Default to a known model
-
-
-# Expose current paths for external access
 def get_current_paths() -> tuple[str, str, str, str]:
     """
     Get current paths (updates globals and returns them).
@@ -168,103 +133,149 @@ def get_current_paths() -> tuple[str, str, str, str]:
     :return: Tuple containing current paths.
     :rtype: tuple[str, str, str, str]
     """
-    _update_global_paths()
     return (
-        CHAT_DATA_PATH,
-        CLASSIFICATION_DATA_PATH,
-        KEYWORDS_DATABANK_PATH,
-        DATABASE_PATH,
+        get_chat_data_path(),
+        get_classification_data_path(),
+        get_keywords_databank_path(),
+        get_database_path(),
     )
 
 
-# LLM, embedding, and DuckDB vector store will be initialized in app.py
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 embedding = None
 classification_db = None
 chat_db = None
 
-
-# Add environment-configurable batch/thread settings
 BATCH_SIZE = int(os.getenv("LLM_BATCH_SIZE", "20"))
 MAX_MEMORY_MB = int(os.getenv("LLM_MAX_MEMORY_MB", "50"))
-MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "4"))
+MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "8"))
 
 
-def dataProcessing(file: str, collection: "DuckDBVectorStore" = None) -> None:
+def global_clean_text_for_classification(text: str) -> str:
     """
-    Ultra-optimized data processing with performance improvements.
+    Cleans text by removing excessive whitespace, newlines, and common non-alphanumeric characters,
+    suitable for classification and keyword extraction.
+    This function should be available globally or passed in.
+    """
+    if not isinstance(text, str):
+        return ""
+    text = re.sub(r"[\n\r]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) -> None:
+    """
+    Ultra-optimized data processing with performance improvements,
+    including text cleaning and top 20 keyword processing per document.
     - Uses thread pool for parallel keyword extraction and chunking if many documents.
     - Caches embedding and keyword extraction results for repeated content.
     - All major steps are performance monitored.
     - Batch size and thread pool are configurable via env vars.
+    - Now includes cleaning of document content and extraction of top 20 words for metadata.
+
+    :param file: The path to the file to be processed.
+    :type file: str
+    :param collection: The DuckDB vector store collection to insert documents into.
+                       If None, documents are processed but not inserted into a database.
+    :type collection: Optional[DuckDBVectorStore]
     """
-    import time
-
     perf_monitor.start_timer("file_processing")
-    keywords_bank = []
+    keywords_bank: List[str] = []
 
-    # Step 1: Extract text (fast)
     perf_monitor.start_timer("text_extraction")
-    document = ExtractText(file)
+    document_list_raw: List[Document] = ExtractText(file)
     perf_monitor.end_timer("text_extraction")
 
-    # Step 2: Fast keyword extraction (parallel if many docs)
-    perf_monitor.start_timer("keyword_extraction")
-    cache = cache_manager.get_cache("keyword_extraction")
+    perf_monitor.start_timer("content_cleaning")
+    document_list_cleaned: List[Document] = []
+    for doc in document_list_raw:
+        cleaned_content = global_clean_text_for_classification(doc.page_content)
+        document_list_cleaned.append(
+            Document(page_content=cleaned_content, metadata=doc.metadata)
+        )
+    perf_monitor.end_timer("content_cleaning")
 
-    def extract_keywords(doc):
+    perf_monitor.start_timer("keyword_extraction")
+    keyword_cache = cache_manager.get_cache("keyword_extraction")
+
+    def extract_and_process_keywords(doc: Document) -> Document:
         doc_hash = hash(doc.page_content)
-        if doc_hash in cache:
-            doc.metadata["keywords"] = cache[doc_hash]
-        else:
-            doc = FastYAKEMetadataTagger([doc])[0]
-            cache[doc_hash] = doc.metadata.get("keywords", [])
+
+        cached_data = keyword_cache.get(doc_hash)
+        if cached_data:
+            doc.metadata["keywords"] = cached_data.get("keywords", [])
+            doc.metadata["top_20_keywords"] = cached_data.get("top_20_keywords", "")
+            return doc
+
+        doc_with_yake_keywords = FastYAKEMetadataTagger([doc])[0]
+        doc.metadata["keywords"] = doc_with_yake_keywords.metadata.get("keywords", [])
+
+        all_words_from_yake_keywords: List[str] = []
+        for kw_phrase in doc.metadata.get("keywords", []):
+            cleaned_kw_phrase = global_clean_text_for_classification(str(kw_phrase))
+            all_words_from_yake_keywords.extend(
+                [
+                    w.lower()
+                    for w in re.findall(r"\b\w+\b", cleaned_kw_phrase)
+                    if len(w) > 2
+                ]
+            )
+
+        word_counts = collections.Counter(all_words_from_yake_keywords)
+        top_20_words_list = [w for w, _ in word_counts.most_common(20)]
+
+        top_20_keywords_str = ", ".join(top_20_words_list)
+        doc.metadata["top_20_keywords"] = top_20_keywords_str
+
+        keyword_cache[doc_hash] = {
+            "keywords": doc.metadata["keywords"],
+            "top_20_keywords": top_20_keywords_str,
+        }
+
         return doc
 
-    if len(document) > 8:
+    if len(document_list_cleaned) > 8:
         with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            document = list(executor.map(extract_keywords, document))
+            document = list(
+                executor.map(extract_and_process_keywords, document_list_cleaned)
+            )
     else:
-        document = [extract_keywords(doc) for doc in document]
+        document = [extract_and_process_keywords(doc) for doc in document_list_cleaned]
     perf_monitor.end_timer("keyword_extraction")
 
-    # Process keywords
     for doc in document:
         if "keywords" in doc.metadata:
             keywords_bank.extend(doc.metadata["keywords"])
-            for i in range(len(doc.metadata["keywords"])):
-                doc.metadata[f"keyword{i}"] = doc.metadata["keywords"][i]
-            doc.metadata["keywords"] = ", ".join(doc.metadata["keywords"])
+            doc.metadata["all_extracted_keywords_str"] = ", ".join(
+                doc.metadata["keywords"]
+            )
 
-    # Step 3: Fast chunking (parallel if many docs)
     perf_monitor.start_timer("chunking")
     chunk_cache = cache_manager.get_cache("chunking")
-    doc_hash = hash(tuple(d.page_content for d in document))
-    if doc_hash in chunk_cache:
-        chunks = chunk_cache[doc_hash]
+    doc_content_hash = hash(tuple(d.page_content for d in document))
+    if doc_content_hash in chunk_cache:
+        chunks = chunk_cache[doc_content_hash]
     else:
         if len(document) > 8:
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=MAX_WORKERS
             ) as executor:
-                # Split docs in parallel, then flatten
                 chunk_lists = list(
                     executor.map(lambda d: optimizedRecursiveChunker([d]), document)
                 )
                 chunks = [c for sublist in chunk_lists for c in sublist]
         else:
             chunks = optimizedRecursiveChunker(list(document))
-        chunk_cache[doc_hash] = chunks
+        chunk_cache[doc_content_hash] = chunks
     perf_monitor.end_timer("chunking")
 
-    # Step 4: Advanced memory-conscious batching
     perf_monitor.start_timer("batching")
     batches = list(
         optimized_batching(chunks, batch_size=BATCH_SIZE, max_memory_mb=MAX_MEMORY_MB)
     )
     perf_monitor.end_timer("batching")
 
-    # Step 5: Parallel database insertion
     perf_monitor.start_timer("database_insertion")
     if collection is not None:
         parallelDatabaseInsertion(batches=batches, collection=collection)
@@ -272,96 +283,28 @@ def dataProcessing(file: str, collection: "DuckDBVectorStore" = None) -> None:
         logging.warning("No DuckDB vector store provided for data processing.")
     perf_monitor.end_timer("database_insertion")
 
-    # Update keywords databank
     perf_monitor.start_timer("keywords_update")
     updateKeywordsDatabank(keywords_bank)
     perf_monitor.end_timer("keywords_update")
 
     perf_monitor.end_timer("file_processing")
     total_time = perf_monitor.get_metrics().get("file_processing", 0)
-    logging.info(f"⚡ File processed in {total_time:.2f}s: {file}")
-
-    # Update keywords databank with atomic file operations
-    try:
-        # Ensure the parent directory exists before creating files
-        create_folders(os.path.dirname(KEYWORDS_DATABANK_PATH))
-
-        # Load existing keywords first
-        existing_keywords = []
-        if os.path.exists(KEYWORDS_DATABANK_PATH):
-            try:
-                with shelve.open(KEYWORDS_DATABANK_PATH, "r") as existing_db:
-                    existing_keywords = existing_db.get("keywords", [])
-            except Exception as read_e:
-                logging.warning(f"Could not read existing keywords databank: {read_e}")
-
-        # Merge and deduplicate keywords
-        all_keywords = list(set(existing_keywords + keywords_bank))
-
-        # Write to temporary file with explicit sync
-        temp_db_path = f"{KEYWORDS_DATABANK_PATH}.tmp"
-        temp_db = None
-        try:
-            temp_db = shelve.open(temp_db_path, "c")
-            temp_db["keywords"] = all_keywords
-            temp_db.sync()  # Force write to disk
-        finally:
-            if temp_db:
-                temp_db.close()
-
-        # Atomic rename operation (only after file is completely closed)
-        import time
-
-        time.sleep(0.1)  # Small delay to ensure file handles are released
-
-        # On Windows, shelve creates .dat and .dir files, not a single file
-        # Find which files actually exist and rename them
-        temp_extensions = [".dat", ".dir", ".db", ""]  # Check in order of likelihood
-
-        for ext in temp_extensions:
-            temp_file = temp_db_path + ext
-            main_file = KEYWORDS_DATABANK_PATH + ext
-
-            if os.path.exists(temp_file):
-                try:
-                    if os.path.exists(main_file):
-                        os.replace(temp_file, main_file)
-                    else:
-                        os.rename(temp_file, main_file)
-                    logging.debug(f"Successfully renamed {temp_file} to {main_file}")
-                except Exception as rename_e:
-                    logging.warning(
-                        f"Failed to rename {temp_file} to {main_file}: {rename_e}"
-                    )
-                    raise
-
-        logging.info(
-            f"Successfully updated keywords databank with {len(keywords_bank)} new keywords"
-        )
-    except Exception as e:
-        logging.error(f"Error updating keywords databank: {e}")
-        # Clean up temporary files if they exist
-        temp_base = f"{KEYWORDS_DATABANK_PATH}.tmp"
-        temp_extensions = [".dat", ".dir", ".db", ""]
-
-        for ext in temp_extensions:
-            temp_file = temp_base + ext
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                    logging.debug(f"Cleaned up temporary file: {temp_file}")
-                except Exception as cleanup_e:
-                    logging.warning(f"Failed to clean up {temp_file}: {cleanup_e}")
+    logging.info(f"⚡ File '{Path(file).name}' processed in {total_time:.2f}s.")
 
 
 def strip_yaml_front_matter(md_path: str) -> str:
-    """Remove YAML front matter from a markdown file and return the path to a temp file without it."""
+    """
+    Remove YAML front matter from a markdown file and return the path to a temp file without it.
+
+    :param md_path: The path to the markdown file.
+    :type md_path: str
+    :return: The path to a temporary file containing the markdown content without YAML front matter.
+    :rtype: str
+    """
     with open(md_path, "r", encoding="utf-8") as f:
         content = f.read()
-    # Regex to match YAML front matter
     yaml_regex = r"^---\s*\n.*?\n---\s*\n"
     content_no_yaml = re.sub(yaml_regex, "", content, flags=re.DOTALL)
-    # Write to a temp file
     with tempfile.NamedTemporaryFile(
         delete=False, suffix=".md", mode="w", encoding="utf-8"
     ) as tmp:
@@ -369,22 +312,22 @@ def strip_yaml_front_matter(md_path: str) -> str:
         return tmp.name
 
 
-def ExtractText(path: str):
+def ExtractText(path: str) -> List[Document]:
     """
     Ultra-fast text extraction with multiple fallback methods.
     If the file is markdown, strip YAML front matter before passing to pandoc or other processors.
-    """
-    from performance_utils import perf_monitor
 
+    :param path: The path to the file to extract text from.
+    :type path: str
+    :return: A list of Document objects containing the extracted text and metadata.
+    :rtype: List[Document]
+    """
     perf_monitor.start_timer("text_extraction_method")
 
-    # Try fast extraction methods first
     try:
-        # Method 1: Direct file reading for text files (fastest)
         if path.lower().endswith(
             (".txt", ".md", ".py", ".js", ".html", ".css", ".json")
         ):
-            # For markdown, strip YAML before further processing
             if path.lower().endswith((".md", ".markdown")):
                 temp_path = strip_yaml_front_matter(path)
                 result = FastTextExtraction(temp_path)
@@ -394,14 +337,12 @@ def ExtractText(path: str):
             perf_monitor.end_timer("text_extraction_method")
             return result
 
-        # Method 2: Optimized UnstructuredFileLoader (medium speed)
         result = OptimizedUnstructuredExtraction(path)
         perf_monitor.end_timer("text_extraction_method")
         return result
 
     except Exception as e:
         logging.warning(f"Fast extraction failed: {e}, falling back to standard method")
-        # Method 3: Standard UnstructuredFileLoader (slower but reliable)
         result = StandardUnstructuredExtraction(path)
         perf_monitor.end_timer("text_extraction_method")
         return result
@@ -417,22 +358,16 @@ def FastTextExtraction(file_path: str) -> list[Document]:
     :rtype: list[Document]
     :raises Exception: If extraction fails.
     """
-    from langchain.schema import Document
+    import chardet
 
     try:
-        # Read file directly with encoding detection
-        import chardet
-
-        # Detect encoding from first 10KB
         with open(file_path, "rb") as f:
             raw_data = f.read(10000)
             encoding = chardet.detect(raw_data)["encoding"] or "utf-8"
 
-        # Read full file with detected encoding
         with open(file_path, "r", encoding=encoding, errors="ignore") as f:
             content = f.read()
 
-        # Create document
         document = Document(
             page_content=content,
             metadata={
@@ -468,16 +403,14 @@ def OptimizedUnstructuredExtraction(file_path: str) -> list[Document]:
         return FastTextExtraction(file_path)
 
     try:
-        # Use UnstructuredFileLoader with optimized settings
         loader = UnstructuredFileLoader(
             file_path,
-            mode="single",  # Single document mode for speed
+            mode="single",
             encoding="utf-8",
         )
 
         documents = loader.load()
 
-        # Add extraction method to metadata
         for doc in documents:
             doc.metadata["extraction_method"] = "optimized_unstructured"
             doc.metadata["file_size"] = len(doc.page_content)
@@ -492,7 +425,7 @@ def OptimizedUnstructuredExtraction(file_path: str) -> list[Document]:
         raise
 
 
-def StandardUnstructuredExtraction(file_path: str):
+def StandardUnstructuredExtraction(file_path: str) -> list[Document]:
     """
     Standard UnstructuredFileLoader (fallback method).
 
@@ -511,7 +444,6 @@ def StandardUnstructuredExtraction(file_path: str):
         loader = UnstructuredFileLoader(file_path, encoding="utf-8")
         documents = loader.load()
 
-        # Add extraction method to metadata
         for doc in documents:
             doc.metadata["extraction_method"] = "standard_unstructured"
             doc.metadata["file_size"] = len(doc.page_content)
@@ -521,12 +453,9 @@ def StandardUnstructuredExtraction(file_path: str):
 
     except Exception as e:
         logging.error(f"All extraction methods failed for {file_path}: {e}")
-        # Create empty document as last resort
-        from langchain.schema import Document
-
         return [
             Document(
-                page_content=f"[Extraction failed: {str(e)}]",
+                page_content=f"[Extraction failed for {os.path.basename(file_path)}: {str(e)}]",
                 metadata={
                     "source": file_path,
                     "extraction_method": "failed",
@@ -536,8 +465,7 @@ def StandardUnstructuredExtraction(file_path: str):
         ]
 
 
-# function to create metadata keyword tags for document and chunk using OpenAI
-def OpenAIMetadataTagger(document: list[Document]):
+def OpenAIMetadataTagger(document: list[Document]) -> list[Document]:
     """
     Create metadata keyword tags for document and chunk using OpenAI.
 
@@ -559,42 +487,13 @@ def OpenAIMetadataTagger(document: list[Document]):
         "required": ["keywords"],
     }
 
-    llm = ChatOpenAI(
-        temperature=0.8, model="gpt-4o"
-    )  # Changed to gpt-4o for data processing
+    llm = ChatOpenAI(temperature=0.8, model="gpt-4o")
 
     document_transformer = create_metadata_tagger(metadata_schema=schema, llm=llm)
     enhanced_documents = document_transformer.transform_documents(document)
     return enhanced_documents
 
 
-# function to create metadata keyword tags for document and chunk using YAKE library
-def YAKEMetadataTagger(document: str | list[Document]) -> list[str]:
-    """
-    Create metadata keyword tags for document and chunk using YAKE library.
-
-    :param document: The document or text to extract keywords from.
-    :type document: str | list[Document]
-    :return: List of extracted keywords.
-    :rtype: list[str]
-    """
-    if isinstance(document, str):
-        text = document
-    elif isinstance(document, list) and len(document) > 0:
-        text = " ".join([doc.page_content for doc in document])
-    else:
-        return []
-
-    kw_extractor = yake.KeywordExtractor(lan="en", n=1, top=5)
-    keywords = kw_extractor.extract_keywords(text)
-    # Return only the keyword strings, sorted by score (lowest is best)
-    return [kw for kw, score in sorted(keywords, key=lambda x: x[1])]
-
-
-# Lightning-fast keyword extractor using simple text analysis (no ML models)
-
-
-# Lightning-fast keyword extractor using YAKE (no ML models, fast and Alpine compatible)
 def FastYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
     """
     Lightning-fast keyword extraction using YAKE (no ML models, fast and Alpine compatible).
@@ -624,71 +523,7 @@ def FastYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
     return enhanced_documents
 
 
-def HighQualityYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
-    """
-    High-quality YAKE-based metadata tagger (slower but better quality).
-
-    :param documents: List of Document objects to extract keywords from.
-    :type documents: list[Document]
-    :return: List of Document objects with keywords added to metadata.
-    :rtype: list[Document]
-    """
-
-    enhanced_documents = []
-    for doc in documents:
-        if len(doc.page_content.strip()) < 50:
-            doc.metadata["keywords"] = []
-            enhanced_documents.append(doc)
-            continue
-        kw_extractor = yake.KeywordExtractor(lan="en", n=2, top=5)
-        keywords = kw_extractor.extract_keywords(doc.page_content)
-        keyword_list = [kw for kw, score in sorted(keywords, key=lambda x: x[1])]
-        doc.metadata["keywords"] = keyword_list
-        enhanced_documents.append(doc)
-    total_keywords = sum(
-        len(doc.metadata.get("keywords", [])) for doc in enhanced_documents
-    )
-    logging.info(
-        f"⚡ Extracted {total_keywords} keywords from {len(documents)} documents (YAKE high-quality)"
-    )
-    return enhanced_documents
-
-
-# KeyBERTOpenAIMetadataTagger and all KeyBERT-based taggers are deprecated and removed. Use YAKE-based taggers instead.
-
-
-# function to split documents into set smaller chunks for better retrieval processing
-# includes overlap to maintain context between chunks
-def recursiveChunker(documents: list[Document]):
-    """
-    Split documents into set smaller chunks for better retrieval processing, with overlap to maintain context.
-
-    :param documents: List of Document objects to chunk.
-    :type documents: list[Document]
-    :return: List of chunked Document objects.
-    :rtype: list[Document]
-    """
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, chunk_overlap=400, length_function=len, add_start_index=True
-    )
-
-    chunks = text_splitter.split_documents(documents)
-
-    print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
-
-    # print sample chunks for verification
-    print("Example Chunks:")
-    print(chunks[0])
-    print("=" * 100)
-    print(chunks[1])
-    print("=" * 100)
-    print(chunks[2])
-
-    return chunks
-
-
-# Optimized recursive chunker with performance improvements
-def optimizedRecursiveChunker(documents: list[Document]):
+def optimizedRecursiveChunker(documents: list[Document]) -> list[Document]:
     """
     Optimized chunker with better performance and reduced memory usage.
 
@@ -698,114 +533,61 @@ def optimizedRecursiveChunker(documents: list[Document]):
     :rtype: list[Document]
     """
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,  # Smaller chunks for faster processing
-        chunk_overlap=200,  # Reduced overlap for speed
+        chunk_size=800,
+        chunk_overlap=200,
         length_function=len,
         add_start_index=True,
     )
 
     chunks = text_splitter.split_documents(documents)
 
-    logging.info(f"⚡ Split {len(documents)} documents into {len(chunks)} chunks")
+    logging.info(f"⚡ Split {len(documents)} documents into {len(chunks)} chunks.")
 
-    # Only log first chunk for verification (reduce console spam)
     if chunks:
         logging.debug(f"Sample chunk: {chunks[0].page_content[:100]}...")
 
     return chunks
 
 
-# function to split documents into semantic smaller chunks for better retrieval processing
-def semanticChunker(documents: list[Document]):
-    """
-    Split documents into semantic smaller chunks for better retrieval processing.
-
-    :param documents: List of Document objects to chunk.
-    :type documents: list[Document]
-    :return: List of chunked Document objects.
-    :rtype: list[Document]
-    """
-    text_splitter = SemanticChunker(OpenAIEmbeddings())
-
-    chunks = text_splitter.split_documents(documents)
-
-    print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
-
-    # print sample chunks for verification
-    # print('Example Chunks:')
-    # print(chunks[0])
-    # print('='*100)
-    # print(chunks[1])
-    # print('='*100)
-    # print(chunks[2])
-
-    return chunks
-
-
-# Ultra-efficient memory-conscious batching
-def batching(chunks: list, batch_size: int) -> Generator[list, None, None]:
-    """
-    Memory-efficient batching with generator pattern.
-
-    :param chunks: List of chunks to batch.
-    :type chunks: list
-    :param batch_size: Number of chunks per batch.
-    :type batch_size: int
-    :yields list: A batch of chunks.
-    :rtype: Generator[list, None, None]
-    """
-    for i in range(0, len(chunks), batch_size):
-        yield chunks[i : i + batch_size]
-
-
-# Advanced batching with memory optimization
 def optimized_batching(
-    chunks: list, batch_size: int = 25, max_memory_mb: int = 100
-) -> Generator[list, None, None]:
+    chunks: list[Document], batch_size: int = 25, max_memory_mb: int = 100
+) -> Generator[list[Document], None, None]:
     """
     Advanced batching with memory monitoring and optimization.
 
     :param chunks: List of chunks to batch.
-    :type chunks: list
+    :type chunks: list[Document]
     :param batch_size: Number of chunks per batch.
     :type batch_size: int
     :param max_memory_mb: Maximum memory usage per batch in MB.
     :type max_memory_mb: int
-    :yields list: A batch of chunks.
-    :rtype: Generator[list, None, None]
+    :yields list[Document]: A batch of chunks.
+    :rtype: Generator[list[Document], None, None]
     """
-    from performance_utils import perf_monitor
-
     perf_monitor.start_timer("advanced_batching")
 
-    current_batch = []
+    current_batch: List[Document] = []
     current_size = 0
-    max_size = max_memory_mb * 1024 * 1024  # Convert MB to bytes
+    max_size = max_memory_mb * 1024 * 1024
 
     for chunk in chunks:
-        # Estimate memory usage of chunk
         chunk_size = sys.getsizeof(chunk.page_content) + sys.getsizeof(
             str(chunk.metadata)
         )
 
-        # Check if adding this chunk would exceed memory limit
-        if current_size + chunk_size > max_size and current_batch:
-            # Yield current batch and start new one
+        if current_batch and current_size + chunk_size > max_size:
             yield current_batch
             current_batch = [chunk]
             current_size = chunk_size
         else:
-            # Add chunk to current batch
             current_batch.append(chunk)
             current_size += chunk_size
 
-        # Also check batch size limit
-        if len(current_batch) >= batch_size:
+        if current_batch and len(current_batch) >= batch_size:
             yield current_batch
             current_batch = []
             current_size = 0
 
-    # Yield remaining chunks
     if current_batch:
         yield current_batch
 
@@ -813,33 +595,6 @@ def optimized_batching(
     logging.debug(f"⚡ Advanced batching complete with memory limit {max_memory_mb}MB")
 
 
-# Adding documents to the appropriate collection
-def databaseInsertion(
-    batches: Iterable[list[Document]], collection: DuckDBVectorStore
-) -> None:
-    """
-    Add documents to the appropriate collection.
-
-    :param batches: Iterable of batches of Document objects.
-    :type batches: Iterable[list[Document]]
-    :param collection: The DuckDB vector store collection to insert documents into.
-    :type collection: DuckDBVectorStore
-    """
-    for chunk in batches:
-        # Convert LangChain Document objects to DuckDB format
-        docs_for_duckdb = []
-        for doc in chunk:
-            docs_for_duckdb.append(
-                {
-                    "id": doc.metadata.get("id", str(hash(doc.page_content))),
-                    "content": doc.page_content,
-                    "metadata": doc.metadata,
-                }
-            )
-        collection.add_documents(docs_for_duckdb)
-
-
-# Optimized parallel database insertion
 def parallelDatabaseInsertion(
     batches: Iterable[list[Document]], collection: DuckDBVectorStore
 ) -> None:
@@ -851,20 +606,23 @@ def parallelDatabaseInsertion(
     :param collection: The DuckDB vector store collection to insert documents into.
     :type collection: DuckDBVectorStore
     """
-    import concurrent.futures
     import threading
 
-    # Thread-safe insertion with connection pooling
     insertion_lock = threading.Lock()
     successful_insertions = 0
     failed_insertions = 0
 
-    def insert_batch(batch_data):
-        """Insert a single batch with error handling."""
+    batches_list = list(batches)
+    total_batches = len(batches_list)
+
+    if total_batches == 0:
+        logging.info("No batches to insert into the database.")
+        return
+
+    def insert_batch(batch_data: tuple[int, list[Document]]):
         batch_idx, batch = batch_data
         try:
-            with insertion_lock:  # Ensure thread-safe database access
-                # Convert LangChain Document objects to DuckDB format
+            with insertion_lock:
                 docs_for_duckdb = []
                 for doc in batch:
                     docs_for_duckdb.append(
@@ -875,22 +633,22 @@ def parallelDatabaseInsertion(
                         }
                     )
                 collection.add_documents(docs_for_duckdb)
-            return f"✅ Batch {batch_idx}: {len(batch)} docs"
+            return f"✅ Batch {batch_idx}: {len(batch)} docs inserted."
         except Exception as e:
             logging.error(f"❌ Batch {batch_idx} failed: {e}")
-            return f"❌ Batch {batch_idx}: {str(e)}"
+            return f"❌ Batch {batch_idx} failed: {str(e)}"
 
-    # Process batches with limited parallelism to avoid overwhelming the database
-    max_workers = min(3, len(batches))  # Limit concurrent database operations
+    max_workers_for_db = min(MAX_WORKERS, total_batches, 3)
+    logging.debug(f"Using {max_workers_for_db} workers for database insertion.")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all batch insertion tasks
-        batch_data = [(i, batch) for i, batch in enumerate(batches)]
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers_for_db
+    ) as executor:
+        batch_data_tuples = [(i, batch) for i, batch in enumerate(batches_list)]
         future_to_batch = {
-            executor.submit(insert_batch, data): data for data in batch_data
+            executor.submit(insert_batch, data): data for data in batch_data_tuples
         }
 
-        # Process completed tasks
         for future in concurrent.futures.as_completed(future_to_batch):
             result = future.result()
             if "✅" in result:
@@ -899,98 +657,96 @@ def parallelDatabaseInsertion(
                 failed_insertions += 1
             logging.debug(result)
 
-    total_docs = sum(len(batch) for batch in batches)
+    total_docs = sum(len(batch) for batch in batches_list)
     logging.info(
-        f"⚡ Database insertion complete: {successful_insertions} successful, {failed_insertions} failed, {total_docs} total docs"
+        f"⚡ Database insertion complete: {successful_insertions} batches successful, {failed_insertions} failed ({total_docs} total docs)."
     )
 
 
-# Optimized keywords databank update
 def updateKeywordsDatabank(keywords_bank: list[str]) -> None:
     """
-    Optimized keywords databank update with the fixed file handling.
+    Optimized keywords databank update with atomic file handling for shelve files.
 
     :param keywords_bank: List of keywords to add to the databank.
     :type keywords_bank: list[str]
     :raises Exception: If updating the databank fails.
     """
     if not keywords_bank:
+        logging.debug("No new keywords to add to the databank.")
         return
 
-    # Update keywords databank with atomic file operations
     try:
-        # Get current keywords databank path
         keywords_path = get_keywords_databank_path()
-
-        # Ensure the parent directory exists before creating files
         create_folders(os.path.dirname(keywords_path))
 
-        # Load existing keywords first
         existing_keywords = []
-        if os.path.exists(keywords_path):
+        if os.path.exists(keywords_path + ".dat"):
             try:
                 with shelve.open(keywords_path, "r") as existing_db:
                     existing_keywords = existing_db.get("keywords", [])
             except Exception as read_e:
-                logging.warning(f"Could not read existing keywords databank: {read_e}")
+                logging.warning(
+                    f"Could not read existing keywords databank at {keywords_path}: {read_e}"
+                )
+                existing_keywords = []
 
-        # Merge and deduplicate keywords
         all_keywords = list(set(existing_keywords + keywords_bank))
+        logging.debug(
+            f"Merged {len(existing_keywords)} existing with {len(keywords_bank)} new keywords. Total unique: {len(all_keywords)}"
+        )
 
-        # Write to temporary file with explicit sync
         temp_db_path = f"{keywords_path}.tmp"
         temp_db = None
         try:
             temp_db = shelve.open(temp_db_path, "c")
             temp_db["keywords"] = all_keywords
-            temp_db.sync()  # Force write to disk
+            temp_db.sync()
+            logging.debug(f"Temporary keywords databank written to {temp_db_path}.*")
         finally:
             if temp_db:
                 temp_db.close()
 
-        # Atomic rename operation (only after file is completely closed)
-        import time
+        shelve_extensions = [".dat", ".dir", ".bak", ".db", ""]
 
-        time.sleep(0.1)  # Small delay to ensure file handles are released
+        for ext in shelve_extensions:
+            src_file = temp_db_path + ext
+            dest_file = keywords_path + ext
 
-        # On Windows, shelve creates .dat and .dir files, not a single file
-        # Find which files actually exist and rename them
-        temp_extensions = [".dat", ".dir", ".db", ""]  # Check in order of likelihood
-
-        for ext in temp_extensions:
-            temp_file = temp_db_path + ext
-            main_file = keywords_path + ext
-
-            if os.path.exists(temp_file):
+            if os.path.exists(src_file):
                 try:
-                    if os.path.exists(main_file):
-                        os.replace(temp_file, main_file)
+                    if os.path.exists(dest_file):
+                        os.replace(src_file, dest_file)
+                        logging.debug(
+                            f"Atomically replaced '{dest_file}' with '{src_file}'"
+                        )
                     else:
-                        os.rename(temp_file, main_file)
-                    logging.debug(f"Successfully renamed {temp_file} to {main_file}")
+                        os.rename(src_file, dest_file)
+                        logging.debug(f"Renamed '{src_file}' to '{dest_file}'")
                 except Exception as rename_e:
                     logging.warning(
-                        f"Failed to rename {temp_file} to {main_file}: {rename_e}"
+                        f"Failed to replace/rename {src_file} to {dest_file}: {rename_e}"
                     )
                     raise
 
         logging.info(
-            f"Successfully updated keywords databank with {len(keywords_bank)} new keywords"
+            f"Successfully updated keywords databank with {len(keywords_bank)} new keywords. Total keywords: {len(all_keywords)}"
         )
     except Exception as e:
         logging.error(f"Error updating keywords databank: {e}")
-        # Clean up temporary files if they exist
         temp_base = f"{keywords_path}.tmp"
-        temp_extensions = [".dat", ".dir", ".db", ""]
+        shelve_extensions = [".dat", ".dir", ".bak", ".db", ""]
 
-        for ext in temp_extensions:
+        for ext in shelve_extensions:
             temp_file = temp_base + ext
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
-                    logging.debug(f"Cleaned up temporary file: {temp_file}")
+                    logging.debug(f"Cleaned up residual temporary file: {temp_file}")
                 except Exception as cleanup_e:
-                    logging.warning(f"Failed to clean up {temp_file}: {cleanup_e}")
+                    logging.warning(
+                        f"Failed to clean up residual {temp_file}: {cleanup_e}"
+                    )
+        raise
 
 
 def initialiseDatabase():
@@ -999,30 +755,27 @@ def initialiseDatabase():
 
     :return: None
     """
-    import concurrent.futures
-    from performance_utils import perf_monitor
-
     perf_monitor.start_timer("database_initialization")
 
-    # Get all files to process (using dynamic paths)
-    chat_files = glob(get_chat_data_path() + "/**/*.*", recursive=True)
+    chat_files = glob(os.path.join(get_chat_data_path(), "**", "*.*"), recursive=True)
     classification_files = glob(
-        get_classification_data_path() + "/**/*.*", recursive=True
+        os.path.join(get_classification_data_path(), "**", "*.*"), recursive=True
     )
 
     total_files = len(chat_files) + len(classification_files)
     logging.info(f"🗄️ Initializing database with {total_files} files...")
 
     if total_files == 0:
-        logging.info("No files found for database initialization")
+        logging.info("No files found for database initialization.")
         perf_monitor.end_timer("database_initialization")
         return
 
-    # Process files in parallel with limited workers to avoid overwhelming the system
-    max_workers = min(2, total_files)  # Limit concurrent file processing
+    max_workers_for_init = min(MAX_WORKERS, total_files, 4)
+    logging.debug(f"Using {max_workers_for_init} workers for database initialization.")
 
-    def process_file_with_collection(file_and_collection):
-        """Process a single file with its designated collection."""
+    def process_file_with_collection(
+        file_and_collection: tuple[str, DuckDBVectorStore],
+    ):
         file_path, collection = file_and_collection
         try:
             dataProcessing(file_path, collection=collection)
@@ -1031,16 +784,34 @@ def initialiseDatabase():
             logging.error(f"❌ Failed to process {file_path}: {e}")
             return f"❌ Failed: {os.path.basename(file_path)} - {str(e)}"
 
-    # Prepare file and collection pairs
-    file_collection_pairs = []
-    file_collection_pairs.extend([(f, chat_db) for f in chat_files])
-    file_collection_pairs.extend([(f, classification_db) for f in classification_files])
+    file_collection_pairs: List[tuple[str, DuckDBVectorStore]] = []
+    if chat_db:
+        file_collection_pairs.extend([(f, chat_db) for f in chat_files])
+    else:
+        logging.warning("Chat database (chat_db) not initialized for file processing.")
 
-    # Process files in parallel
+    if classification_db:
+        file_collection_pairs.extend(
+            [(f, classification_db) for f in classification_files]
+        )
+    else:
+        logging.warning(
+            "Classification database (classification_db) not initialized for file processing."
+        )
+
+    if not file_collection_pairs:
+        logging.warning(
+            "No database collections available for file processing during initialization."
+        )
+        perf_monitor.end_timer("database_initialization")
+        return
+
     successful_files = 0
     failed_files = 0
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers_for_init
+    ) as executor:
         future_to_file = {
             executor.submit(process_file_with_collection, pair): pair
             for pair in file_collection_pairs
@@ -1057,9 +828,45 @@ def initialiseDatabase():
     perf_monitor.end_timer("database_initialization")
     total_time = perf_monitor.get_metrics().get("database_initialization", 0)
     logging.info(
-        f"🗄️ Database initialization complete in {total_time:.2f}s: {successful_files} successful, {failed_files} failed"
+        f"🗄️ Database initialization complete in {total_time:.2f}s: {successful_files} successful, {failed_files} failed."
     )
 
 
 if __name__ == "__main__":
-    pass
+    logging.basicConfig(level=logging.INFO)
+    logging.info("Running dataProcessing.py as main...")
+
+    class MockDuckDBVectorStore:
+        def __init__(self, name="mock_db"):
+            self.name = name
+            logging.info(f"MockDuckDBVectorStore '{self.name}' initialized.")
+
+        def add_documents(self, docs):
+            logging.info(f"MockDB '{self.name}': Added {len(docs)} documents.")
+
+        def get_all_documents(self):
+            return [{"content": "mock doc"}]
+
+    temp_dir = tempfile.mkdtemp()
+    test_chat_file = os.path.join(temp_dir, "test_chat_doc.txt")
+    test_classification_file = os.path.join(temp_dir, "test_classification_doc.md")
+
+    with open(test_chat_file, "w") as f:
+        f.write(
+            "This is a test document for chat data. It contains information about data processing and pipelines."
+        )
+    with open(test_classification_file, "w") as f:
+        f.write(
+            "---\ntitle: Confidential Report\nauthor: John Doe\n---\nThis document contains highly sensitive financial information. Do not share."
+        )
+
+    os.environ["TESTING"] = "true"
+    chat_db = MockDuckDBVectorStore("chat_collection")
+    classification_db = MockDuckDBVectorStore("classification_collection")
+
+    initialiseDatabase()
+
+    shutil.rmtree(temp_dir)
+    logging.info("Cleaned up temporary test files and directory.")
+
+    del os.environ["TESTING"]
