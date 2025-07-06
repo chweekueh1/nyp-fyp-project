@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 NYP FYP Chatbot Application - Modular Interface Design
+
 Organized with tabbed interfaces and modular components.
 """
 
 import sys
 import asyncio
 from pathlib import Path
+from typing import Tuple
 import gradio as gr
 from infra_utils import setup_logging
 from performance_utils import (
@@ -69,6 +71,7 @@ else:
 llm = None
 embedding = None
 try:
+    # Using direct model and temperature as per old app.py
     llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
     embedding = OpenAIEmbeddings(model=EMBEDDING_MODEL)
     logger.info("LLM and embedding models initialized.")
@@ -79,6 +82,7 @@ except Exception as e:
 classification_db = None
 chat_db = None
 try:
+    # Passing only one argument as per old app.py
     classification_db = get_duckdb_collection("classification")
     chat_db = get_duckdb_collection("chat")
     logger.info("DuckDB vector stores initialized.")
@@ -103,8 +107,13 @@ dataProcessing.chat_db = chat_db
 backend_config.client = client
 
 
-def initialize_backend_in_background():
-    """Initialize the backend in a separate thread (truly non-blocking)."""
+def initialize_backend_in_background() -> None:
+    """
+    Initializes the backend in a separate thread to avoid blocking the Gradio UI startup.
+
+    This function sets up a status file to track the initialization progress
+    and logs messages to indicate the status.
+    """
     import threading
     import tempfile
     import os
@@ -112,8 +121,13 @@ def initialize_backend_in_background():
     # Create a status file to track initialization
     status_file = os.path.join(tempfile.gettempdir(), "nyp_chatbot_backend_status.txt")
 
-    def background_init():
-        """Background thread function for backend initialization."""
+    def background_init() -> None:
+        """
+        Background thread function for backend initialization.
+
+        This function performs the actual backend setup, including importing
+        and initializing the backend module, and updates the status file.
+        """
         try:
             # Write initializing status
             with open(status_file, "w") as f:
@@ -130,24 +144,22 @@ def initialize_backend_in_background():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            try:
-                # Import backend module (this will trigger ChromaDB init)
-                backend_module = importlib.import_module("backend")
+            # Import backend module (this will trigger ChromaDB init)
+            backend_module = importlib.import_module("backend")
 
-                # Call the initialization function
-                loop.run_until_complete(backend_module.init_backend())
-                logger.info("✅ Backend initialization completed successfully")
-                # Write success status
-                with open(status_file, "w") as f:
-                    f.write("ready")
-            finally:
-                loop.close()
-
+            # Call the initialization function
+            loop.run_until_complete(backend_module.init_backend())
+            logger.info("✅ Backend initialization completed successfully")
+            # Write success status
+            with open(status_file, "w") as f:
+                f.write("ready")
         except Exception as e:
             logger.warning(f"⚠️ Backend initialization failed: {e}")
             # Write failure status
             with open(status_file, "w") as f:
                 f.write("failed")
+        finally:
+            loop.close()
 
     # Start background thread
     thread = threading.Thread(target=background_init, daemon=True)
@@ -155,8 +167,13 @@ def initialize_backend_in_background():
     logger.info("🔄 Backend initialization started in background thread")
 
 
-def get_backend_status():
-    """Get the current backend status from file."""
+def get_backend_status() -> str:
+    """
+    Gets the current backend status from the status file.
+
+    :return: The status string ('initializing', 'ready', 'failed').
+    :rtype: str
+    """
     import tempfile
     import os
 
@@ -171,8 +188,15 @@ def get_backend_status():
         return "initializing"
 
 
-def load_css_file(filename):
-    """Load CSS from external file for better performance."""
+def load_css_file(filename: str) -> str:
+    """
+    Loads CSS from an external file for better performance.
+
+    :param filename: The name of the CSS file.
+    :type filename: str
+    :return: The content of the CSS file, or a minimal style if not found.
+    :rtype: str
+    """
     try:
         with open(f"styles/{filename}", "r") as f:
             return f.read()
@@ -181,8 +205,13 @@ def load_css_file(filename):
         return ".gradio-container { max-width: 1200px !important; margin: 0 auto !important; }"
 
 
-def create_main_app():
-    """Create the main application with performance optimizations."""
+def create_main_app() -> gr.Blocks:
+    """
+    Creates the main Gradio application with performance optimizations.
+
+    :return: The configured Gradio Blocks application instance.
+    :rtype: gr.Blocks
+    """
 
     # Load optimized CSS and theme
     mark_startup_milestone("loading_css")
@@ -197,13 +226,20 @@ def create_main_app():
     with gr.Blocks(
         title="NYP FYP Chatbot", theme=custom_theme, css=combined_css
     ) as app:
-        # State variables
-        logged_in_state = gr.State(False)
+        # State variables - ALL REQUIRED STATES MUST BE INITIALIZED HERE
         username_state = gr.State("")
-        backend_status_state = gr.State("initializing")
-        # Initialize these states here to ensure they are always defined
-        chat_history_state = gr.State([])
-        selected_chat_id = gr.State("")
+        logged_in_state = gr.State(False)
+        user_role_state = gr.State("guest")  # e.g., 'guest', 'user', 'admin'
+
+        # State for current chat session
+        chat_id_state = gr.State("")
+        chat_history_state = gr.State(
+            []
+        )  # Stores the history for the currently loaded chat
+        all_chats_data_state = gr.State(
+            {}
+        )  # Stores metadata and history for ALL user chats {chat_id: {name, history}}
+        debug_info_state = gr.State("")  # For displaying debug messages
 
         # Loading screen (visible initially)
         with gr.Column(visible=True) as loading_section:
@@ -239,34 +275,33 @@ def create_main_app():
         # Login interface container (hidden initially)
         mark_startup_milestone("creating_login_interface")
         with gr.Column(visible=False) as login_section:
-            # Import and create login interface
             try:
+                # Corrected import: Using login_interface from login_and_register
                 from gradio_modules.login_and_register import login_interface
 
-                login_components = login_interface(setup_events=True)
-
-                # Corrected unpacking for login_interface (19 components)
+                # login_interface returns a tuple of 19 Gradio components (based on snippet)
+                # It handles its own event setup internally. We only need the states.
                 (
                     logged_in_state_from_login,  # This is the state returned by login_interface
                     username_state_from_login,  # This is the state returned by login_interface
-                    is_register_mode,
-                    main_container_login,  # Renamed to avoid conflict with main_content_container
-                    error_message,
-                    username_input,
-                    email_input,
-                    password_input,
-                    confirm_password_input,
-                    primary_btn,
-                    secondary_btn,
-                    show_password_btn,
-                    show_confirm_btn,
-                    password_visible,
-                    confirm_password_visible,
-                    header_subtitle,
-                    header_instruction,
-                    email_info,
-                    password_requirements,
-                ) = login_components
+                    _is_register_mode,  # Internal state, not directly used by app.py's UI logic
+                    _main_container_login,
+                    _error_message,
+                    _username_input,
+                    _email_input,
+                    _password_input,
+                    _confirm_password_input,
+                    _primary_btn,
+                    _secondary_btn,
+                    _show_password_btn,
+                    _show_confirm_btn,
+                    _password_visible,
+                    _confirm_password_visible,
+                    _header_subtitle,  # This is the "Login" or "Register" markdown
+                    _header_instruction,  # This is the instruction markdown
+                    _email_info,
+                    _password_requirements,
+                ) = login_interface()
 
                 # Link the states from login_interface to the main app states
                 logged_in_state_from_login.change(
@@ -286,6 +321,14 @@ def create_main_app():
                     "Please check the gradio_modules.login_and_register module."
                 )
 
+            # Define components for overall login status display, managed by main_interface
+            # These are defined here, outside the try-except, to ensure they always exist
+            login_status_message = gr.Markdown(
+                "Please log in to continue.", elem_id="login-status-message"
+            )
+            logout_button = gr.Button("Logout", visible=False, elem_id="logout-button")
+            username_display = gr.Markdown("", elem_id="username-display")
+
         # Main application container (hidden initially)
         mark_startup_milestone("creating_main_interface")
         with gr.Column(visible=False) as main_section:
@@ -294,7 +337,6 @@ def create_main_app():
             # User info and logout
             with gr.Row():
                 user_info = gr.Markdown("", elem_id="user_info")
-                logout_btn = gr.Button("🚪 Logout", variant="secondary", size="sm")
 
             # Import and use the change password interface
             from gradio_modules.change_password import change_password_interface
@@ -308,40 +350,41 @@ def create_main_app():
             main_content_container = gr.Column(visible=True)
             with main_content_container:
                 mark_startup_milestone("creating_tabbed_interface")
-                with (
-                    gr.Tabs() as main_tabs
-                ):  # Added name for tabs to control visibility
+                with gr.Tabs():  # Added name for tabs to control visibility
                     # Chat Tab
-                    with gr.TabItem("💬 Chat", id="chat_tab"):
-                        with gr.Column(
-                            visible=False
-                        ) as chat_tab_content_column:  # Content column for chat tab
+                    with gr.TabItem("💬 Chat", id="chat_tab") as chat_tab_item:
+                        with gr.Column():
                             try:
-                                from gradio_modules.chatbot import (
-                                    chatbot_ui,
-                                )  # Assuming chatbot_ui is the main function
+                                from gradio_modules.chat_interface import (  # Corrected import from chatbot to chat_interface
+                                    chat_interface_ui,
+                                    load_all_chats,  # Still need load_all_chats
+                                )
 
-                                # Corrected unpacking for chatbot_ui (13 components)
+                                # Corrected unpacking for chat_interface_ui (11 components now)
                                 (
                                     chat_selector,
                                     chatbot,
-                                    chat_input,
+                                    msg,
                                     send_btn,
-                                    search_input_chat,  # Renamed to avoid conflict with search_interface
-                                    search_btn_chat,  # Renamed to avoid conflict with search_interface
-                                    search_results_chat,  # Renamed to avoid conflict with search_interface
                                     rename_input,
                                     rename_btn,
-                                    debug_md,
-                                    clear_chat_btn,
-                                    clear_chat_status,
-                                    new_chat_btn,  # This was the missing one causing 12 vs 13
-                                ) = chatbot_ui(
+                                    rename_status_md,
+                                    search_box,
+                                    search_btn_from_interface,
+                                    search_results_md,
+                                    new_chat_btn,  # Added new_chat_btn
+                                ) = chat_interface_ui(  # Passed debug_info_state
                                     username_state,
+                                    chat_id_state,
                                     chat_history_state,
-                                    selected_chat_id,
-                                    setup_events=True,
+                                    all_chats_data_state,
+                                    debug_info_state,
                                 )
+
+                                # Link debug_info_state to the debug_md in chatbot_ui (if it exists)
+                                # The chat_interface_ui does not return debug_md directly, it uses debug_info_state
+                                # So, this link is not needed here.
+
                             except ImportError as e:
                                 gr.Markdown(
                                     f"⚠️ **Chatbot interface not available:** {e}"
@@ -354,121 +397,89 @@ def create_main_app():
                                 gr.Button("Send", variant="primary")
                                 gr.Textbox(label="Response", interactive=False)
 
-                    # Search History Tab (assuming it's a separate tab)
-                    with gr.TabItem("🔍 Search History", id="search_tab"):
-                        with gr.Column(
-                            visible=False
-                        ) as search_tab_content_column:  # Content column for search tab
+                    # Document Ingestion Tab
+                    with gr.TabItem(
+                        "📁 Document Ingestion", id="document_ingestion_tab"
+                    ):
+                        with gr.Column():
                             try:
-                                from gradio_modules.search_interface import (
-                                    search_interface,
+                                from gradio_modules.document_ingestion import (
+                                    document_ingestion_ui,
                                 )
 
-                                # Corrected unpacking for search_interface (4 components)
-                                (
-                                    search_container,
-                                    search_query,
-                                    search_btn_search,  # Renamed to avoid conflict with chat tab's search_btn
-                                    search_results_dropdown,
-                                ) = search_interface(
-                                    logged_in_state,
-                                    username_state,
-                                    selected_chat_id,  # This is the current chat ID
-                                    chat_history_state,  # This is the current chat history
+                                document_ingestion_ui(
+                                    logged_in_state, username_state, user_role_state
                                 )
                             except ImportError as e:
                                 gr.Markdown(
-                                    f"⚠️ **Search interface not available:** {e}"
+                                    f"⚠️ **Document Ingestion interface not available:** {e}"
                                 )
                                 gr.Markdown(
-                                    "Please check the gradio_modules.search_interface module."
+                                    "Please check the gradio_modules.document_ingestion module."
                                 )
-                                gr.Textbox(
-                                    label="Search Query",
-                                    placeholder="Enter search query...",
-                                )
-                                gr.Button("Search")
-                                gr.Dropdown(label="Search Results", choices=[])
 
-                    # File Classification Tab
-                    with gr.TabItem("📄 File Classification", id="classification_tab"):
-                        with (
-                            gr.Column(
-                                visible=False
-                            ) as classification_tab_content_column
-                        ):  # Content column for classification tab
+                    # Classification Tab (Assuming this exists based on the previous error context)
+                    with gr.TabItem(
+                        "🔍 Classification", id="classification_tab"
+                    ) as classification_tab_item:
+                        with gr.Column():
                             try:
                                 from gradio_modules.file_classification import (
-                                    file_classification_interface,
+                                    file_classification_interface as classification_interface,
                                     setup_file_classification_events,
                                 )
 
-                                components = file_classification_interface(
+                                file_components_tuple = classification_interface(
                                     username_state
                                 )
-                                # Corrected unpacking for file_classification_interface (17 components)
                                 (
                                     file_upload,
                                     upload_btn,
-                                    status_md,
-                                    results_box,  # Corrected from results_section based on previous analysis
+                                    file_status_md,
+                                    results_box,
                                     classification_result,
                                     sensitivity_result,
                                     file_info,
                                     reasoning_result,
                                     summary_result,
-                                    history_md,
-                                    refresh_history_btn,
+                                    file_history_md,
+                                    refresh_file_history_btn,
                                     file_dropdown,
-                                    refresh_files_btn,
+                                    refresh_files_dropdown_btn,
                                     classify_existing_btn,
-                                    loading_indicator,
+                                    file_loading_indicator,
                                     clear_files_btn,
                                     clear_files_status,
-                                ) = components
+                                ) = file_components_tuple
 
-                                # Set up event handlers within Blocks context
+                                # Set up event handlers for file classification
                                 setup_file_classification_events(
-                                    components, username_state
+                                    file_components_tuple,
+                                    username_state,
                                 )
+
                             except ImportError as e:
                                 gr.Markdown(
-                                    f"⚠️ **File classification interface not available:** {e}"
+                                    f"⚠️ **Classification interface not available:** {e}"
                                 )
                                 gr.Markdown(
-                                    "Please check the gradio_modules.file_classification module."
+                                    "Please check the gradio_modules.classification_interface module."
                                 )
 
-                    # Audio Input Tab
-                    with gr.TabItem("🎤 Audio Input", id="audio_tab"):
-                        with gr.Column(
-                            visible=False
-                        ) as audio_tab_content_column:  # Content column for audio tab
+                    # Audio Tab (Assuming this exists based on the previous error context)
+                    with gr.TabItem("🎤 Audio", id="audio_tab") as audio_tab_item:
+                        with gr.Column():
                             try:
-                                from gradio_modules.audio_input import audio_interface
+                                from gradio_modules.audio_input import (
+                                    audio_interface,
+                                )
 
-                                # Corrected unpacking for audio_interface (11 components)
-                                (
-                                    audio_input,
-                                    process_audio_btn,
-                                    transcription_output,
-                                    response_output,
-                                    status_message,
-                                    edit_transcription,
-                                    edit_btn,
-                                    send_edited_btn,
-                                    history_output,
-                                    clear_history_btn,
-                                    audio_history,
-                                ) = audio_interface(username_state, setup_events=True)
+                                audio_interface(username_state)
                             except ImportError as e:
                                 gr.Markdown(f"⚠️ **Audio interface not available:** {e}")
                                 gr.Markdown(
-                                    "Please check the gradio_modules.audio_input module."
+                                    "Please check the gradio_modules.audio_interface module."
                                 )
-                                gr.Audio(label="Record Audio", type="filepath")
-                                gr.Button("Process Audio", variant="primary")
-                                gr.Textbox(label="Transcription", interactive=False)
 
             # By default, show tabbed interface, hide change password button initially
             main_content_container.visible = True
@@ -483,214 +494,189 @@ def create_main_app():
                 "🔄 Refresh Status", size="sm", visible=False
             )
 
-        # Event handlers for login/logout
-        def handle_login_success(logged_in, username, backend_status_state_val):
-            """Handle successful login."""
-            if logged_in and username:
-                # Check current backend status from file
-                current_status = get_backend_status()
-                if current_status == "ready":
-                    status_msg = "✅ **Backend ready!** All features available."
-                elif current_status == "failed":
-                    status_msg = (
-                        "⚠️ **Limited mode:** Some features may not be available."
-                    )
-                else:
-                    status_msg = "🔄 **Backend initializing...** Please wait for full functionality."
+        # Event Handlers for Auth and Tab Visibility
+        # This logic for showing/hiding tabs and updating status is now triggered by the app's global logged_in_state
+        logged_in_state.change(
+            fn=lambda logged_in: [
+                gr.update(interactive=logged_in),  # Chatbot tab
+                gr.update(interactive=logged_in),  # Audio Input tab
+                gr.update(interactive=logged_in),  # File Classification tab
+                gr.update(visible=logged_in),  # Logout button visibility
+                gr.update(visible=logged_in),  # Username display visibility
+                gr.update(
+                    visible=not logged_in
+                ),  # Login status message visibility when logged out
+                gr.update(visible=logged_in),  # Backend status markdown visibility
+                gr.update(visible=logged_in),  # Refresh status button visibility
+                gr.update(visible=logged_in),  # Change password button visibility
+            ],
+            inputs=[logged_in_state],
+            outputs=[
+                chat_tab_item,
+                audio_tab_item,
+                classification_tab_item,
+                logout_button,
+                username_display,
+                login_status_message,
+                backend_status,
+                refresh_status_btn,
+                change_password_btn,
+            ],
+            queue=False,
+        ).then(
+            fn=lambda logged_in, username: (
+                f"Welcome, {username}!" if logged_in else "Please log in to continue."
+            ),
+            inputs=[logged_in_state, username_state],
+            outputs=[login_status_message],
+            queue=False,
+        ).then(
+            fn=lambda logged_in, username: (
+                f"Logged in as: **{username}**" if logged_in else ""
+            ),
+            inputs=[logged_in_state, username_state],
+            outputs=[username_display],
+            queue=False,
+        ).then(
+            fn=load_all_chats,
+            inputs=[username_state],
+            outputs=[all_chats_data_state],
+        ).then(
+            fn=lambda all_data: gr.update(
+                choices=[(v["name"], k) for k, v in all_data.items()]
+            ),
+            inputs=[all_chats_data_state],
+            outputs=[chat_selector],
+        )
 
+        # Logout event: Clears username, hides tabs, clears chats
+        logout_button.click(
+            fn=lambda: [
+                "",
+                False,
+                {},
+                [],
+                "",
+                "guest",
+            ],  # Clear username, logged_in_state, all_chats_data_state, chat_history_state, chat_id_state, user_role_state
+            outputs=[
+                username_state,
+                logged_in_state,
+                all_chats_data_state,
+                chat_history_state,
+                chat_id_state,
+                user_role_state,
+            ],
+            queue=False,
+        ).then(
+            fn=lambda: gr.update(choices=[], value=""),  # Clear chat selector dropdown
+            outputs=[chat_selector],
+            queue=False,
+        ).then(
+            fn=lambda: gr.update(value=[]),  # Clear chatbot display
+            outputs=[chatbot],
+            queue=False,
+        )
+
+        def handle_password_change_logout(
+            logged_in: bool, username: str, user_role: str
+        ) -> Tuple[
+            bool,
+            str,
+            str,
+            gr.Column,
+            gr.Column,
+            str,
+            gr.Markdown,
+            gr.Button,
+            gr.Button,
+            gr.Dropdown,  # chat_selector
+            gr.Chatbot,  # chatbot
+            gr.State,  # chat_id_state
+            gr.State,  # chat_history_state
+            gr.State,  # all_chats_data_state
+        ]:
+            """
+            Handles logout triggered by successful password change.
+
+            :param logged_in: True if the user is logged in, False otherwise.
+            :type logged_in: bool
+            :param username: The username of the logged-in user.
+            :type username: str
+            :param user_role: The role of the logged-in user.
+            :type user_role: str
+            :return: A tuple of Gradio updates to reset states and UI components.
+            :rtype: Tuple[...]
+            """
+            if not logged_in:  # Password change was successful and logged out
+                # Perform the same actions as a regular logout
                 return (
-                    gr.update(visible=False),  # Hide login section
-                    gr.update(visible=True),  # Show main section
-                    f"**Logged in as:** {username}",  # Update user info
-                    gr.update(visible=True, value=status_msg),  # Show backend status
-                    gr.update(visible=True),  # Show refresh button
-                    gr.update(visible=True),  # Show change password button
-                    gr.update(selected=0),  # Switch to the first tab (Chat tab)
-                    gr.update(visible=True),  # Show Chat Tab content
-                    gr.update(visible=True),  # Show Search Tab content
-                    gr.update(visible=True),  # Show File Classification Tab content
-                    gr.update(visible=True),  # Show Audio Input Tab content
-                )
-            else:
-                return (
+                    False,  # logged_in_state
+                    "",  # username_state
+                    "guest",  # user_role_state reset to guest
                     gr.update(visible=True),  # Show login section
                     gr.update(visible=False),  # Hide main section
                     "",  # Clear user info
                     gr.update(visible=False),  # Hide backend status
                     gr.update(visible=False),  # Hide refresh button
                     gr.update(visible=False),  # Hide change password button
-                    gr.update(selected=0),  # Switch back to login tab or default
-                    gr.update(visible=False),  # Hide Chat Tab content
-                    gr.update(visible=False),  # Hide Search Tab content
-                    gr.update(visible=False),  # Hide File Classification Tab content
-                    gr.update(visible=False),  # Hide Audio Input Tab content
+                    gr.update(choices=[], value=""),  # Clear chat selector
+                    gr.update(value=[]),  # Clear chatbot
+                    "",  # chat_id_state
+                    [],  # chat_history_state
+                    {},  # all_chats_data_state
                 )
-
-        # Link login state change to UI updates
-        logged_in_state.change(
-            fn=handle_login_success,
-            inputs=[logged_in_state, username_state, backend_status_state],
-            outputs=[
-                login_section,
-                main_section,
-                user_info,
-                backend_status,
-                refresh_status_btn,
-                change_password_btn,
-                main_tabs,
-                chat_tab_content_column,
-                search_tab_content_column,
-                classification_tab_content_column,
-                audio_tab_content_column,
-            ],
-        )
-
-        def handle_logout():
-            """Handle logout with proper state reset for dynamic login interface."""
-            logger.info("User logged out")
-            # Clear all relevant states and inputs
-            return (
-                False,  # logged_in_state
-                "",  # username_state
-                False,  # is_register_mode (reset to login view)
-                gr.update(visible=True),  # Show login section
-                gr.update(visible=False),  # Hide main section
-                "",  # Clear user info
-                gr.update(visible=False),  # Hide backend status
-                gr.update(visible=False),  # Hide refresh button
-                gr.update(visible=False),  # Hide change password button
-                # Reset login/register form inputs
-                "",  # username_input
-                "",  # email_input
-                "",  # password_input
-                "",  # confirm_password_input
-                gr.update(visible=False),  # error_message
-                gr.update(value="## 🔐 Login"),  # header_subtitle
-                gr.update(
-                    value="Please log in to access the chatbot."
-                ),  # header_instruction
-                gr.update(visible=False),  # email_info
-                gr.update(visible=False),  # password_requirements
-                gr.update(visible=False),  # confirm_password_input visibility
-                gr.update(visible=False),  # show_confirm_btn visibility
-                gr.update(value="Login", variant="primary"),  # primary_btn
-                gr.update(value="Register", variant="secondary"),  # secondary_btn
-                gr.update(selected=0),  # Switch to Auth tab
-                gr.update(visible=False),  # Hide Chat Tab content
-                gr.update(visible=False),  # Hide Search Tab content
-                gr.update(visible=False),  # Hide File Classification Tab content
-                gr.update(visible=False),  # Hide Audio Input Tab content
-            )
-
-        # Wire up logout event with proper state reset for dynamic login interface
-        logout_btn.click(
-            fn=handle_logout,
-            inputs=[],
-            outputs=[
-                logged_in_state,
-                username_state,
-                is_register_mode,
-                login_section,
-                main_section,
-                user_info,
-                backend_status,
-                refresh_status_btn,
-                change_password_btn,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-                error_message,
-                header_subtitle,
-                header_instruction,
-                email_info,
-                password_requirements,
-                confirm_password_input,  # This is a component, not a state
-                show_confirm_btn,  # This is a component, not a state
-                primary_btn,
-                secondary_btn,
-                main_tabs,  # Control tab selection
-                chat_tab_content_column,
-                search_tab_content_column,
-                classification_tab_content_column,
-                audio_tab_content_column,
-            ],
-        )
-
-        # Handle logout triggered by password change
-        def handle_password_change_logout(logged_in, username):
-            """Handle logout triggered by successful password change."""
-            if not logged_in:  # Password change was successful and logged out
-                return handle_logout()
             # If still logged in, return current state (no changes)
-            # This return needs to match the handle_logout outputs
             return (
                 logged_in,
                 username,
-                False,  # is_register_mode
+                user_role,
                 gr.update(),  # login_section
                 gr.update(),  # main_section
                 gr.update(),  # user_info
                 gr.update(),  # backend_status
                 gr.update(),  # refresh_status_btn
                 gr.update(),  # change_password_btn
-                gr.update(),  # username_input
-                gr.update(),  # email_input
-                gr.update(),  # password_input
-                gr.update(),  # confirm_password_input
-                gr.update(),  # error_message
-                gr.update(),  # header_subtitle
-                gr.update(),  # header_instruction
-                gr.update(),  # email_info
-                gr.update(),  # password_requirements
-                gr.update(),  # confirm_password_input
-                gr.update(),  # show_confirm_btn
-                gr.update(),  # primary_btn
-                gr.update(),  # secondary_btn
-                gr.update(),  # main_tabs selection
-                gr.update(),  # chat_tab_content_column
-                gr.update(),  # search_tab_content_column
-                gr.update(),  # classification_tab_content_column
-                gr.update(),  # audio_tab_content_column
+                gr.update(),  # chat_selector
+                gr.update(),  # chatbot
+                gr.update(),  # chat_id_state
+                gr.update(),  # chat_history_state
+                gr.update(),  # all_chats_data_state
             )
 
         # Monitor logged_in_state for password change logout
         logged_in_state.change(
             fn=handle_password_change_logout,
-            inputs=[logged_in_state, username_state],
+            inputs=[
+                logged_in_state,
+                username_state,
+                user_role_state,
+            ],
             outputs=[
                 logged_in_state,
                 username_state,
-                is_register_mode,
+                user_role_state,
                 login_section,
                 main_section,
                 user_info,
                 backend_status,
                 refresh_status_btn,
                 change_password_btn,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-                error_message,
-                header_subtitle,
-                header_instruction,
-                email_info,
-                password_requirements,
-                confirm_password_input,
-                show_confirm_btn,
-                primary_btn,
-                secondary_btn,
-                main_tabs,
-                chat_tab_content_column,
-                search_tab_content_column,
-                classification_tab_content_column,
-                audio_tab_content_column,
+                chat_selector,  # Added to outputs
+                chatbot,  # Added to outputs
+                chat_id_state,  # Added to outputs
+                chat_history_state,  # Added to outputs
+                all_chats_data_state,  # Added to outputs
             ],
         )
 
-        def check_backend_status():
-            """Check the current backend initialization status."""
+        def check_backend_status() -> gr.Markdown:
+            """
+            Checks the current backend initialization status and returns a formatted message.
+
+            :return: Gradio Markdown update with the backend status.
+            :rtype: gr.Markdown
+            """
             current_status = get_backend_status()
             if current_status == "initializing":
                 return gr.update(value="🔄 **Initializing backend...** Please wait...")
@@ -704,9 +690,14 @@ def create_main_app():
         # Wire up refresh status button
         refresh_status_btn.click(fn=check_backend_status, outputs=[backend_status])
 
-        # UI Loading sequence - start backend, wait for completion, then show login
-        def start_backend_and_wait_for_completion():
-            """Start backend initialization and wait for it to complete before showing login."""
+        def start_backend_and_wait_for_completion() -> Tuple[gr.Column, gr.Column, str]:
+            """
+            Starts backend initialization in the background and waits for it to complete
+            before showing the login interface.
+
+            :return: A tuple of Gradio updates to show/hide sections and update status.
+            :rtype: Tuple[gr.Column, gr.Column, str]
+            """
             import time
 
             # Step 1: Start backend initialization in background (non-blocking)
@@ -759,9 +750,13 @@ def create_main_app():
             outputs=[loading_section, login_section, loading_status],
         )
 
-        # Manual proceed button (for users who don't want to wait)
-        def proceed_anyway():
-            """Allow users to proceed to login even if backend isn't ready."""
+        def proceed_anyway() -> Tuple[gr.Column, gr.Column, str]:
+            """
+            Allows users to proceed to login even if backend isn't ready.
+
+            :return: A tuple of Gradio updates to show/hide sections and update status.
+            :rtype: Tuple[gr.Column, gr.Column, str]
+            """
             return (
                 gr.update(visible=False),  # Hide loading screen
                 gr.update(visible=True),  # Show login interface
