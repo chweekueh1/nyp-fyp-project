@@ -73,7 +73,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --prerelease=allow overrides tenacity rich tqdm typer && \
     ${VENV_PATH}/bin/python -c "import yake; print('YAKE import OK')" && \
     uv pip install --prerelease=allow --no-deps unstructured
-COPY app.py backend.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
+COPY app.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
 COPY backend/ ./backend/
 COPY gradio_modules/ ./gradio_modules/
 COPY llm/ ./llm/

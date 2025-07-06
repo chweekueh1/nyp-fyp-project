@@ -1,28 +1,379 @@
+# backend/chat.py
 #!/usr/bin/env python3
 """
 Chat module for the backend.
-Contains chat-related functions for handling conversations and chat history.
+Contains chat-related functions for handling conversations and chat history,
+including persistence, loading, searching, and renaming.
 """
 
-import os
 import json
 import logging
-import re
-from typing import List, Tuple, Dict, Any
-from .config import CHAT_DATA_PATH, CHAT_SESSIONS_PATH
+from typing import List, Dict, Any
+from pathlib import Path
+import uuid
+from datetime import datetime
+
+from .config import CHAT_SESSIONS_PATH
 from .rate_limiting import check_rate_limit, get_rate_limit_info
-from .utils import sanitize_input, save_message_async
-from .database import get_llm_functions
-from .timezone_utils import get_utc_timestamp, now_singapore
+from .utils import (
+    sanitize_input,
+    save_message_async,
+)  # Assuming save_message_async handles persistence
+
+# The import for get_llm_functions is now lazy-loaded within ask_question
+from .timezone_utils import now_singapore
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Ensure chat session directory exists
+Path(CHAT_SESSIONS_PATH).mkdir(parents=True, exist_ok=True)
+
+# In-memory store for chat names and metadata
+_chat_metadata_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+
+def _get_user_chat_dir(username: str) -> Path:
+    """
+    Get the directory for a user's chat sessions.
+
+    :param username: The username.
+    :type username: str
+    :return: Path to the user's chat directory.
+    :rtype: Path
+    """
+    return Path(CHAT_SESSIONS_PATH) / username
+
+
+def _get_chat_file_path(chat_id: str, username: str) -> Path:
+    """
+    Get the file path for a specific chat session.
+
+    :param chat_id: The ID of the chat.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :return: Path to the chat file.
+    :rtype: Path
+    """
+    user_chat_dir = _get_user_chat_dir(username)
+    return user_chat_dir / f"{chat_id}.json"
+
+
+def _load_chat_metadata(username: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Load chat metadata for a user from disk.
+
+    :param username: The username.
+    :type username: str
+    :return: Dictionary of chat metadata.
+    :rtype: Dict[str, Dict[str, Any]]
+    """
+    user_chat_dir = _get_user_chat_dir(username)
+    metadata_file = user_chat_dir / "metadata.json"
+    if metadata_file.exists():
+        try:
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding metadata for user {username}: {e}")
+            return {}
+    return {}
+
+
+def _save_chat_metadata(username: str, metadata: Dict[str, Dict[str, Any]]) -> None:
+    """
+    Save chat metadata for a user to disk.
+
+    :param username: The username.
+    :type username: str
+    :param metadata: Dictionary of chat metadata.
+    :type metadata: Dict[str, Dict[str, Any]]
+    """
+    user_chat_dir = _get_user_chat_dir(username)
+    user_chat_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+    metadata_file = user_chat_dir / "metadata.json"
+    with open(metadata_file, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=4)
+
+
+def list_user_chat_ids(username: str) -> List[str]:
+    """
+    List all chat IDs for a given user.
+
+    :param username: The username.
+    :type username: str
+    :return: List of chat IDs.
+    :rtype: List[str]
+    """
+    user_chat_dir = _get_user_chat_dir(username)
+    if not user_chat_dir.exists():
+        return []
+    # Load from metadata, fallback to scanning files if metadata not found
+    metadata = _load_chat_metadata(username)
+    if metadata:
+        return list(metadata.keys())
+    else:
+        # Fallback to scanning .json files, but prefer metadata.json
+        return [
+            f.stem
+            for f in user_chat_dir.iterdir()
+            if f.suffix == ".json" and f.stem != "metadata"
+        ]
+
+
+def get_chat_history(chat_id: str, username: str) -> List[List[str]]:
+    """
+    Retrieve the chat history for a given chat ID and username.
+
+    :param chat_id: The ID of the chat session.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :return: A list of message pairs (user, bot).
+    :rtype: List[List[str]]
+    """
+    file_path = _get_chat_file_path(chat_id, username)
+    if not file_path.exists():
+        return []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Ensure data is a list of lists or equivalent for Gradio Chatbot
+            # Assumes chat data is stored as a list of dictionaries with 'role' and 'content'
+            history = []
+            for msg in data.get("messages", []):
+                if msg["role"] == "user":
+                    history.append([msg["content"], None])
+                elif msg["role"] == "assistant":
+                    if history and history[-1][1] is None:
+                        history[-1][1] = msg["content"]
+                    else:
+                        # This handles cases where assistant message might not directly follow user
+                        # or if history is empty (e.g. first message is bot-generated)
+                        history.append([None, msg["content"]])
+            return history
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding chat file {file_path}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load chat history from {file_path}: {e}")
+        return []
+
+
+def create_and_persist_new_chat(username: str) -> str:
+    """
+    Create a new chat session for the user and persist it to disk.
+    If the user has no existing chats, this will be their first.
+
+    :param username: The username for whom to create the chat.
+    :type username: str
+    :return: The ID of the newly created chat session.
+    :rtype: str
+    """
+    new_chat_id = str(uuid.uuid4())
+    user_chat_dir = _get_user_chat_dir(username)
+    user_chat_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+
+    # Create an empty chat file
+    file_path = _get_chat_file_path(new_chat_id, username)
+    initial_chat_data = {
+        "chat_id": new_chat_id,
+        "name": f"New Chat {now_singapore().strftime('%H:%M')}",
+        "created_at": now_singapore().isoformat(),
+        "messages": [],
+    }
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(initial_chat_data, f, indent=4)
+
+    # Update metadata
+    metadata = _load_chat_metadata(username)
+    metadata[new_chat_id] = {
+        "name": initial_chat_data["name"],
+        "created_at": initial_chat_data["created_at"],
+    }
+    _save_chat_metadata(username, metadata)
+
+    logger.info(f"Created new chat {new_chat_id} for user {username}")
+    return new_chat_id
+
+
+def get_chat_name(chat_id: str, username: str) -> str:
+    """
+    Get the name of a chat session.
+
+    :param chat_id: The ID of the chat session.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :return: The name of the chat, or a default name if not found.
+    :rtype: str
+    """
+    metadata = _load_chat_metadata(username)
+    return metadata.get(chat_id, {}).get("name", f"Chat {chat_id[:8]}")
+
+
+def rename_chat(chat_id: str, username: str, new_name: str) -> bool:
+    """
+    Rename a chat session.
+
+    :param chat_id: The ID of the chat session to rename.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :param new_name: The new name for the chat.
+    :type new_name: str
+    :return: True if successful, False otherwise.
+    :rtype: bool
+    """
+    metadata = _load_chat_metadata(username)
+    if chat_id in metadata:
+        metadata[chat_id]["name"] = new_name
+        _save_chat_metadata(username, metadata)
+        logger.info(f"Renamed chat {chat_id} to '{new_name}' for user {username}")
+        return True
+    logger.warning(f"Chat {chat_id} not found for renaming by user {username}")
+    return False
+
+
+def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
+    """
+    Search chat history for a given query across all user's chats.
+
+    :param query: The search query string.
+    :type query: str
+    :param username: The username.
+    :type username: str
+    :return: A list of dictionaries, each representing a chat with matches.
+    :rtype: List[Dict[str, Any]]
+    """
+    results = []
+    chat_ids = list_user_chat_ids(username)
+    for chat_id in chat_ids:
+        history = get_chat_history(chat_id, username)
+        chat_name = get_chat_name(chat_id, username)
+        matches = []
+        match_count = 0
+        preview_messages = []
+
+        for i, pair in enumerate(history):
+            user_msg = pair[0]
+            bot_msg = pair[1]
+
+            user_match = user_msg and query.lower() in user_msg.lower()
+            bot_match = bot_msg and query.lower() in bot_msg.lower()
+
+            if user_match or bot_match:
+                match_count += 1
+                matches.append(
+                    {
+                        "index": i,
+                        "user_message": user_msg,
+                        "bot_message": bot_msg,
+                        "user_match": user_match,
+                        "bot_match": bot_match,
+                    }
+                )
+                if (
+                    len(preview_messages) < 2
+                ):  # Capture a couple of messages for preview
+                    preview_messages.append(user_msg if user_msg else "")
+                    if bot_msg:
+                        preview_messages.append(bot_msg)
+
+        if matches:
+            results.append(
+                {
+                    "chat_id": chat_id,
+                    "chat_name": chat_name,
+                    "match_count": match_count,
+                    "matching_messages": matches,
+                    "chat_preview": " ... ".join(preview_messages[:2]).strip(),
+                }
+            )
+    return results
+
+
+def ensure_chat_on_login(username: str) -> str:
+    """
+    Ensures that a chat session exists for the user upon login.
+    If no chats exist, a new one is created. Otherwise, the most recent one is returned.
+
+    :param username: The username.
+    :type username: str
+    :return: The ID of the chat session to be used.
+    :rtype: str
+    """
+    chat_ids = list_user_chat_ids(username)
+    if not chat_ids:
+        logger.info(f"No chats found for user {username}. Creating a new one.")
+        return create_and_persist_new_chat(username)
+
+    # Load all chat metadata to find the most recent chat
+    user_chats = _load_chat_metadata(username)
+    if not user_chats:
+        logger.warning(
+            f"No chat metadata found for {username} despite chat IDs existing. Creating new chat."
+        )
+        return create_and_persist_new_chat(username)
+
+    most_recent_chat = None
+    latest_timestamp = None
+
+    for chat_id, chat_data in user_chats.items():
+        created_at_str = chat_data.get("created_at")
+        if created_at_str:
+            try:
+                # Parse ISO format string to datetime object
+                current_timestamp = datetime.fromisoformat(created_at_str)
+                if most_recent_chat is None or current_timestamp > latest_timestamp:
+                    latest_timestamp = current_timestamp
+                    most_recent_chat = chat_id
+            except ValueError:
+                logger.warning(
+                    f"Could not parse created_at for chat {chat_id}: {created_at_str}"
+                )
+                # If parsing fails, fallback to using the first available chat
+                if most_recent_chat is None:
+                    most_recent_chat = chat_id
+        else:
+            # If created_at is missing, fallback to using the first available chat
+            if most_recent_chat is None:
+                most_recent_chat = chat_id
+
+    if most_recent_chat:
+        logger.info(
+            f"Returning most recent chat {most_recent_chat} for user {username}."
+        )
+        return most_recent_chat
+    else:
+        # Fallback if somehow no chat could be determined as "most recent"
+        logger.warning(
+            f"Could not determine most recent chat for {username}, creating a new one as fallback."
+        )
+        return create_and_persist_new_chat(username)
 
 
 async def ask_question(
     question: str, chat_id: str, username: str
 ) -> dict[str, str | dict]:
-    """Ask a question and get a response from the chatbot."""
+    """
+    Ask a question and get a response from the chatbot.
+
+    This asynchronous function processes a user's question, applies rate limiting,
+    sanitizes the input, calls the LLM, and persists both the user's message
+    and the bot's response to the chat session file.
+
+    :param question: The user's question.
+    :type question: str
+    :param chat_id: The ID of the current chat session.
+    :type chat_id: str
+    :param username: The username of the current user.
+    :type username: str
+    :return: A dictionary containing the response status, code, and the bot's answer.
+             Includes error information if the operation fails or rate limit is exceeded.
+    :rtype: dict[str, str | dict]
+    """
     logging.error(
         f"ask_question called with question={question!r}, chat_id={chat_id!r}, username={username!r}"
     )
@@ -36,7 +387,10 @@ async def ask_question(
         }
     sanitized_question = sanitize_input(question)
     try:
-        # Get LLM functions lazily
+        # Lazily import get_llm_functions here to break the circular dependency
+        from .database import get_llm_functions
+
+        # Get LLM functions
         llm_funcs = get_llm_functions()
         if not llm_funcs or not llm_funcs["is_llm_ready"]():
             logging.error(
@@ -69,6 +423,11 @@ async def get_chatbot_response(ui_state: dict) -> dict:
     """
     Chatbot interface: generates a response using the LLM and updates history.
     Now includes message persistence to chat session files.
+
+    :param ui_state: A dictionary containing the current UI state, including 'username', 'message', 'history', and 'chat_id'.
+    :type ui_state: dict
+    :return: A dictionary containing the updated history, bot response, and debug information.
+    :rtype: dict
     """
     print(f"[DEBUG] backend.get_chatbot_response called with ui_state: {ui_state}")
     username = ui_state.get("username")
@@ -98,506 +457,31 @@ async def get_chatbot_response(ui_state: dict) -> dict:
             "response": f"[Error] Rate limit exceeded. Please wait {rate_limit_info['time_window']} seconds.",
             "debug": "Rate limit exceeded.",
         }
-
     try:
-        # Use your LLM chat model with lazy loading
-        llm_funcs = get_llm_functions()
-        if not llm_funcs:
+        result = await ask_question(message, chat_id, username)
+
+        if result.get("code") == "200":
+            answer = result.get("response", "")
+            if isinstance(answer, dict) and "answer" in answer:
+                answer = answer["answer"]
+            updated_history = history + [[message, answer]]
             return {
-                "history": history,
-                "response": "AI assistant not available.",
-                "debug": "LLM functions not loaded.",
+                "history": updated_history,
+                "response": answer,
+                "debug": "Message processed.",
             }
-
-        result = llm_funcs["get_convo_hist_answer"](message, chat_id)
-        response = result["answer"]
-
-        # Update in-memory history
-        history = history + [[message, response]]
-
-        # Persist messages to chat session file asynchronously
-        try:
-            # Save user message
-            await save_message_async(
-                username, chat_id, {"role": "user", "content": message}
-            )
-            # Save bot response
-            await save_message_async(
-                username, chat_id, {"role": "assistant", "content": response}
-            )
-            print(f"[DEBUG] Messages persisted to chat session {chat_id}")
-        except Exception as persist_error:
-            print(f"[WARNING] Failed to persist messages: {persist_error}")
-            # Continue anyway since we have the response
-
-        response_dict = {
-            "history": history,
-            "response": response,
-            "debug": "Chatbot response generated and persisted.",
-        }
-        print(f"[DEBUG] backend.get_chatbot_response returning: {response_dict}")
-        return response_dict
+        else:
+            error_msg = result.get("error", "An unknown error occurred.")
+            updated_history = history + [[message, f"Error: {error_msg}"]]
+            return {
+                "history": updated_history,
+                "response": f"Error: {error_msg}",
+                "debug": f"Error during question: {error_msg}",
+            }
     except Exception as e:
-        print(f"[ERROR] backend.get_chatbot_response exception: {e}")
+        logger.error(f"Error in get_chatbot_response: {e}")
         return {
             "history": history,
-            "response": f"[Error] {e}",
-            "debug": f"Exception: {e}",
+            "response": f"[Error] An unexpected error occurred: {e}",
+            "debug": f"Unexpected error: {e}",
         }
-
-
-def get_chat_response(message: str, username: str) -> str:
-    """Get a simple chat response without persistence."""
-    try:
-        llm_funcs = get_llm_functions()
-        if not llm_funcs:
-            return "AI assistant not available."
-
-        result = llm_funcs["get_convo_hist_answer"](message, "default")
-        return result["answer"]
-    except Exception as e:
-        logger.error(f"Error in get_chat_response: {e}")
-        return f"Error: {e}"
-
-
-def search_chat_history(query: str, username: str) -> List[Dict[str, Any]]:
-    """Search through user's chat history."""
-    try:
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        if not os.path.exists(user_folder):
-            return []
-
-        # Return empty results for empty query
-        if not query or not query.strip():
-            return []
-
-        results = []
-        query_lower = query.lower().strip()
-
-        for filename in os.listdir(user_folder):
-            if filename.endswith(".json"):
-                chat_file = os.path.join(user_folder, filename)
-                try:
-                    with open(chat_file, "r") as f:
-                        chat_data = json.load(f)
-
-                    chat_name = chat_data.get("name", filename.replace(".json", ""))
-                    messages = chat_data.get("messages", [])
-                    for message in messages:
-                        content = message.get("content", "").lower()
-                        if query_lower in content:
-                            results.append(
-                                {
-                                    "chat_id": filename.replace(".json", ""),
-                                    "chat_name": chat_name,
-                                    "message": message,
-                                    "timestamp": message.get("timestamp", ""),
-                                }
-                            )
-                except Exception as e:
-                    logger.error(f"Error reading chat file {chat_file}: {e}")
-                    continue
-
-        # Sort by timestamp (newest first)
-        results.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        return results[:50]  # Limit to 50 results
-
-    except Exception as e:
-        logger.error(f"Error in search_chat_history: {e}")
-        return []
-
-
-def get_chat_history(chat_id: str, username: str) -> List[Tuple[str, str]]:
-    """Get chat history for a specific chat."""
-    try:
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        chat_file = os.path.join(user_folder, f"{chat_id}.json")
-
-        # If chat file does not exist, just return empty history (do not create file)
-        if not os.path.exists(chat_file):
-            return []
-
-        with open(chat_file, "r") as f:
-            chat_data = json.load(f)
-
-        messages = chat_data.get("messages", [])
-        history = []
-
-        for message in messages:
-            role = message.get("role", "")
-            content = message.get("content", "")
-            if role in ["user", "assistant"]:
-                history.append((role, content))
-
-        return history
-
-    except Exception as e:
-        logger.error(f"Error in get_chat_history: {e}")
-        return []
-
-
-def list_user_chat_ids(username: str) -> list:
-    """List all chat IDs for a user."""
-    try:
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        if not os.path.exists(user_folder):
-            return []
-
-        chat_ids = []
-        for filename in os.listdir(user_folder):
-            if filename.endswith(".json"):
-                chat_id = filename.replace(".json", "")
-                chat_ids.append(chat_id)
-
-        return chat_ids
-
-    except Exception as e:
-        logger.error(f"Error in list_user_chat_ids: {e}")
-        return []
-
-
-def create_new_chat_id(username: str) -> str:
-    """Create a new chat ID for a user."""
-    try:
-        # Use Singapore timezone for chat ID generation
-        timestamp = now_singapore().strftime("%Y%m%d_%H%M%S")
-        chat_id = f"chat_{timestamp}"
-
-        # Ensure the chat file exists
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        os.makedirs(user_folder, exist_ok=True)
-
-        chat_file = os.path.join(user_folder, f"{chat_id}.json")
-        if not os.path.exists(chat_file):
-            with open(chat_file, "w") as f:
-                json.dump({"messages": []}, f)
-
-        return chat_id
-
-    except Exception as e:
-        logger.error(f"Error in create_new_chat_id: {e}")
-        return f"chat_{int(now_singapore().timestamp())}"
-
-
-def generate_smart_chat_name(first_message: str) -> str:
-    """Generate a smart chat name based on the first message."""
-    try:
-        # Clean the message
-        cleaned = re.sub(r"[^\w\s]", "", first_message)
-        words = cleaned.split()
-
-        # Filter out common stop words and short words
-        stop_words = {
-            "how",
-            "do",
-            "i",
-            "a",
-            "an",
-            "the",
-            "is",
-            "are",
-            "can",
-            "you",
-            "me",
-            "with",
-            "what",
-            "where",
-            "when",
-            "why",
-            "help",
-        }
-        meaningful_words = [
-            w for w in words if len(w) > 2 and w.lower() not in stop_words
-        ]
-
-        # Take up to 4 meaningful words to capture more context
-        selected_words = meaningful_words[:4]
-
-        if selected_words:
-            name = " ".join(selected_words).title()
-            # Limit length
-            if len(name) > 30:
-                name = name[:27] + "..."
-            return name
-        else:
-            return "New Chat"
-
-    except Exception as e:
-        logger.error(f"Error in generate_smart_chat_name: {e}")
-        return "New Chat"
-
-
-def create_and_persist_new_chat(username: str) -> str:
-    """Create a new chat and persist it."""
-    try:
-        chat_id = create_new_chat_id(username)
-
-        # Ensure the sessions directory exists
-        os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
-
-        # Create session file
-        session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-
-        session_data = {
-            "chat_id": chat_id,
-            "username": username,
-            "created_at": get_utc_timestamp(),
-            "name": "New Chat",
-        }
-
-        with open(session_file, "w") as f:
-            json.dump(session_data, f, indent=2)
-
-        return chat_id
-
-    except Exception as e:
-        logger.error(f"Error in create_and_persist_new_chat: {e}")
-        return create_new_chat_id(username)
-
-
-def create_and_persist_smart_chat(username: str, first_message: str) -> str:
-    """Create a new chat with a smart name based on the first message."""
-    try:
-        chat_id = create_new_chat_id(username)
-        chat_name = generate_smart_chat_name(first_message)
-
-        # Ensure the sessions directory exists
-        os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
-
-        # Create session file
-        session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-
-        session_data = {
-            "chat_id": chat_id,
-            "username": username,
-            "created_at": get_utc_timestamp(),
-            "name": chat_name,
-            "first_message": first_message,
-        }
-
-        with open(session_file, "w") as f:
-            json.dump(session_data, f, indent=2)
-
-        return chat_id
-
-    except Exception as e:
-        logger.error(f"Error in create_and_persist_smart_chat: {e}")
-        return create_new_chat_id(username)
-
-
-def get_user_chats(username: str) -> list:
-    """Get all chats for a user."""
-    try:
-        session_files = []
-
-        if os.path.exists(CHAT_SESSIONS_PATH):
-            for filename in os.listdir(CHAT_SESSIONS_PATH):
-                if filename.startswith(f"{username}_") and filename.endswith(".json"):
-                    session_files.append(filename)
-
-        return session_files
-
-    except Exception as e:
-        logger.error(f"Error in get_user_chats: {e}")
-        return []
-
-
-def get_user_chats_with_names(username: str) -> list:
-    """Get all chats for a user with their names."""
-    try:
-        session_files = get_user_chats(username)
-        chats = []
-
-        for filename in session_files:
-            session_file = os.path.join(CHAT_SESSIONS_PATH, filename)
-            try:
-                with open(session_file, "r") as f:
-                    session_data = json.load(f)
-
-                chats.append(
-                    {
-                        "chat_id": session_data.get("chat_id", ""),
-                        "name": session_data.get("name", "New Chat"),
-                        "created_at": session_data.get("created_at", ""),
-                        "filename": filename,
-                    }
-                )
-            except Exception as e:
-                logger.error(f"Error reading session file {session_file}: {e}")
-                continue
-
-        # Sort by creation date (newest first)
-        chats.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return chats
-
-    except Exception as e:
-        logger.error(f"Error in get_user_chats_with_names: {e}")
-        return []
-
-
-def get_chat_name(chat_id: str, username: str) -> str:
-    """Get the name of a specific chat."""
-    try:
-        session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-        if os.path.exists(session_file):
-            with open(session_file, "r") as f:
-                session_data = json.load(f)
-            return session_data.get("name", "New Chat")
-        else:
-            # If the chat is not persisted, display the current timestamp as its title
-            from .timezone_utils import now_singapore
-
-            timestamp = now_singapore().strftime("%Y-%m-%d %H:%M:%S")
-            return f"{timestamp}"
-    except Exception as e:
-        logger.error(f"Error in get_chat_name: {e}")
-        from .timezone_utils import now_singapore
-
-        timestamp = now_singapore().strftime("%Y-%m-%d %H:%M:%S")
-        return f"{timestamp}"
-
-
-def set_chat_name(chat_id: str, username: str, new_name: str) -> bool:
-    """Set the name of a specific chat."""
-    try:
-        session_file = os.path.join(CHAT_SESSIONS_PATH, f"{username}_{chat_id}.json")
-
-        if os.path.exists(session_file):
-            with open(session_file, "r") as f:
-                session_data = json.load(f)
-
-            session_data["name"] = new_name
-
-            with open(session_file, "w") as f:
-                json.dump(session_data, f, indent=2)
-
-            return True
-        else:
-            return False
-
-    except Exception as e:
-        logger.error(f"Error in set_chat_name: {e}")
-        return False
-
-
-def rename_chat(old_chat_id: str, new_chat_name: str, username: str) -> Dict[str, Any]:
-    """Rename a chat."""
-    try:
-        # Validate new name
-        if not new_chat_name or len(new_chat_name.strip()) == 0:
-            return {"success": False, "error": "Chat name cannot be empty"}
-
-        new_chat_name = new_chat_name.strip()
-        if len(new_chat_name) > 50:
-            return {"success": False, "error": "Chat name too long (max 50 characters)"}
-
-        # Check if chat exists
-        old_session_file = os.path.join(
-            CHAT_SESSIONS_PATH, f"{username}_{old_chat_id}.json"
-        )
-        if not os.path.exists(old_session_file):
-            return {"success": False, "error": "Chat not found"}
-
-        # Read current session data
-        with open(old_session_file, "r") as f:
-            session_data = json.load(f)
-
-        # Update name in session file
-        session_data["name"] = new_chat_name
-        with open(old_session_file, "w") as f:
-            json.dump(session_data, f, indent=2)
-
-        # Also update name in chat data file
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        chat_data_file = os.path.join(user_folder, f"{old_chat_id}.json")
-        if os.path.exists(chat_data_file):
-            try:
-                with open(chat_data_file, "r") as f:
-                    chat_data = json.load(f)
-                chat_data["name"] = new_chat_name
-                with open(chat_data_file, "w") as f:
-                    json.dump(chat_data, f, indent=2)
-            except Exception as e:
-                logger.error(f"Error updating chat data file name: {e}")
-
-        logger.info(
-            f"Chat {old_chat_id} renamed to '{new_chat_name}' for user {username}"
-        )
-        return {"success": True, "new_name": new_chat_name, "new_chat_id": old_chat_id}
-
-    except Exception as e:
-        logger.error(f"Error in rename_chat: {e}")
-        return {"success": False, "error": str(e)}
-
-
-def rename_chat_file(old_chat_id: str, new_chat_id: str, username: str) -> bool:
-    """Rename a chat file (internal function)."""
-    try:
-        old_session_file = os.path.join(
-            CHAT_SESSIONS_PATH, f"{username}_{old_chat_id}.json"
-        )
-        new_session_file = os.path.join(
-            CHAT_SESSIONS_PATH, f"{username}_{new_chat_id}.json"
-        )
-
-        if os.path.exists(old_session_file):
-            os.rename(old_session_file, new_session_file)
-            return True
-        else:
-            return False
-
-    except Exception as e:
-        logger.error(f"Error in rename_chat_file: {e}")
-        return False
-
-
-def fuzzy_search_chats(username: str, query: str) -> str:
-    """Search through user's chats using fuzzy matching."""
-    try:
-        chats = get_user_chats_with_names(username)
-        query_lower = query.lower()
-
-        results = []
-        for chat in chats:
-            name = chat.get("name", "").lower()
-            if query_lower in name:
-                results.append(chat)
-
-        if results:
-            # Format results
-            formatted_results = []
-            for chat in results[:10]:  # Limit to 10 results
-                formatted_results.append(f"- {chat['name']} (ID: {chat['chat_id']})")
-
-            return f"Found {len(results)} matching chats:\n" + "\n".join(
-                formatted_results
-            )
-        else:
-            return f"No chats found matching '{query}'"
-
-    except Exception as e:
-        logger.error(f"Error in fuzzy_search_chats: {e}")
-        return f"Error searching chats: {e}"
-
-
-def render_all_chats(username: str) -> list:
-    """Render all chats for a user in a formatted list."""
-    try:
-        chats = get_user_chats_with_names(username)
-
-        formatted_chats = []
-        for chat in chats:
-            formatted_chats.append(
-                {
-                    "id": chat["chat_id"],
-                    "name": chat["name"],
-                    "created": chat["created_at"],
-                    "display_name": f"{chat['name']} ({chat['chat_id']})",
-                }
-            )
-
-        return formatted_chats
-
-    except Exception as e:
-        logger.error(f"Error in render_all_chats: {e}")
-        return []
