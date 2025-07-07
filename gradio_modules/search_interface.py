@@ -19,7 +19,7 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 # Now import from parent directory
-from backend import search_chat_history, get_chat_history  # DO NOT RENAME
+from backend.chat import search_chat_history, get_chat_history  # DO NOT RENAME
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +50,7 @@ def search_interface(
     :param chat_history_state: State for storing the current chat history.
     :type chat_history_state: gr.State
     :return: A tuple containing the search container (gr.Column), search query textbox,
-             search button, and search results dropdown.
+              search button, and search results dropdown.
     :rtype: Tuple[gr.Column, gr.Textbox, gr.Button, gr.Dropdown]
     """
     with gr.Column(visible=False) as search_container:  # Container for search UI
@@ -67,7 +67,10 @@ def search_interface(
             allow_custom_value=False,  # Users should pick from results, not type
         )
 
-    def _handle_search_query(query: str, username: str) -> Dict[str, Any]:
+    # Make the handler async to support potential async backend calls
+    async def _handle_search_query(
+        query: str, username: str
+    ) -> Dict[str, Any]:  # <--- MODIFIED TO ASYNC
         """
         Handle a search query from the UI and return matching results for dropdown.
 
@@ -79,7 +82,7 @@ def search_interface(
         :param username: The current username.
         :type username: str
         :return: A dictionary suitable for updating a Gradio Dropdown,
-                 containing 'choices' and 'value'.
+                  containing 'choices' and 'value'.
         :rtype: Dict[str, Any]
         """
         if not query.strip() or not username:
@@ -88,7 +91,9 @@ def search_interface(
         try:
             # Get search results from backend
             # search_chat_history returns list of dicts with chat_name, chat_id, etc.
-            results = search_chat_history(query.strip(), username)
+            results = await search_chat_history(
+                query.strip(), username
+            )  # <--- ADDED AWAIT
 
             # Format results for dropdown: (display_name, value_to_pass)
             # Display name will include chat name and a preview
@@ -109,7 +114,8 @@ def search_interface(
             logger.error(f"Error handling search: {e}")
             return gr.update(choices=[], value=None)
 
-    def _handle_search_result_selection(
+    # Make the handler async to support potential async backend calls
+    async def _handle_search_result_selection(  # <--- MODIFIED TO ASYNC
         selected_chat_id: str, username: str
     ) -> Tuple[str, List[List[str]]]:
         """
@@ -123,7 +129,7 @@ def search_interface(
         :param username: The current username.
         :type username: str
         :return: A tuple containing the selected chat ID and its history
-                 (list of [user_msg, bot_msg] pairs) for display in a chatbot component.
+                  (list of [user_msg, bot_msg] pairs) for display in a chatbot component.
         :rtype: Tuple[str, List[List[str]]]
         """
         if not selected_chat_id or not username:
@@ -131,7 +137,9 @@ def search_interface(
 
         try:
             # Get chat history for selected result
-            history = get_chat_history(selected_chat_id, username)
+            history = await get_chat_history(
+                selected_chat_id, username
+            )  # <--- ADDED AWAIT
             # Convert tuples to lists to match the expected return type for Gradio Chatbot
             if history:
                 return selected_chat_id, [[str(msg[0]), str(msg[1])] for msg in history]

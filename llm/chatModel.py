@@ -5,13 +5,13 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import START, StateGraph
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # Already correct
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.prompts import PromptTemplate
 from typing import Sequence, List, Any, Optional, Dict, TypedDict
 import openai
 import os
 import json
-import sqlite3
+import aiosqlite  # <--- ADD THIS IMPORT
 from openai.types.chat import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 from dotenv import load_dotenv
@@ -72,7 +72,7 @@ app = None
 llm_init_lock = threading.Lock()
 
 
-async def initialize_llm_and_db() -> None:  # Made async
+async def initialize_llm_and_db() -> None:
     """
     Initialize LLM and database with performance optimizations.
     """
@@ -137,8 +137,6 @@ async def initialize_llm_and_db() -> None:  # Made async
                 return
 
             logging.info("🗄️ Loading DuckDB vector store...")
-            # Adjust this import based on your actual project structure.
-            # Assuming 'backend' is a sibling directory to 'llm'
             from backend.database import get_duckdb_collection
 
             db = get_duckdb_collection("chat")
@@ -179,7 +177,7 @@ async def initialize_llm_and_db() -> None:  # Made async
                 app = None
             else:
                 logging.info("🔗 Initializing LangGraph workflow...")
-                await _initialize_langgraph_workflow()  # Await this call
+                await _initialize_langgraph_workflow()
                 logging.info("LangGraph workflow initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to initialize LangGraph workflow: {e}")
@@ -193,7 +191,7 @@ async def initialize_llm_and_db() -> None:  # Made async
             logging.critical("One or more core components failed to initialize.")
 
 
-async def _initialize_langgraph_workflow() -> None:  # Made async
+async def _initialize_langgraph_workflow() -> None:
     """
     Initialize the LangGraph workflow for conversational AI.
     """
@@ -205,10 +203,9 @@ async def _initialize_langgraph_workflow() -> None:  # Made async
 
     try:
         logging.info(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
-        conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
-        sqlite_saver = AsyncSqliteSaver(
-            conn
-        )  # Removed await here as AsyncSqliteSaver is not async init
+        # Use aiosqlite for async connection
+        conn = await aiosqlite.connect(LANGCHAIN_CHECKPOINT_PATH)  # <--- CHANGED HERE
+        sqlite_saver = AsyncSqliteSaver(conn)
         app = workflow.compile(checkpointer=sqlite_saver)
         logging.info(
             f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}"
