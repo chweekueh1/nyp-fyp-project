@@ -49,11 +49,9 @@ from .auth import (
 from hashing import hash_password, verify_password
 
 from .chat import (
-    ask_question,
+    get_chatbot_response,
     get_chat_history,
     search_chat_history,
-    create_and_persist_new_chat,
-    get_chat_name,
     rename_chat,
     list_user_chat_ids,  # 'rename_chat_file' removed
 )
@@ -110,11 +108,9 @@ __all__ = [
     "init_backend_async_internal",
     "get_backend_status",
     # Chat functions
-    "ask_question",
+    "get_chatbot_response",
     "get_chat_history",
     "search_chat_history",
-    "create_and_persist_new_chat",
-    "get_chat_name",
     "rename_chat",
     "list_user_chat_ids",  # 'rename_chat_file' removed
     # File handling

@@ -1,13 +1,13 @@
+# llm/chatModel.py
 #!/usr/bin/env python3
+# llm/chatModel.py
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import START, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # Already correct
 from langchain.prompts import PromptTemplate
-from typing_extensions import Annotated, TypedDict
-from typing import Sequence, List, Any, Optional, Dict
+from typing import Sequence, List, Any, Optional, Dict, TypedDict
 import openai
 import os
 import json
@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 from infra_utils import (
     rel2abspath,
     create_folders,
-)  # Ensure get_chatbot_dir is imported
-import logging  # Added for internal logging in this file
+)
+import logging
 import threading
 from llm.keyword_cache import get_cached_response, set_cached_response
 from system_prompts import (
@@ -37,7 +37,6 @@ logging.basicConfig(
 load_dotenv()
 
 # --- Environment Setup and Path Resolution ---
-# Ensure get_chatbot_dir() returns a string for os.path.join compatibility
 BASE_CHATBOT_DIR = str(os.getcwd())
 
 default_db_path = os.path.join("data", "vector_store", "chroma_db")
@@ -59,7 +58,8 @@ LANGCHAIN_CHECKPOINT_PATH = rel2abspath(
     )
 )
 
-# Directory creation will be done lazily in initialize_llm_and_db()
+# Define CACHE_DIR before it's used
+CACHE_DIR = os.path.join(BASE_CHATBOT_DIR, "data", "cache")
 
 # Use capital letters for the API key variable
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -67,20 +67,17 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 llm: Optional[ChatOpenAI] = None
 embedding: Optional[OpenAIEmbeddings] = None
 client: Optional[openai.OpenAI] = None
-db: Optional[Any] = None  # Will be DuckDBVectorStore
-app = None  # LangGraph workflow app
+db: Optional[Any] = None
+app = None
 llm_init_lock = threading.Lock()
 
 
-def initialize_llm_and_db() -> None:
+async def initialize_llm_and_db() -> None:  # Made async
     """
     Initialize LLM and database with performance optimizations.
-
-    :return: None
     """
     global llm, embedding, client, db, app
     with llm_init_lock:
-        # Skip if already initialized
         if (
             llm is not None
             and embedding is not None
@@ -99,26 +96,21 @@ def initialize_llm_and_db() -> None:
             embedding = None
             client = None
             db = None
+            app = None
             return
 
         try:
             # Ensure necessary directories exist for persistent storage
             try:
-                create_folders(os.path.dirname(DATABASE_PATH))  # For Chroma DB
-                create_folders(
-                    os.path.dirname(KEYWORDS_DATABANK_PATH)
-                )  # For Shelve DB (it's a file, but its directory must exist)
-                create_folders(
-                    os.path.dirname(LANGCHAIN_CHECKPOINT_PATH)
-                )  # For LangGraph Checkpoint DB
-                create_folders(CACHE_DIR)  # For cache files
+                create_folders(os.path.dirname(DATABASE_PATH))
+                create_folders(os.path.dirname(KEYWORDS_DATABANK_PATH))
+                create_folders(os.path.dirname(LANGCHAIN_CHECKPOINT_PATH))
+                create_folders(CACHE_DIR)
             except PermissionError as e:
                 logging.warning(f"Permission denied creating directories: {e}")
             except Exception as e:
                 logging.warning(f"Failed to create directories: {e}")
 
-            # Continue with LLM initialization
-            # Initialize core components
             logging.info("🤖 Initializing LLM components...")
             llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
             embedding = OpenAIEmbeddings(
@@ -133,9 +125,9 @@ def initialize_llm_and_db() -> None:
             embedding = None
             client = None
             db = None
+            app = None
             return
 
-        # Load DuckDB vector store with caching
         try:
             if embedding is None:
                 logging.critical(
@@ -145,24 +137,21 @@ def initialize_llm_and_db() -> None:
                 return
 
             logging.info("🗄️ Loading DuckDB vector store...")
+            # Adjust this import based on your actual project structure.
+            # Assuming 'backend' is a sibling directory to 'llm'
             from backend.database import get_duckdb_collection
 
             db = get_duckdb_collection("chat")
             logging.info(f"DuckDB vector store 'chat' loaded from {DATABASE_PATH}")
 
-            # Cache the database for faster subsequent loads
             try:
-                # Test the database connection
                 db.get(limit=1)
-                logging.info("DuckDB vector store loaded from cache.")
+                logging.info("DuckDB vector store cache test successful.")
             except Exception as cache_e:
                 logging.warning(f"DuckDB vector store cache test failed: {cache_e}")
-                # Try to recreate from existing data
                 try:
                     db = get_duckdb_collection("chat")
-                    logging.info(
-                        "Successfully recreated DuckDB vector store from cache"
-                    )
+                    logging.info("Successfully recreated DuckDB vector store.")
                 except Exception as recreate_e:
                     logging.error(
                         f"Failed to recreate DuckDB vector store: {recreate_e}"
@@ -173,7 +162,6 @@ def initialize_llm_and_db() -> None:
             logging.critical(f"Failed to load DuckDB vector store 'chat': {e}")
             db = None
 
-        # Initialize LangGraph workflow with detailed error logging
         try:
             missing_components = []
             if not llm:
@@ -191,31 +179,26 @@ def initialize_llm_and_db() -> None:
                 app = None
             else:
                 logging.info("🔗 Initializing LangGraph workflow...")
-                _initialize_langgraph_workflow()
+                await _initialize_langgraph_workflow()  # Await this call
                 logging.info("LangGraph workflow initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to initialize LangGraph workflow: {e}")
             app = None
 
-        # Save successful initialization state
-        if llm and embedding and client and db:
-            logging.info("Saved DuckDB vector store to cache")
+        if llm and embedding and client and db and app:
             logging.info(
-                "LLM, DuckDB vector store, and OpenAI client initialized successfully."
+                "LLM, DuckDB vector store, OpenAI client, and LangGraph app initialized successfully."
             )
+        else:
+            logging.critical("One or more core components failed to initialize.")
 
 
-def _initialize_langgraph_workflow() -> None:
+async def _initialize_langgraph_workflow() -> None:  # Made async
     """
     Initialize the LangGraph workflow for conversational AI.
-
-    :return: None
     """
     global app
 
-    # Import required modules
-
-    # Create the workflow
     workflow = StateGraph(state_schema=State)
     workflow.add_node("model", call_model)
     workflow.add_edge(START, "model")
@@ -223,14 +206,16 @@ def _initialize_langgraph_workflow() -> None:
     try:
         logging.info(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
         conn = sqlite3.connect(LANGCHAIN_CHECKPOINT_PATH, check_same_thread=False)
-        sqlite_saver = SqliteSaver(conn)
+        sqlite_saver = AsyncSqliteSaver(
+            conn
+        )  # Removed await here as AsyncSqliteSaver is not async init
         app = workflow.compile(checkpointer=sqlite_saver)
         logging.info(
             f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}"
         )
     except Exception as e:
         logging.warning(f"Failed to connect to SQLite checkpoint: {e}")
-        app = workflow.compile()  # Compile without checkpointer if it fails
+        app = workflow.compile()
         logging.warning(
             "LangGraph compiled without checkpointing. State will not persist across runs."
         )
@@ -271,7 +256,6 @@ qa_prompt = ChatPromptTemplate.from_messages(
 def match_keywords(question: str) -> List[str]:
     if not question:
         return []
-    # Check cache first
     cached = get_cached_response(question)
     if cached is not None:
         try:
@@ -281,7 +265,6 @@ def match_keywords(question: str) -> List[str]:
         except Exception:
             pass
     try:
-        # Define the function parameter for keyword matching
         tool_param = ChatCompletionToolParam(
             type="function",
             function=FunctionDefinition(
@@ -318,7 +301,6 @@ def match_keywords(question: str) -> List[str]:
             tool_choice={"type": "function", "function": {"name": "match_keywords"}},
         )
         predictions = _extract_predictions_from_response(r, question)
-        # Store in cache
         set_cached_response(question, json.dumps(predictions))
         return predictions
     except openai.APIError as e:
@@ -362,7 +344,7 @@ def build_keyword_filter(
     Assumes keywords are stored in metadata fields like 'keyword0', 'keyword1', etc.
     """
     if not matched_keywords:
-        return {}  # No filter if no keywords
+        return {}
 
     filter_clauses = []
     for i in range(max_keywords):
@@ -386,19 +368,16 @@ def route_retriever(question: str) -> Optional[Any]:
 
     if not matched_keywords:
         logging.info("No keywords matched for routing, returning default retriever.")
-        # Ensure db.as_retriever() is only called if db is not None
         if db:
             return db.as_retriever(search_kwargs={"k": 5})
         else:
             logging.error("db is None in route_retriever's default path.")
             return None
 
-    # Convert ChromaDB filter format to keyword list for DuckDB
     keyword_filter = build_keyword_filter(matched_keywords)
     logging.info(
         f"Keywords matched: {matched_keywords}. Applying filter: {keyword_filter}."
     )
-    # Ensure db.as_retriever() is only called if db is not None
     if db:
         return db.as_retriever(
             search_kwargs={"k": 5, "filter": {"keywords": matched_keywords}}
@@ -410,23 +389,14 @@ def route_retriever(question: str) -> Optional[Any]:
 
 # --- LangGraph State and Nodes ---
 class State(TypedDict):
-    input: str  # The user's current question
-    chat_history: Annotated[
-        Sequence[BaseMessage], add_messages
-    ]  # Cumulative chat history
-    context: str  # Retrieved context from RAG
-    answer: str  # The AI's generated answer
+    input: str
+    chat_history: Sequence[BaseMessage]
+    context: str
+    answer: str
 
 
-def call_model(state: State) -> State:
-    """Call the model with the given state.
-
-    Args:
-        state: The current state containing input, chat history, context, and answer
-
-    Returns:
-        Updated state with the model's response
-    """
+async def call_model(state: State) -> State:
+    """Call the model with the given state."""
     if llm is None:
         logging.error("LLM not initialized")
         return _error_state(
@@ -436,14 +406,12 @@ def call_model(state: State) -> State:
             "No context due to initialization error.",
         )
     try:
-        # Build the prompt using qa_prompt, which includes the system prompt
         messages = qa_prompt.format_messages(
             input=state["input"],
             chat_history=state["chat_history"],
             context=state.get("context", ""),
         )
-        # Invoke the LLM with the formatted messages
-        response = llm.invoke(messages)
+        response = await llm.ainvoke(messages)
         if not response or not response.content:
             return _error_state(
                 state["input"],
@@ -470,17 +438,7 @@ def call_model(state: State) -> State:
 def _error_state(
     question: str, chat_history: Sequence[BaseMessage], answer: str, context: str
 ) -> State:
-    """Create an error state.
-
-    Args:
-        question: The user's question
-        chat_history: The chat history
-        answer: The error message
-        context: The context
-
-    Returns:
-        Error state
-    """
+    """Create an error state."""
     return {
         "input": str(question),
         "chat_history": chat_history,
@@ -489,19 +447,8 @@ def _error_state(
     }
 
 
-# --- LangGraph Workflow Setup ---
-CACHE_DIR = os.path.join(BASE_CHATBOT_DIR, "data", "cache")
-# Cache directory creation will be done lazily in initialize_llm_and_db()
-DUCKDB_CACHE_PATH = os.path.join(CACHE_DIR, "duckdb_vectorstore.pkl")
-LANGCHAIN_CACHE_PATH = os.path.join(CACHE_DIR, "langchain_workflow.pkl")
-CACHE_VERSION = "1.0"  # Add version for cache invalidation
-
-app: Optional[Any] = None  # Initialize app to None
-# Ensure llm, db, and client are all initialized before compiling the workflow
-
-
 # --- Main Answer Retrieval Function ---
-def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
+async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
     """
     Retrieves a conversational answer using the LangGraph RAG workflow.
     """
@@ -525,9 +472,6 @@ def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
             "context": "No context due to initialization error.",
         }
 
-    # LangGraph's checkpointer automatically loads history based on thread_id
-    # We pass the initial 'input' for the current turn.
-    # The 'chat_history' will be loaded from the checkpointer by LangGraph based on the thread_id config.
     initial_state: State = {
         "input": question,
         "chat_history": [],
@@ -536,7 +480,7 @@ def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
     }
 
     try:
-        result = app.invoke(
+        result = await app.ainvoke(
             initial_state, config={"configurable": {"thread_id": thread_id}}
         )
 

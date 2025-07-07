@@ -7,8 +7,7 @@ including persistence, loading, searching, and renaming.
 """
 
 import json
-import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 import uuid
 from datetime import datetime
@@ -17,13 +16,16 @@ from .config import CHAT_SESSIONS_PATH
 from .rate_limiting import check_rate_limit, get_rate_limit_info
 from .utils import (
     sanitize_input,
-    save_message_async,
 )
 from .timezone_utils import now_singapore
+from infra_utils import setup_logging
+
+# New imports from chatModel.py
+from llm.chatModel import get_convo_hist_answer, initialize_llm_and_db, is_llm_ready
 
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 # Ensure chat session directory exists
 Path(CHAT_SESSIONS_PATH).mkdir(parents=True, exist_ok=True)
@@ -52,489 +54,446 @@ def _get_user_chat_dir(username: str) -> Path:
     return Path(CHAT_SESSIONS_PATH) / username
 
 
-def _get_chat_file_path(chat_id: str, username: str) -> Path:
+def _get_chat_file_path(username: str, chat_id: str) -> Path:
     """
     Get the file path for a specific chat session.
 
-    :param chat_id: The ID of the chat session.
-    :type chat_id: str
     :param username: The username.
     :type username: str
+    :param chat_id: The chat session ID.
+    :type chat_id: str
     :return: Path to the chat session file.
     :rtype: Path
     """
     return _get_user_chat_dir(username) / f"{chat_id}.json"
 
 
-def _get_user_chats_metadata_file(username: str) -> Path:
+def _load_chat_metadata_cache(username: str) -> None:
     """
-    Get the file path for a user's chat metadata.
-
-    :param username: The username.
-    :type username: str
-    :return: Path to the user's chat metadata file.
-    :rtype: Path
+    Loads all chat metadata for a user into the in-memory cache.
+    This is called once per user login.
     """
-    return _get_user_chat_dir(username) / "user_chats.json"
+    user_chat_dir = _get_user_chat_dir(username)
+    if not user_chat_dir.exists():
+        _chat_metadata_cache[username] = {}
+        return
 
-
-def _load_chat_metadata_from_file(username: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Load chat metadata for a user from their user_chats.json file.
-
-    :param username: The username.
-    :type username: str
-    :return: Dictionary of chat metadata, or an empty dictionary if file not found.
-    :rtype: Dict[str, Dict[str, Any]]
-    """
-    metadata_file = _get_user_chats_metadata_file(username)
-    if metadata_file.exists():
+    user_chats_metadata = {}
+    for chat_file in user_chat_dir.glob("*.json"):
         try:
-            with open(metadata_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(chat_file, "r", encoding="utf-8") as f:
+                chat_data = json.load(f)
+                chat_id = chat_file.stem
+                user_chats_metadata[chat_id] = {
+                    "name": chat_data.get("name", "Unnamed Chat"),
+                    "created_at": chat_data.get(
+                        "created_at", now_singapore().isoformat()
+                    ),
+                    "updated_at": chat_data.get(
+                        "updated_at", now_singapore().isoformat()
+                    ),
+                    "history": chat_data.get("history", []),
+                }
         except json.JSONDecodeError as e:
-            logger.error(f"Error decoding user_chats.json for {username}: {e}")
-            # Consider backing up corrupted file and starting fresh or attempting recovery
-            return {}
-    return {}
+            logger.error(f"Error decoding JSON from {chat_file}: {e}")
+        except Exception as e:
+            logger.error(f"Error loading chat metadata from {chat_file}: {e}")
+    _chat_metadata_cache[username] = user_chats_metadata
 
 
 def _save_chat_metadata_cache(username: str) -> None:
     """
-    Save the in-memory chat metadata cache for a user to their user_chats.json file.
-
-    :param username: The username.
-    :type username: str
-    :raises IOError: If there's an error writing to the file.
+    Saves the in-memory chat metadata cache for a user back to individual JSON files.
+    This ensures that updates to names, timestamps, and history are persisted.
     """
-    metadata_file = _get_user_chats_metadata_file(username)
+    user_chats = _chat_metadata_cache.get(username, {})
     user_chat_dir = _get_user_chat_dir(username)
-    user_chat_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+    user_chat_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        with open(metadata_file, "w", encoding="utf-8") as f:
-            json.dump(_chat_metadata_cache.get(username, {}), f, indent=4)
-    except IOError as e:
-        logger.error(f"Error saving user_chats.json for {username}: {e}")
-        raise  # Re-raise to indicate a critical persistence error
+    for chat_id, chat_data in user_chats.items():
+        file_path = _get_chat_file_path(username, chat_id)
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(chat_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving chat data to {file_path}: {e}")
 
 
-def _get_chat_metadata_cache(
-    username: str, force_reload: bool = False
-) -> Dict[str, Dict[str, Any]]:
+def _get_chat_metadata_cache(username: str) -> Dict[str, Dict[str, Any]]:
     """
-    Get the in-memory chat metadata cache for a user.
-    Loads from file if not in cache or if force_reload is True.
+    Retrieves the in-memory chat metadata for a user.
+    Loads it if not already cached.
+    """
+    if username not in _chat_metadata_cache:
+        _load_chat_metadata_cache(username)
+    return _chat_metadata_cache.get(username, {})
+
+
+def list_user_chat_ids(username: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Lists all chat IDs and their names for a given user.
+    This now returns the full metadata, including history, from the cache.
 
     :param username: The username.
     :type username: str
-    :param force_reload: If True, forces a reload from disk, bypassing the cache.
-    :type force_reload: bool
-    :return: Dictionary of chat metadata.
+    :return: A dictionary where keys are chat IDs and values are dictionaries
+             containing 'name', 'created_at', 'updated_at', and 'history' for each chat.
     :rtype: Dict[str, Dict[str, Any]]
     """
-    if (
-        username not in _chat_metadata_cache
-        or not _chat_metadata_cache[username]
-        or force_reload
-    ):
-        _chat_metadata_cache[username] = _load_chat_metadata_from_file(username)
-        logger.debug(f"Refreshed chat metadata cache for {username}.")
-    return _chat_metadata_cache[username]
+    return _get_chat_metadata_cache(username)
+
+
+def get_chat_history(chat_id: str, username: str) -> List[List[str]]:
+    """
+    Retrieves the chat history for a specific chat session from the cache.
+
+    :param chat_id: The ID of the chat session.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :return: A list of lists, where each inner list represents a [user_message, bot_response].
+    :rtype: List[List[str]]
+    """
+    user_chats = _get_chat_metadata_cache(username)
+    return user_chats.get(chat_id, {}).get("history", [])
+
+
+def create_new_chat(username: str, chat_name: str = "New Chat") -> str:
+    """
+    Creates a new chat session for the user.
+
+    :param username: The username.
+    :type username: str
+    :param chat_name: The initial name for the new chat.
+    :type chat_name: str
+    :return: The ID of the newly created chat session.
+    :rtype: str
+    """
+    chat_id = str(uuid.uuid4())
+    user_chats = _get_chat_metadata_cache(username)
+    user_chats[chat_id] = {
+        "name": chat_name,
+        "created_at": now_singapore().isoformat(),
+        "updated_at": now_singapore().isoformat(),
+        "history": [],
+    }
+    _save_chat_metadata_cache(username)
+    logger.info(f"New chat '{chat_name}' created for {username} with ID: {chat_id}")
+    return chat_id
+
+
+def rename_chat(
+    chat_id: str, new_name: str, username: str, all_chats_data: Dict[str, Any]
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Renames a specific chat session.
+
+    :param chat_id: The ID of the chat session to rename.
+    :type chat_id: str
+    :param new_name: The new name for the chat session.
+    :type new_name: str
+    :param username: The current username.
+    :type username: str
+    :param all_chats_data: The current state of all_chats_data.
+    :type all_chats_data: Dict[str, Any]
+    :return: A tuple containing a status message and the updated all_chats_data.
+    :rtype: Tuple[str, Dict[str, Any]]
+    """
+    user_chats = _get_chat_metadata_cache(username)
+    if chat_id in user_chats:
+        user_chats[chat_id]["name"] = new_name
+        user_chats[chat_id]["updated_at"] = now_singapore().isoformat()
+        _save_chat_metadata_cache(username)
+        return f"Chat renamed to '{new_name}'", user_chats
+    logger.warning(f"Attempted to rename non-existent chat {chat_id} for {username}")
+    return "Failed to rename chat. Chat not found.", all_chats_data
+
+
+def delete_chat(chat_id: str, username: str) -> bool:
+    """
+    Deletes a specific chat session.
+
+    :param chat_id: The ID of the chat session to delete.
+    :type chat_id: str
+    :param username: The username.
+    :type username: str
+    :return: True if the chat was deleted, False otherwise.
+    :rtype: bool
+    """
+    user_chats = _get_chat_metadata_cache(username)
+    if chat_id in user_chats:
+        file_path = _get_chat_file_path(username, chat_id)
+        if file_path.exists():
+            try:
+                file_path.unlink()
+                del user_chats[chat_id]
+                _save_chat_metadata_cache(username)
+                logger.info(f"Chat {chat_id} deleted for {username}")
+                return True
+            except Exception as e:
+                logger.error(f"Error deleting chat file {file_path}: {e}")
+                return False
+        else:
+            del user_chats[chat_id]
+            _save_chat_metadata_cache(username)
+            logger.warning(f"Chat file {file_path} not found but removed from cache.")
+            return True
+    return False
 
 
 def ensure_chat_on_login(username: str) -> str:
     """
-    Ensures a chat exists for the user upon login. If no chats exist,
-    a new default chat is created and persisted.
+    Ensures that a user has at least one chat session upon login.
+    If no chats exist, a new one is created.
 
     :param username: The username.
     :type username: str
-    :return: The ID of the ensured (or newly created) chat.
+    :return: The ID of the current or newly created chat session.
     :rtype: str
     """
     user_chats = _get_chat_metadata_cache(username)
     if not user_chats:
         logger.info(f"No chats found for {username}. Creating a new default chat.")
-        chat_id = str(uuid.uuid4())
-        default_chat_name = "New Chat"
-        user_chats[chat_id] = {
-            "name": default_chat_name,
-            "created_at": now_singapore().isoformat(),
-            "updated_at": now_singapore().isoformat(),
-        }
-        _chat_metadata_cache[username] = user_chats  # Update the cache directly
-        _save_chat_metadata_cache(username)
-        # Create an empty chat file
-        chat_file = _get_chat_file_path(chat_id, username)
-        with open(chat_file, "w", encoding="utf-8") as f:
-            json.dump([], f)  # Empty history for a new chat
-        logger.info(
-            f"Created default chat '{default_chat_name}' ({chat_id}) for {username}."
-        )
-        return chat_id
-    else:
-        # Return the ID of the most recently updated chat or the first one found
-        latest_chat_id = None
-        latest_timestamp = None
-        for cid, data in user_chats.items():
-            updated_at_str = data.get("updated_at")
-            if updated_at_str:
-                updated_at = datetime.fromisoformat(updated_at_str)
-                if latest_timestamp is None or updated_at > latest_timestamp:
-                    latest_timestamp = updated_at
-                    latest_chat_id = cid
-        return latest_chat_id if latest_chat_id else next(iter(user_chats.keys()))
-
-
-def list_user_chat_ids(username: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Lists all chat IDs and their metadata for a given user, forcing a reload of metadata.
-
-    :param username: The username.
-    :type username: str
-    :return: A dictionary of chat IDs mapped to their metadata (name, created_at, updated_at).
-    :rtype: Dict[str, Dict[str, Any]]
-    """
-    # Force reload metadata to ensure the dropdown always has the latest names/IDs
-    user_chats = _get_chat_metadata_cache(username, force_reload=True)
-    return user_chats
-
-
-def get_chat_history(chat_id: str, username: str) -> List[List[str]]:
-    """
-    Retrieves the full chat history for a specific chat ID and user.
-
-    :param chat_id: The ID of the chat session.
-    :type chat_id: str
-    :param username: The username.
-    :type username: str
-    :return: A list of message pairs (user_message, bot_response).
-    :rtype: List[List[str]]
-    """
-    chat_file = _get_chat_file_path(chat_id, username)
-    if chat_file.exists():
-        try:
-            with open(chat_file, "r", encoding="utf-8") as f:
-                history_raw = json.load(f)
-                # Convert history to the [user_msg, bot_msg] format expected by Gradio
-                # The stored format seems to be {"role": "user/assistant", "content": "..."}
-                # We need to pair them up.
-                parsed_history = []
-                user_message = None
-                for msg in history_raw:
-                    if msg.get("role") == "user":
-                        user_message = msg.get("content", "")
-                    elif msg.get("role") == "assistant" and user_message is not None:
-                        parsed_history.append([user_message, msg.get("content", "")])
-                        user_message = None  # Reset for next pair
-                return parsed_history
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding chat file {chat_file}: {e}")
-            return []
-    return []
-
-
-def get_chat_name(chat_id: str, username: str) -> str:
-    """
-    Retrieves the name of a specific chat session.
-
-    :param chat_id: The ID of the chat session.
-    :type chat_id: str
-    :param username: The username.
-    :type username: str
-    :return: The name of the chat, or the chat ID if not found.
-    :rtype: str
-    """
-    user_chats = _get_chat_metadata_cache(username)
-    return user_chats.get(chat_id, {}).get("name", chat_id)
-
-
-def create_new_chat(username: str) -> Dict[str, Any]:
-    """
-    Creates a new chat session, persists its metadata, and returns its details.
-
-    :param username: The username for whom to create the chat.
-    :type username: str
-    :return: A dictionary containing the ID, name, and updated_at timestamp of the newly created chat.
-    :rtype: Dict[str, Any]
-    """
-    chat_id = str(uuid.uuid4())
-    user_chats = _get_chat_metadata_cache(username)
-    default_chat_name = (
-        f"Chat {len(user_chats) + 1}"  # Use len of current chats for numbering
+        return create_new_chat(username, "My First Chat")
+    latest_chat_id = max(
+        user_chats,
+        key=lambda chat_id: user_chats[chat_id].get(
+            "updated_at", datetime.min.isoformat()
+        ),
+        default=None,
     )
-
-    new_chat_data = {
-        "name": default_chat_name,
-        "created_at": now_singapore().isoformat(),
-        "updated_at": now_singapore().isoformat(),
-    }
-    user_chats[chat_id] = new_chat_data
-    _chat_metadata_cache[username] = user_chats  # Update the cache directly
-    _save_chat_metadata_cache(username)
-
-    # Create an empty chat file for the new session
-    chat_file = _get_chat_file_path(chat_id, username)
-    with open(chat_file, "w", encoding="utf-8") as f:
-        json.dump([], f)  # Empty history for a new chat
-    logger.info(f"Created new chat '{default_chat_name}' ({chat_id}) for {username}.")
-
-    return {"chat_id": chat_id, **new_chat_data}
+    if latest_chat_id:
+        return latest_chat_id
+    return create_new_chat(username, "My First Chat")
 
 
-def rename_chat(chat_id: str, username: str, new_name: str) -> bool:
+def search_chat_history(
+    search_query: str, username: str, chat_id: Optional[str] = None
+) -> Tuple[List[Dict[str, Any]], str]:
     """
-    Renames an existing chat session.
-
-    :param chat_id: The ID of the chat to rename.
-    :type chat_id: str
-    :param username: The username who owns the chat.
-    :type username: str
-    :param new_name: The new name for the chat.
-    :type new_name: str
-    :return: True if successful, False otherwise.
-    :rtype: bool
-    """
-    user_chats = _get_chat_metadata_cache(
-        username
-    )  # Get the current metadata (might be cached)
-    if chat_id not in user_chats:
-        logger.warning(f"Chat {chat_id} not found for user {username} during rename.")
-        return False
-
-    user_chats[chat_id]["name"] = new_name
-    user_chats[chat_id]["updated_at"] = (
-        now_singapore().isoformat()
-    )  # Update timestamp on rename
-    _chat_metadata_cache[username] = user_chats  # Update the cache directly
-    _save_chat_metadata_cache(username)  # Persist the updated metadata to disk
-    logger.info(f"Chat {chat_id} renamed to '{new_name}' for user {username}.")
-    return True
-
-
-def all_history_text_snippet(history: List[List[str]], max_len: int) -> str:
-    """
-    Generates a snippet of the entire chat history for search results.
-
-    :param history: The chat history (list of [user_msg, bot_msg] pairs).
-    :type history: List[List[str]]
-    :param max_len: Maximum length of the snippet.
-    :type max_len: int
-    :return: A truncated string of the chat history.
-    :rtype: str
-    """
-    full_text = " ".join(
-        [f"{msg[0]} {msg[1]}" for msg in history if msg and len(msg) == 2]
-    )  # Ensure msg is valid
-    return f"{full_text[:max_len]}..." if len(full_text) > max_len else full_text
-
-
-def fuzzy_search_chats(search_query: str, username: str) -> List[Tuple[str, str, str]]:
-    """
-    Performs a fuzzy search through all chat sessions for a given user.
-    Searches chat names and message content.
+    Searches through chat history for a given query for a specific user,
+    optionally within a specific chat.
 
     :param search_query: The query string to search for.
     :type search_query: str
-    :param username: The username performing the search.
+    :param username: The username whose chats are being searched.
     :type username: str
-    :return: A list of tuples (chat_id, chat_name, matching_snippet) for found results.
-    :rtype: List[Tuple[str, str, str]]
+    :param chat_id: Optional. The specific chat ID to search within. If None,
+                    all chats for the user are searched.
+    :type chat_id: Optional[str]
+    :return: A tuple containing:
+                - A list of dictionaries, where each dictionary represents a found match:
+                  {'chat_id': ..., 'chat_name': ..., 'message_index': ...,
+                   'message_type': 'user' or 'bot', 'content': ...}
+                - A status message.
+    :rtype: Tuple[List[Dict[str, Any]], str]
     """
-    if not username:
-        return []
     if not search_query:
-        return []
+        return [], "Please enter a search query."
 
-    all_user_chats_metadata = _get_chat_metadata_cache(username, force_reload=True)
-    if not all_user_chats_metadata:
-        return []
+    sanitized_query = sanitize_input(search_query)
+    search_results = []
+    user_chats = _get_chat_metadata_cache(username)
 
-    results = []
-    search_query_lower = search_query.lower()
-
-    for chat_id, chat_data in all_user_chats_metadata.items():
-        chat_name = chat_data.get("name", chat_id)
-
-        # Load the actual chat history for content search
-        chat_history_list = get_chat_history(chat_id, username)
-
-        # Combine name and all messages for search
-        all_text = chat_name.lower()
-        for msg_pair in chat_history_list:
-            if msg_pair and len(msg_pair) == 2:
-                all_text += " " + str(msg_pair[0]).lower()  # User message
-                all_text += " " + str(msg_pair[1]).lower()  # Bot response
-
-        if search_query_lower in all_text:
-            # If a direct substring match, add it
-            results.append(
-                (chat_id, chat_name, all_history_text_snippet(chat_history_list, 100))
-            )
-
-    return results
-
-
-def search_chat_history(username: str, query: str) -> List[Tuple[str, str, str]]:
-    """
-    Search chat history for the given user and query.
-
-    This function performs a fuzzy search through chat names and message content.
-
-    :param username: The username performing the search.
-    :type username: str
-    :param query: The search query string.
-    :type query: str
-    :return: A list of tuples (chat_id, chat_name, matching_snippet) for found results.
-    :rtype: List[Tuple[str, str, str]]
-    """
-    return fuzzy_search_chats(query, username)
-
-
-async def ask_question(
-    question: str, chat_id: str, username: str
-) -> dict[str, str | dict]:
-    """
-    Ask a question and get a response from the chatbot.
-
-    This asynchronous function processes a user's question, applies rate limiting,
-    sanitizes the input, calls the LLM, and persists both the user's message
-    and the bot's response to the chat session file.
-
-    :param question: The user's question.
-    :type question: str
-    :param chat_id: The ID of the current chat session.
-    :type chat_id: str
-    :param username: The username of the current user.
-    :type username: str
-    :return: A dictionary containing the response status, code, and the bot's answer.
-             Includes error information if the operation fails or rate limit is exceeded.
-    :rtype: dict[str, str | dict]
-    """
-    logger.info(
-        f"ask_question called with question={question!r}, chat_id={chat_id!r}, username={username!r}"
-    )
-    if not question or not chat_id or not username:
-        return {"error": "Invalid question or chat_id or username", "code": "400"}
-
-    sanitized_question = sanitize_input(question)
-    try:
-        # Lazily import get_llm_functions here to break the circular dependency
-        from .database import get_llm_functions
-
-        # Get LLM functions
-        llm_funcs = get_llm_functions()
-        if not llm_funcs or not llm_funcs["is_llm_ready"]():
-            logger.error(
-                "LLM/DB not ready in ask_question. Backend may not be fully initialized."
-            )
-            return {
-                "error": "AI assistant is not fully initialized. Please try again later.",
-                "code": "500",
-            }
-
-        response = llm_funcs["get_convo_hist_answer"](sanitized_question, chat_id)
-
-        # Save user message
-        await save_message_async(
-            username, chat_id, {"role": "user", "content": sanitized_question}
-        )
-
-        # Save bot response
-        if isinstance(response, dict) and "answer" in response:
-            answer = response["answer"]
+    target_chats = {}
+    if chat_id and chat_id != "all":
+        if chat_id in user_chats:
+            target_chats[chat_id] = user_chats[chat_id]
         else:
-            answer = str(response)
+            return [], "Specified chat not found."
+    else:
+        target_chats = user_chats
 
-        await save_message_async(
-            username, chat_id, {"role": "assistant", "content": answer}
-        )
+    for current_chat_id, chat_data in target_chats.items():
+        chat_name = chat_data.get("name", "Unnamed Chat")
+        history = chat_data.get("history", [])
 
-        return {"status": "OK", "code": "200", "response": response}
-    except Exception as e:
-        logger.error(f"Error in ask_question: {e}")
-        return {"error": str(e), "code": "500"}
+        for i, message_pair in enumerate(history):
+            user_msg = message_pair[0]
+            bot_resp = message_pair[1]
+
+            if sanitized_query.lower() in user_msg.lower():
+                search_results.append(
+                    {
+                        "chat_id": current_chat_id,
+                        "chat_name": chat_name,
+                        "message_index": i,
+                        "message_type": "user",
+                        "content": user_msg,
+                    }
+                )
+            if sanitized_query.lower() in bot_resp.lower():
+                search_results.append(
+                    {
+                        "chat_id": current_chat_id,
+                        "chat_name": chat_name,
+                        "message_index": i,
+                        "message_type": "bot",
+                        "content": bot_resp,
+                    }
+                )
+
+    if search_results:
+        return search_results, f"Found {len(search_results)} matching entries."
+    else:
+        return [], "No matching entries found."
 
 
-async def get_chatbot_response(
-    message: str, history: List[List[str]], username: str, chat_id: str
-) -> Dict[str, Any]:
+def _update_chat_history(
+    chat_id: str, username: str, user_message: str, bot_response: str
+) -> List[List[str]]:
     """
-    Main function to get a chatbot response, handling persistence and rate limits.
+    Internal function to update chat history in memory and persist it.
 
-    :param message: The current user message.
-    :type message: str
-    :param history: The current chat history (messages from both user and bot).
-    :type history: List[List[str]]
+    :param chat_id: The ID of the chat session.
+    :type chat_id: str
     :param username: The username.
     :type username: str
-    :param chat_id: The ID of the current chat.
-    :type chat_id: str
-    :return: A dictionary containing the updated history, bot response, and debug info.
-    :rtype: Dict[str, Any]
+    :param user_message: The user's message.
+    :type user_message: str
+    :param bot_response: The bot's response.
+    :type bot_response: str
+    :return: The updated chat history.
+    :rtype: List[List[str]]
     """
-    if not username:
-        return {
-            "history": history,
-            "response": "[Error] Please login to use the chatbot.",
-            "debug": "User not logged in.",
-        }
-    if not chat_id:
-        return {
-            "history": history,
-            "response": "[Error] No active chat session. Please create or select one.",
-            "debug": "No chat_id provided.",
-        }
+    user_chats = _get_chat_metadata_cache(username)
+    current_chat_id = chat_id
 
-    # Check rate limit for chat operations
-    if not await check_rate_limit(username, "chat"):
-        rate_limit_info = get_rate_limit_info("chat")
-        return {
-            "history": history,
-            "response": f"[Error] Rate limit exceeded. Please wait {rate_limit_info['time_window']} seconds.",
-            "debug": "Rate limit exceeded.",
-        }
+    if current_chat_id == "new_chat_id":
+        new_real_chat_id = create_new_chat(username, "New Chat")
+        user_chats = _get_chat_metadata_cache(username)
+        current_chat_id = new_real_chat_id
+        logger.info(f"Created real chat {current_chat_id} from temp new_chat_id.")
+
+    if current_chat_id not in user_chats:
+        logger.error(
+            f"Chat ID {current_chat_id} not found in user_chats for {username}. Cannot update history."
+        )
+        return user_chats.get(chat_id, {}).get("history", [])
+
+    history = user_chats[current_chat_id].get("history", [])
+
+    history.append([user_message, bot_response])
+    user_chats[current_chat_id]["history"] = history
+    user_chats[current_chat_id]["updated_at"] = now_singapore().isoformat()
+    _save_chat_metadata_cache(username)
+    return history
+
+
+# --- Main Chatbot Response Function ---
+# This is where LLM interaction happens
+async def get_chatbot_response(
+    message: str, history: List[List[str]], username: str, chat_id: str
+) -> Tuple[str, List[List[str]], str, Dict[str, Any], str]:
+    """
+    Generates a chatbot response to a user message, updates chat history,
+    and handles chat ID creation for new chats.
+
+    :param message: The user's input message.
+    :type message: str
+    :param history: The current chat history (list of [user, bot] pairs).
+    :type history: List[List[str]]
+    :param username: The current username.
+    :type username: str
+    :param chat_id: The current chat ID. Can be a temporary "new_chat_id".
+    :type chat_id: str
+    :return: A tuple of 5 values:
+             (empty_message_input, updated_history, current_chat_id, all_user_chats_data, debug_info)
+    :rtype: Tuple[str, List[List[str]], str, Dict[str, Any], str]
+    """
+    # Ensure LLM and DB are initialized for every call (safe due to internal lock)
+    if not is_llm_ready():
+        await initialize_llm_and_db()  # Await this call
+
+    if not is_llm_ready():
+        logger.error("LLM and DB are not ready after initialization attempt.")
+        error_response = (
+            "I'm sorry, the AI system is not ready. Please try again later."
+        )
+        current_history = history if history is not None else []
+        return (
+            "",
+            current_history,
+            chat_id,
+            _get_chat_metadata_cache(username),
+            "AI system initialization failed.",
+        )
+
+    if not message:
+        user_chats = _get_chat_metadata_cache(username)
+        return "", history, chat_id, user_chats, "Empty message. No action taken."
+
+    # Initial check for rate limits
+    rate_limited = await check_rate_limit(username, "chat_message")
+    if not rate_limited:
+        limit_info = get_rate_limit_info("chat")
+        error_response = f"Rate limit exceeded. Please wait {limit_info['time_to_wait']:.1f} seconds."
+        updated_history = _update_chat_history(
+            chat_id, username, message, error_response
+        )
+        user_chats = _get_chat_metadata_cache(username)
+        return (
+            "",
+            updated_history,
+            chat_id,
+            user_chats,
+            f"Rate limit hit: {limit_info['time_to_wait']:.1f}s wait.",
+        )
+
     try:
-        result = await ask_question(message, chat_id, username)
+        result = await get_convo_hist_answer(message, chat_id)
 
-        if result.get("code") == "200" or result.get("status") == "OK":
-            answer = result.get("response", "")
-            if isinstance(answer, dict) and "answer" in answer:
-                answer_text = answer["answer"]
-            else:
-                answer_text = str(answer)
+        answer_text = result.get("answer", "No answer generated by AI.")
 
-            updated_history = get_chat_history(chat_id, username)
+        is_error_from_chatModel = (
+            "I'm sorry, the AI assistant is not fully set up." in answer_text
+            or "I'm sorry, I cannot process your request right now" in answer_text
+            or "I'm sorry, I encountered an error" in answer_text
+        )
 
-            user_chats = _get_chat_metadata_cache(username)
-            if chat_id in user_chats:
-                user_chats[chat_id]["updated_at"] = now_singapore().isoformat()
-                _chat_metadata_cache[username] = user_chats
-                _save_chat_metadata_cache(username)
-            return {
-                "history": updated_history,
-                "response": answer_text,
-                "debug": "Message processed and LLM response obtained.",
-            }
+        if not is_error_from_chatModel:
+            updated_history = _update_chat_history(
+                chat_id, username, message, answer_text
+            )
+            user_chats_after_update = _get_chat_metadata_cache(username)
+            final_chat_id = chat_id
+            if chat_id == "new_chat_id" and user_chats_after_update:
+                final_chat_id = max(
+                    user_chats_after_update,
+                    key=lambda k: user_chats_after_update[k].get(
+                        "updated_at", datetime.min.isoformat()
+                    ),
+                    default=chat_id,
+                )
+            debug_info = "Message processed and LLM response obtained."
         else:
-            error_msg = result.get("error", "An unknown error occurred from LLM.")
-            if isinstance(result.get("response"), dict) and "answer" in result.get(
-                "response"
-            ):
-                error_msg = result["response"]["answer"]
+            error_response = answer_text
+            updated_history = _update_chat_history(
+                chat_id, username, message, error_response
+            )
+            user_chats_after_update = _get_chat_metadata_cache(username)
+            final_chat_id = chat_id
+            debug_info = f"Error from LLM: {answer_text}"
 
-            updated_history = get_chat_history(chat_id, username)
-
-            return {
-                "history": updated_history,
-                "response": f"[Error] {error_msg}",
-                "debug": f"Error during question: {error_msg}",
-            }
+        return (
+            "",
+            updated_history,
+            final_chat_id,
+            user_chats_after_update,
+            debug_info,
+        )
     except Exception as e:
         logger.error(f"Error in get_chatbot_response: {e}")
-        return {
-            "history": history,
-            "response": f"[Error] An unexpected error occurred in backend: {e}",
-            "debug": f"Unexpected error in get_chatbot_response: {e}",
-        }
+        error_response = f"[Error] An unexpected error occurred in backend: {e}"
+        updated_history = _update_chat_history(
+            chat_id, username, message, error_response
+        )
+        user_chats_after_update = _get_chat_metadata_cache(username)
+        final_chat_id = chat_id
+        return (
+            "",
+            updated_history,
+            final_chat_id,
+            user_chats_after_update,
+            f"Unexpected error in get_chatbot_response: {e}",
+        )
