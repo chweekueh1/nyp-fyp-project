@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import logging
+from typing import Optional
 
 
 def rel2abspath(relative_path: str) -> str:
@@ -92,7 +93,58 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
-def clear_chat_history() -> None:
+def clear_chat_history(chat_id: str, username: str) -> tuple[bool, dict]:
+    """
+    Clear the history of a specific chat for a user.
+
+    This function clears the message history of a specific chat while preserving
+    the chat metadata (name, timestamps, etc.). It updates both the in-memory
+    cache and the persistent storage.
+
+    :param chat_id: The ID of the chat to clear.
+    :type chat_id: str
+    :param username: The username whose chat should be cleared.
+    :type username: str
+    :return: A tuple containing (success: bool, all_chats: dict) where success
+             indicates if the operation was successful and all_chats contains
+             the updated chat metadata for the user.
+    :rtype: tuple[bool, dict]
+    """
+    try:
+        # Import here to avoid circular imports
+        from backend.chat import (
+            _get_chat_metadata_cache_internal,
+            _save_chat_metadata_cache,
+        )
+        from datetime import datetime
+
+        # Get the user's chat metadata cache
+        user_chats = _get_chat_metadata_cache_internal().get(username, {})
+
+        if chat_id not in user_chats:
+            return False, user_chats
+
+        # Clear the history while preserving metadata
+        user_chats[chat_id]["history"] = []
+        user_chats[chat_id]["updated_at"] = datetime.now().isoformat()
+
+        # Update the in-memory cache
+        _get_chat_metadata_cache_internal()[username] = user_chats
+
+        # Persist the changes to disk
+        _save_chat_metadata_cache(username)
+
+        return True, user_chats
+
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error clearing chat history for {chat_id}: {e}")
+        return False, {}
+
+
+def clear_all_chat_history() -> None:
     """Delete all files in the chat_sessions directory."""
     chat_history_dir = os.path.join(get_chatbot_dir(), "data", "chat_sessions")
     if os.path.exists(chat_history_dir):
@@ -124,6 +176,51 @@ def clear_uploaded_files() -> None:
                     shutil.rmtree(fpath)
             except Exception as e:
                 print(f"Warning: Could not delete {fpath}: {e}")
+
+
+def cleanup_test_environment(
+    test_dir: Optional[str] = None, original_get_chatbot_dir: Optional[callable] = None
+) -> None:
+    """
+    Clean up test environment by removing test directories and restoring original functions.
+
+    This function is used in test suites to clean up after tests that modify the
+    chatbot directory or mock functions.
+
+    :param test_dir: Optional test directory to remove. If None, uses default test cleanup.
+    :type test_dir: Optional[str]
+    :param original_get_chatbot_dir: Optional original function to restore if it was mocked.
+    :type original_get_chatbot_dir: Optional[callable]
+    """
+    try:
+        import shutil
+
+        # Restore original function if provided
+        if original_get_chatbot_dir is not None:
+            import infra_utils
+
+            infra_utils.get_chatbot_dir = original_get_chatbot_dir
+
+        # Remove test directory if provided
+        if test_dir and os.path.exists(test_dir):
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+        # Default cleanup: remove test data directories
+        test_data_dirs = [
+            os.path.join(get_chatbot_dir(), "data", "chat_sessions"),
+            os.path.join(get_chatbot_dir(), "data", "user_info"),
+            os.path.join(get_chatbot_dir(), "data", "modelling", "data"),
+        ]
+
+        for test_dir_path in test_data_dirs:
+            if os.path.exists(test_dir_path):
+                shutil.rmtree(test_dir_path, ignore_errors=True)
+
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Error during test environment cleanup: {e}")
 
 
 def get_docker_venv_path(mode="prod") -> str:

@@ -14,6 +14,39 @@ try:
 except ImportError:
     # Fallback if keyword_cache is not available
     def filter_filler_words(text: str) -> str:
+        """Remove filler/stop words from text using the keyword cache implementation."""
+        try:
+            from llm.keyword_cache import filter_filler_words as keyword_filter
+
+            return keyword_filter(text)
+        except ImportError:
+            # Fallback if keyword_cache is not available
+            return text
+
+
+# Import the main implementation to avoid duplication
+try:
+    from llm.classificationModel import clean_text_for_classification
+except ImportError:
+    # Fallback implementation if the main module is not available
+    def clean_text_for_classification(text: str) -> str:
+        """
+        Applies comprehensive cleaning to text to remove redundant symbols,
+        markdown, and numerical prefixes, making it suitable for classification.
+        """
+        if not isinstance(text, str):
+            text = str(text)  # Ensure it's a string
+
+        # Remove common Markdown headings: e.g., "## Header", "# Title"
+        text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
+        # Remove horizontal rules: "---", "***"
+        text = re.sub(r"^\s*[-*]+\s*$", "", text, flags=re.MULTILINE)
+        # Remove list indicators: "1. ", "2. ", "- ", "* "
+        text = re.sub(r"^\s*((\d+\.)|[-*])\s+", "", text, flags=re.MULTILINE)
+        # Remove redundant spaces and newlines
+        text = re.sub(r"\s+", " ", text).strip()
+        # Remove any remaining leading/trailing punctuation that might occur after cleaning
+        text = re.sub(r"^[.,!?;:()\"']+|[.,!?;:()\"']+$", "", text).strip()
         return text
 
 
@@ -39,27 +72,6 @@ def find_tool(tool_name: str) -> Optional[str]:
     if os.path.exists(local_path):
         return local_path
     return shutil.which(tool_name)
-
-
-def clean_text_for_classification(text: str) -> str:
-    """
-    Applies comprehensive cleaning to text to remove redundant symbols,
-    markdown, and numerical prefixes, making it suitable for classification.
-    """
-    if not isinstance(text, str):
-        text = str(text)  # Ensure it's a string
-
-    # Remove common Markdown headings: e.g., "## Header", "# Title"
-    text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
-    # Remove horizontal rules: "---", "***"
-    text = re.sub(r"^\s*[-*]+\s*$", "", text, flags=re.MULTILINE)
-    # Remove list indicators: "1. ", "2. ", "- ", "* "
-    text = re.sub(r"^\s*((\d+\.)|[-*])\s+", "", text, flags=re.MULTILINE)
-    # Remove redundant spaces and newlines
-    text = re.sub(r"\s+", " ", text).strip()
-    # Remove any remaining leading/trailing punctuation that might occur after cleaning
-    text = re.sub(r"^[.,!?;:()\"']+|[.,!?;:()\"']+$", "", text).strip()
-    return text
 
 
 def apply_text_processing(content: str, file_ext: str) -> str:

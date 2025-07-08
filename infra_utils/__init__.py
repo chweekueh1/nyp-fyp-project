@@ -32,6 +32,7 @@ try:
     get_chatbot_dir = infra_utils_main.get_chatbot_dir
     setup_logging = infra_utils_main.setup_logging
     clear_chat_history = infra_utils_main.clear_chat_history
+    clear_all_chat_history = infra_utils_main.clear_all_chat_history
     clear_uploaded_files = infra_utils_main.clear_uploaded_files
     cleanup_test_environment = infra_utils_main.cleanup_test_environment
     get_docker_venv_path = infra_utils_main.get_docker_venv_path
@@ -45,6 +46,7 @@ try:
         "get_chatbot_dir",
         "setup_logging",
         "clear_chat_history",
+        "clear_all_chat_history",
         "clear_uploaded_files",
         "cleanup_test_environment",
         "get_docker_venv_path",
@@ -76,13 +78,19 @@ except Exception:
         logger.setLevel(logging.DEBUG)
         return logger
 
-    def clear_chat_history():
+    def clear_chat_history(chat_id: str, username: str):
+        """Stub function for clearing chat history."""
+        return False, {}
+
+    def clear_all_chat_history():
+        """Stub function for clearing all chat history."""
         pass
 
     def clear_uploaded_files():
         pass
 
-    def cleanup_test_environment():
+    def cleanup_test_environment(test_dir=None, original_get_chatbot_dir=None):
+        """Stub function for cleaning up test environment."""
         pass
 
     def get_docker_venv_path(mode="prod"):
@@ -98,6 +106,7 @@ except Exception:
         "get_chatbot_dir",
         "setup_logging",
         "clear_chat_history",
+        "clear_all_chat_history",
         "clear_uploaded_files",
         "cleanup_test_environment",
         "get_docker_venv_path",

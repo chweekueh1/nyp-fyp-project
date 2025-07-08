@@ -1,3 +1,4 @@
+# chat_interface.py
 #!/usr/bin/env python3
 
 """
@@ -10,8 +11,7 @@ Users can send messages, manage chat sessions, search history, and rename chats.
 from typing import Tuple, Dict, Any, List
 import gradio as gr
 import logging
-from datetime import datetime  # Import datetime for handling timestamps
-
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,13 @@ from infra_utils import clear_chat_history
 # Import specific backend functions
 from backend.chat import (
     _get_chat_metadata_cache_internal,  # Use the internal cache getter
-    list_user_chat_ids,  # Corrected: Import list_user_chat_ids instead of load_all_chats
-    get_chatbot_response,  # Corrected: Import get_chatbot_response
-    rename_chat,  # Assuming this is the function to rename chats
-    search_chat_history,  # Assuming this is the function to search chat history
+    list_user_chat_ids,
+    get_chatbot_response,
+    rename_chat,
 )
 
+# Import the search_interface function
+from gradio_modules.search_interface import search_interface
 
 # --- Helper functions for chatbot_ui (these handle overall chat session management) ---
 
@@ -192,16 +193,14 @@ def chatbot_ui(
     all_chats_data_state: gr.State,
     debug_info_state: gr.State,
 ) -> Tuple[
-    gr.Dropdown,
+    gr.State,
     gr.Chatbot,
     gr.Textbox,
     gr.Button,
     gr.Textbox,
     gr.Button,
     gr.Markdown,
-    gr.Textbox,
-    gr.Button,
-    gr.Markdown,
+    gr.Column,  # This will be the search_container
     gr.Markdown,  # debug_md
     gr.Button,  # clear_chat_btn
     gr.Markdown,  # clear_chat_status
@@ -222,7 +221,7 @@ def chatbot_ui(
     :param debug_info_state: Gradio state for displaying debug information.
     :type debug_info_state: gr.State
     :return: A tuple of Gradio components for the chatbot interface.
-    :rtype: Tuple[gr.Dropdown, gr.Chatbot, gr.Textbox, gr.Button, gr.Textbox, gr.Button, gr.Markdown, gr.Textbox, gr.Button, gr.Markdown, gr.Markdown, gr.Button, gr.Markdown, gr.Button]
+    :rtype: Tuple[gr.Dropdown, gr.Chatbot, gr.Textbox, gr.Button, gr.Textbox, gr.Button, gr.Markdown, gr.Column, gr.Markdown, gr.Button, gr.Markdown, gr.Button]
     """
 
     with gr.Column(elem_classes=["overall-chatbot-container"]):
@@ -273,17 +272,26 @@ def chatbot_ui(
             )
             rename_status_md = gr.Markdown("")
 
-        with gr.Row(elem_classes=["chat-search-row"]):
-            search_box = gr.Textbox(
-                label="Search Chat History",
-                placeholder="Enter keywords to search chat history",
-                scale=1,
-                elem_classes=["search-box"],
-            )
-            search_btn_from_interface = gr.Button(
-                "Search", scale=0, elem_classes=["search-button"]
-            )
-        search_results_md = gr.Markdown("", elem_classes=["search-results-display"])
+        # Instantiate the search interface here
+        logger.info("🔍 [CHATBOT_UI] Calling search_interface...")
+        (
+            search_container,
+            search_query,
+            search_btn_from_interface,  # This variable is now assigned from search_interface's return
+            search_results_md,
+        ) = search_interface(
+            username_state,
+            chat_id_state,
+            chat_history_state,
+            all_chats_data_state,
+            debug_info_state,
+        )
+        logger.info(
+            f"🔍 [CHATBOT_UI] search_interface returned: search_container={search_container is not None}"
+        )
+
+        # Ensure search container is properly integrated with the chat interface
+        # The search container will be made visible by app.py's _enable_chat_inputs_on_login function
 
         with gr.Row(elem_classes=["chat-management-buttons"]):
             # Use the new_chat_btn returned from chat_interface_ui
@@ -406,13 +414,6 @@ def chatbot_ui(
             outputs=[chat_selector],
         )
 
-        # Search chat history logic
-        search_btn_from_interface.click(
-            fn=search_chat_history,
-            inputs=[search_box, username_state],
-            outputs=[search_results_md],
-        )
-
         # Clear chat logic
         clear_chat_btn.click(
             fn=_clear_current_chat,
@@ -435,6 +436,9 @@ def chatbot_ui(
         )
 
     # Return all necessary components to the calling module (e.g., app.py)
+    logger.info(
+        f"🔍 [CHATBOT_UI] Returning components, search_container={search_container is not None}"
+    )
     return (
         chat_selector,
         chatbot,
@@ -443,11 +447,9 @@ def chatbot_ui(
         rename_input,
         rename_btn,
         rename_status_md,
-        search_box,  # This comes from chat_interface_ui
-        search_btn_from_interface,  # This comes from chat_interface_ui, renamed to avoid clash
-        search_results_md,  # This comes from chat_interface_ui
-        debug_md,  # This is defined here (renamed to debug_info_state inside chatbot_ui)
-        clear_chat_btn,  # This is defined here
-        clear_chat_status,  # This is defined here
-        new_chat_btn,  # This is defined here
+        search_container,  # Returning the integrated search container
+        debug_md,
+        clear_chat_btn,
+        clear_chat_status,
+        new_chat_btn,
     )

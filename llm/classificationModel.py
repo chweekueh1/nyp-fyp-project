@@ -12,16 +12,6 @@ from infra_utils import get_chatbot_dir
 from typing import Optional, Dict, Any
 import re  # Import regex module for cleaning
 
-# Assuming filter_filler_words is available from llm.keyword_cache
-# If not, ensure it's defined or remove its usage if no longer needed here
-try:
-    from llm.keyword_cache import filter_filler_words
-except ImportError:
-    # Fallback if keyword_cache is not available or if this function
-    # is now only expected to receive already filtered text.
-    def filter_filler_words(text: str) -> str:
-        return text
-
 
 from system_prompts import (
     get_classification_system_prompt,

@@ -125,7 +125,6 @@ def run_search_tests():
     try:
         from tests.frontend.test_search_ui import (
             test_search_interface,
-            test_chat_history_interface,
         )
 
         # Create test apps for validation
@@ -133,9 +132,9 @@ def run_search_tests():
         test_search_interface()
         print("✅ Search interface test app created successfully")
 
-        print("Testing chat history interface creation...")
-        test_chat_history_interface()
-        print("✅ Chat history interface test app created successfully")
+        print("Testing search interface creation...")
+        test_search_interface()
+        print("✅ Search interface test app created successfully")
 
         # Test search functionality
         print("Testing search functionality...")
@@ -143,8 +142,8 @@ def run_search_tests():
 
         def test_search_functionality():
             # Test search functionality
-            result = search_chat_history("test_user", "hello")
-            if isinstance(result, list):
+            result = search_chat_history("hello", "test_user")
+            if isinstance(result, tuple) and len(result) == 2:
                 print("✅ Search functionality works")
             else:
                 print(f"⚠️ Search returned: {result}")
@@ -274,16 +273,15 @@ def run_component_tests():
     print("🧩 Running UI Component Tests...")
     try:
         from tests.frontend.test_chatbot_ui import test_chatbot_ui
-        from tests.frontend.test_chat_history_ui import test_chat_history_ui
         from tests.frontend.test_file_upload_ui import test_file_upload_ui
 
         print("Testing chatbot UI component...")
         test_chatbot_ui()
         print("✅ Chatbot UI component test passed")
 
-        print("Testing chat history UI component...")
-        test_chat_history_ui()
-        print("✅ Chat history UI component test passed")
+        print("Testing file upload UI component...")
+        test_file_upload_ui()
+        print("✅ File upload UI component test passed")
 
         print("Testing file upload UI component...")
         test_file_upload_ui()
@@ -333,6 +331,31 @@ def run_change_password_tests():
         return False
 
 
+def run_app_integration_tests():
+    """Run app integration fix tests."""
+    print("🔧 Running App Integration Fix Tests...")
+    try:
+        from tests.frontend.test_app_integration_fixes import (
+            run_all_app_integration_tests,
+        )
+
+        success = run_all_app_integration_tests()
+        return success
+    except ImportError as e:
+        print(f"❌ App integration tests failed: Import error - {e}")
+        print(
+            "   This usually means the app integration test modules are not available"
+        )
+        return False
+    except Exception as e:
+        print(f"❌ App integration tests failed: {e}")
+        print("   Full traceback:")
+        import traceback
+
+        traceback.print_exc()
+        return False
+
+
 def run_all_tests():
     """Run all frontend tests."""
     print("🚀 Running All Frontend Tests...")
@@ -345,6 +368,7 @@ def run_all_tests():
         "Theme Styles": run_theme_styles_tests(),
         "Component": run_component_tests(),
         "Change Password": run_change_password_tests(),
+        "App Integration": run_app_integration_tests(),
     }
     print("\n📊 Test Results Summary")
     print("-" * 30)
@@ -383,10 +407,10 @@ def launch_test_app(test_name):
         test_chatbot_ui()
         return True
     elif test_name == "chat-history-ui":
-        from tests.frontend.test_chat_history_ui import test_chat_history_ui
-
-        test_chat_history_ui()
-        return True
+        print(
+            "❌ Chat history UI component removed - functionality integrated into search interface"
+        )
+        return False
     elif test_name == "file-upload-ui":
         from tests.frontend.test_file_upload_ui import test_file_upload_ui
 

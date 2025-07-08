@@ -576,7 +576,7 @@ nyp-fyp-project/
 │   │   ├── test_login_ui.py       # Login interface tests
 │   │   ├── test_chatbot_ui.py     # Chatbot component tests
 │   │   ├── test_search_ui.py      # Search interface tests
-│   │   ├── test_chat_history_ui.py # Chat history tests
+│   │   ├── test_search_ui.py # Search interface tests
 │   │   ├── test_file_audio_ui.py  # Audio interface tests
 │   │   ├── test_file_classification.py # Classification tests
 │   │   ├── test_change_password_functionality.py

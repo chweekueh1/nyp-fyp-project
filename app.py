@@ -282,7 +282,7 @@ def create_main_app() -> gr.Blocks:
                 # Corrected import: Using login_interface from login_and_register
                 from gradio_modules.login_and_register import login_interface
 
-                # login_interface returns a tuple of 19 Gradio components (based on snippet)
+                # login_interface returns a tuple of 19 Gradio components (based on the actual return)
                 # It handles its own event setup internally. We only need the states.
                 (
                     logged_in_state_from_login,  # This is the state returned by login_interface
@@ -327,7 +327,7 @@ def create_main_app() -> gr.Blocks:
             # Define components for overall login status display, managed by main_interface
             # These are defined here, outside the try-except, to ensure they always exist
             login_status_message = gr.Markdown(
-                "Please log in to continue.", elem_id="login-status-message"
+                "", elem_id="login-status-message", visible=False
             )
             logout_button = gr.Button("Logout", visible=False, elem_id="logout-button")
             username_display = gr.Markdown("", elem_id="username-display")
@@ -366,9 +366,7 @@ def create_main_app() -> gr.Blocks:
                             rename_input = None
                             rename_btn = None
                             rename_status_md = None
-                            search_box = None
-                            search_btn_from_interface = None
-                            search_results_md = None
+                            search_container = None
                             new_chat_btn = None
                             clear_chat_btn = None  # Added clear_chat_btn
                             clear_chat_status = None  # Added clear_chat_status
@@ -378,7 +376,8 @@ def create_main_app() -> gr.Blocks:
                                 # Removed unused import: chat_interface_ui
                                 from gradio_modules.chatbot import chatbot_ui
 
-                                # Unpack components from chatbot_ui
+                                # Unpack components from chatbot_ui (12 components in correct order)
+                                logger.info("🔍 [APP] Calling chatbot_ui...")
                                 (
                                     chat_selector,
                                     chatbot,
@@ -387,19 +386,20 @@ def create_main_app() -> gr.Blocks:
                                     rename_input,
                                     rename_btn,
                                     rename_status_md,
-                                    search_box,
-                                    search_btn_from_interface,
-                                    search_results_md,
-                                    debug_md,  # Unpacked debug_md
-                                    clear_chat_btn,  # Unpacked clear_chat_btn
-                                    clear_chat_status,  # Unpacked clear_chat_status
-                                    new_chat_btn,  # Unpacked new_chat_btn
+                                    search_container,
+                                    debug_md,
+                                    clear_chat_btn,
+                                    clear_chat_status,
+                                    new_chat_btn,
                                 ) = chatbot_ui(
                                     username_state,
                                     chat_id_state,
                                     chat_history_state,
                                     all_chats_data_state,
                                     debug_info_state,
+                                )
+                                logger.info(
+                                    f"🔍 [APP] chatbot_ui returned: search_container={search_container is not None}"
                                 )
 
                             except ImportError as e:
@@ -409,27 +409,6 @@ def create_main_app() -> gr.Blocks:
                                 gr.Markdown("Using basic fallback interface.")
                                 # Dummy components are not assigned to local variables here to avoid F841.
                                 # They are only created if the import fails, but not used in app.py's logic.
-
-                    # Document Ingestion Tab
-                    with gr.TabItem(
-                        "📁 Document Ingestion", id="document_ingestion_tab"
-                    ):
-                        with gr.Column():
-                            try:
-                                from gradio_modules.document_ingestion import (
-                                    document_ingestion_ui,
-                                )
-
-                                document_ingestion_ui(
-                                    logged_in_state, username_state, user_role_state
-                                )
-                            except ImportError as e:
-                                gr.Markdown(
-                                    f"⚠️ **Document Ingestion interface not available:** {e}"
-                                )
-                                gr.Markdown(
-                                    "Please check the gradio_modules.document_ingestion module."
-                                )
 
                     # Classification Tab (Assuming this exists based on the previous error context)
                     with gr.TabItem(
@@ -598,8 +577,8 @@ def create_main_app() -> gr.Blocks:
                 update_logout_btn = gr.update(visible=False)
                 update_username_display = gr.update(visible=False)
                 update_login_status_msg = gr.update(
-                    value="Please log in to continue.", visible=True
-                )
+                    visible=False
+                )  # Removed the "Please log in" message
                 update_backend_status = gr.update(visible=False)
                 update_refresh_status_btn = gr.update(visible=False)
                 update_change_password_btn = gr.update(visible=False)
@@ -687,7 +666,13 @@ def create_main_app() -> gr.Blocks:
         def _enable_chat_inputs_on_login(
             logged_in: bool, all_chats_data: Dict[str, Any], chat_id: str
         ) -> Tuple[
-            gr.update, gr.update, gr.update, gr.update, gr.update, gr.update, gr.update
+            gr.update,
+            gr.update,
+            gr.update,
+            gr.update,
+            gr.update,
+            gr.update,
+            gr.update,
         ]:
             """
             Enables/disables interactive chat components based on login status and chat data.
@@ -697,13 +682,18 @@ def create_main_app() -> gr.Blocks:
             )  # Chat inputs require a selected chat_id
             is_logged_in = logged_in  # New chat button only requires login
 
+            logger.info(
+                f"🔍 [APP] _enable_chat_inputs_on_login called: logged_in={logged_in}, is_chat_active={is_chat_active}, is_logged_in={is_logged_in}"
+            )
+
             return (
                 gr.update(interactive=is_chat_active),  # msg
                 gr.update(interactive=is_chat_active),  # send_btn
                 gr.update(interactive=is_chat_active),  # rename_input
                 gr.update(interactive=is_chat_active),  # rename_btn
-                gr.update(interactive=is_chat_active),  # search_box
-                gr.update(interactive=is_chat_active),  # search_btn_from_interface
+                gr.update(
+                    visible=is_logged_in
+                ),  # search_container - only visible, no interactive
                 gr.update(interactive=is_logged_in),  # new_chat_btn
                 gr.update(interactive=is_chat_active),  # clear_chat_btn
             )
@@ -768,6 +758,15 @@ def create_main_app() -> gr.Blocks:
         # --- New Event Handler to Enable/Disable Chat Inputs ---
         # This will be triggered when logged_in_state, all_chats_data_state, or chat_id_state changes
         # Only attach if all components are defined
+        logger.info("🔍 [APP] Checking if all chat components are defined:")
+        logger.info(f"🔍 [APP] msg: {msg is not None}")
+        logger.info(f"🔍 [APP] send_btn: {send_btn is not None}")
+        logger.info(f"🔍 [APP] rename_input: {rename_input is not None}")
+        logger.info(f"🔍 [APP] rename_btn: {rename_btn is not None}")
+        logger.info(f"🔍 [APP] search_container: {search_container is not None}")
+        logger.info(f"🔍 [APP] new_chat_btn: {new_chat_btn is not None}")
+        logger.info(f"🔍 [APP] clear_chat_btn: {clear_chat_btn is not None}")
+
         if all(
             c is not None
             for c in [
@@ -775,8 +774,7 @@ def create_main_app() -> gr.Blocks:
                 send_btn,
                 rename_input,
                 rename_btn,
-                search_box,
-                search_btn_from_interface,
+                search_container,
                 new_chat_btn,
                 clear_chat_btn,
             ]
@@ -794,8 +792,7 @@ def create_main_app() -> gr.Blocks:
                     send_btn,
                     rename_input,
                     rename_btn,
-                    search_box,
-                    search_btn_from_interface,
+                    search_container,
                     new_chat_btn,
                     clear_chat_btn,
                 ],

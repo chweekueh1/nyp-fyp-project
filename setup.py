@@ -678,11 +678,10 @@ def get_docker_volume_path(local_path: str) -> str:
     Convert a local path to a Docker-compatible volume path.
     Handles Windows path conversion for Docker Desktop.
 
-    Args:
-        local_path: Local file system path
-
-    Returns:
-        Docker-compatible volume path
+    :param local_path: Local file system path
+    :type local_path: str
+    :return: Docker-compatible volume path
+    :rtype: str
     """
     if sys.platform == "win32":
         # Windows: Convert to Docker Desktop format

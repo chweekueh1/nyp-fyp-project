@@ -788,6 +788,34 @@ async def run_backend_tests():
         auth_debug_success = False
         print("   Special character tests will be skipped")
 
+    # Add standalone search debug tests
+    try:
+        from tests.backend.test_search_debug_standalone import (
+            test_search_debug,
+            test_sanitize_input as test_sanitize_input_standalone,
+        )
+
+        test_functions.extend(
+            [
+                test_search_debug,
+                test_sanitize_input_standalone,
+            ]
+        )
+        print("✅ Standalone search debug tests added to backend test suite")
+    except ImportError as e:
+        print(f"⚠️ Warning: Could not import standalone search debug tests: {e}")
+
+    # Add standalone Mermaid validation tests
+    try:
+        from tests.backend.test_mermaid_validation_standalone import (
+            test_mermaid_validation,
+        )
+
+        test_functions.append(test_mermaid_validation)
+        print("✅ Standalone Mermaid validation tests added to backend test suite")
+    except ImportError as e:
+        print(f"⚠️ Warning: Could not import standalone Mermaid validation tests: {e}")
+
     results = []
     failed_tests = []
     error_messages = []

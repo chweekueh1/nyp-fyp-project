@@ -198,6 +198,23 @@ python setup.py --docker-test-file tests/frontend/test_login_ui.py
 
 Test individual components in isolation:
 
+**Backend Tests:**
+
+- `test_backend.py` - Core backend functionality
+- `test_backend_fixes_and_rename.py` - Backend fixes and file operations
+- `test_auth_debug_integration.py` - Authentication and debugging
+- `test_search_debug_standalone.py` - Search functionality debugging (moved from root)
+- `test_mermaid_validation_standalone.py` - Mermaid diagram validation (moved from root)
+- `test_special_characters.py` - Special character handling
+- `test_audio_fixes.py` - Audio processing fixes
+- `test_clear_buttons_integration.py` - Clear button functionality
+- `test_improved_search.py` - Enhanced search features
+- `test_search_and_audio_fixes.py` - Search and audio integration
+- `test_mermaid_and_search_fixes.py` - Mermaid and search improvements
+- `test_search_integration.py` - Search system integration
+- `test_password_fix.py` - Password management
+- `test_modular_backend.py` - Modular backend architecture
+
 - **Backend:** Core functionality, database operations, API handling ✅ **Missing functions added**
 - **Frontend:** UI components, user interactions, state management ✅ **Import issues fixed**
 - **LLM:** Language model integration, response generation ✅ **Completely rewritten**

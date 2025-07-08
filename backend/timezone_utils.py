@@ -16,8 +16,8 @@ def get_app_timezone() -> timezone:
     """
     Get the application timezone.
 
-    Returns:
-        timezone: Singapore timezone (UTC+8)
+    :return: Singapore timezone (UTC+8)
+    :rtype: timezone
     """
     return SINGAPORE_TZ
 
@@ -26,8 +26,8 @@ def now_singapore() -> datetime:
     """
     Get current datetime in Singapore timezone.
 
-    Returns:
-        datetime: Current datetime in Singapore timezone
+    :return: Current datetime in Singapore timezone
+    :rtype: datetime
     """
     return datetime.now(SINGAPORE_TZ)
 
@@ -36,11 +36,10 @@ def utc_to_singapore(utc_dt: datetime) -> datetime:
     """
     Convert UTC datetime to Singapore timezone.
 
-    Args:
-        utc_dt: UTC datetime object
-
-    Returns:
-        datetime: Datetime in Singapore timezone
+    :param utc_dt: UTC datetime object
+    :type utc_dt: datetime
+    :return: Datetime in Singapore timezone
+    :rtype: datetime
     """
     if utc_dt.tzinfo is None:
         utc_dt = utc_dt.replace(tzinfo=timezone.utc)
@@ -51,11 +50,10 @@ def singapore_to_utc(sg_dt: datetime) -> datetime:
     """
     Convert Singapore datetime to UTC.
 
-    Args:
-        sg_dt: Singapore datetime object
-
-    Returns:
-        datetime: Datetime in UTC
+    :param sg_dt: Singapore datetime object
+    :type sg_dt: datetime
+    :return: Datetime in UTC
+    :rtype: datetime
     """
     if sg_dt.tzinfo is None:
         sg_dt = sg_dt.replace(tzinfo=SINGAPORE_TZ)
@@ -68,12 +66,12 @@ def format_singapore_datetime(
     """
     Format datetime in Singapore timezone.
 
-    Args:
-        dt: Datetime object (defaults to current time)
-        format_str: Format string for datetime
-
-    Returns:
-        str: Formatted datetime string
+    :param dt: Datetime object (defaults to current time)
+    :type dt: Optional[datetime]
+    :param format_str: Format string for datetime
+    :type format_str: str
+    :return: Formatted datetime string
+    :rtype: str
     """
     if dt is None:
         dt = now_singapore()
@@ -90,11 +88,10 @@ def get_iso_timestamp_singapore(dt: Optional[datetime] = None) -> str:
     """
     Get ISO format timestamp in Singapore timezone.
 
-    Args:
-        dt: Datetime object (defaults to current time)
-
-    Returns:
-        str: ISO format timestamp with Singapore timezone
+    :param dt: Datetime object (defaults to current time)
+    :type dt: Optional[datetime]
+    :return: ISO format timestamp with Singapore timezone
+    :rtype: str
     """
     if dt is None:
         dt = now_singapore()
@@ -110,11 +107,10 @@ def get_utc_timestamp(dt: Optional[datetime] = None) -> str:
     """
     Get UTC timestamp for storage (maintains UTC for consistency).
 
-    Args:
-        dt: Datetime object (defaults to current time)
-
-    Returns:
-        str: ISO format UTC timestamp
+    :param dt: Datetime object (defaults to current time)
+    :type dt: Optional[datetime]
+    :return: ISO format UTC timestamp
+    :rtype: str
     """
     if dt is None:
         dt = datetime.now(timezone.utc)
@@ -130,11 +126,10 @@ def parse_stored_timestamp(timestamp_str: str) -> datetime:
     """
     Parse stored timestamp and return as Singapore timezone.
 
-    Args:
-        timestamp_str: ISO format timestamp string
-
-    Returns:
-        datetime: Datetime in Singapore timezone
+    :param timestamp_str: ISO format timestamp string
+    :type timestamp_str: str
+    :return: Datetime in Singapore timezone
+    :rtype: datetime
     """
     try:
         # Parse the timestamp
@@ -155,8 +150,8 @@ def get_timezone_info() -> dict:
     """
     Get timezone information for debugging.
 
-    Returns:
-        dict: Timezone information
+    :return: Timezone information
+    :rtype: dict
     """
     now_utc = datetime.now(timezone.utc)
     now_sg = now_singapore()

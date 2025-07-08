@@ -8,13 +8,27 @@ import os
 import logging
 import tempfile
 from datetime import datetime, timezone
-from .config import client
 from .rate_limiting import check_rate_limit
 from .database import get_llm_functions
 from .timezone_utils import get_utc_timestamp
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+
+def _ensure_client_initialized():
+    """Ensure the OpenAI client is properly initialized."""
+    try:
+        from . import config
+
+        if config.client is not None:
+            return True
+        else:
+            logger.warning("OpenAI client not available in config")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to check OpenAI client: {e}")
+        return False
 
 
 async def audio_to_text(ui_state: dict) -> dict:
@@ -50,6 +64,14 @@ async def audio_to_text(ui_state: dict) -> dict:
         }
 
     try:
+        # Ensure client is initialized
+        if not _ensure_client_initialized():
+            return {
+                "history": history,
+                "response": "[Error] OpenAI client not initialized. Please ensure the backend is properly initialized and try again.",
+                "debug": "OpenAI client not ready.",
+            }
+
         # Get LLM functions lazily
         llm_funcs = get_llm_functions()
         if not llm_funcs or not llm_funcs["is_llm_ready"]():
@@ -63,8 +85,10 @@ async def audio_to_text(ui_state: dict) -> dict:
             }
 
         # Transcribe audio
+        from . import config
+
         with open(audio_file, "rb") as f:
-            transcript = client.audio.transcriptions.create(
+            transcript = config.client.audio.transcriptions.create(
                 model="whisper-1", file=f
             ).text
 
@@ -94,8 +118,31 @@ async def audio_to_text(ui_state: dict) -> dict:
 def transcribe_audio(audio_file_path: str) -> str:
     """Transcribe an audio file to text."""
     try:
+        # Ensure client is initialized
+        if not _ensure_client_initialized():
+            return "Error transcribing audio: OpenAI client not initialized. Please ensure the backend is properly initialized and try again."
+
+        # Check if audio file exists
+        if not os.path.exists(audio_file_path):
+            logger.error(f"Audio file not found: {audio_file_path}")
+            return f"Error transcribing audio: File not found - {audio_file_path}"
+
+        # Check if audio file is readable
+        if not os.access(audio_file_path, os.R_OK):
+            logger.error(f"Cannot read audio file: {audio_file_path}")
+            return f"Error transcribing audio: Cannot read file - {audio_file_path}"
+
+        # Check file size (OpenAI has limits)
+        file_size = os.path.getsize(audio_file_path)
+        max_size = 25 * 1024 * 1024  # 25MB limit
+        if file_size > max_size:
+            logger.error(f"Audio file too large: {file_size} bytes (max: {max_size})")
+            return f"Error transcribing audio: File too large ({file_size / 1024 / 1024:.1f}MB, max 25MB)"
+
+        from . import config
+
         with open(audio_file_path, "rb") as f:
-            transcript = client.audio.transcriptions.create(
+            transcript = config.client.audio.transcriptions.create(
                 model="whisper-1", file=f
             ).text
         return transcript
@@ -108,6 +155,13 @@ def transcribe_audio(audio_file_path: str) -> str:
 async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
     """Transcribe audio bytes asynchronously."""
     try:
+        # Ensure client is initialized
+        if not _ensure_client_initialized():
+            return {
+                "status": "error",
+                "message": "OpenAI client not initialized. Please ensure the backend is properly initialized and try again.",
+            }
+
         # Check rate limit
         if not await check_rate_limit(username, "audio"):
             return {
@@ -122,8 +176,10 @@ async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
 
         try:
             # Transcribe audio
+            from . import config
+
             with open(temp_file_path, "rb") as f:
-                transcript = client.audio.transcriptions.create(
+                transcript = config.client.audio.transcriptions.create(
                     model="whisper-1", file=f
                 ).text
 
@@ -148,11 +204,19 @@ async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
 async def transcribe_audio_file_async(audio_path):
     """Transcribe an audio file asynchronously."""
     try:
+        # Ensure client is initialized
+        if not _ensure_client_initialized():
+            return {
+                "error": "OpenAI client not initialized. Please ensure the backend is properly initialized and try again."
+            }
+
         if not os.path.exists(audio_path):
             return {"error": "Audio file not found"}
 
+        from . import config
+
         with open(audio_path, "rb") as f:
-            transcript = client.audio.transcriptions.create(
+            transcript = config.client.audio.transcriptions.create(
                 model="whisper-1", file=f
             ).text
 

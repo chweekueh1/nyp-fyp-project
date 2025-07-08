@@ -117,6 +117,8 @@ class TestSuite:
             self.tests_dir / "frontend" / "test_ui_fixes.py",
             self.tests_dir / "backend" / "test_backend_fixes_and_rename.py",
             self.tests_dir / "backend" / "test_auth_debug_integration.py",
+            self.tests_dir / "backend" / "test_search_debug_standalone.py",
+            self.tests_dir / "backend" / "test_mermaid_validation_standalone.py",
             # Skip problematic backend test for now
             # self.tests_dir / "backend" / "test_backend.py",
             # Skip LLM test that requires full initialization

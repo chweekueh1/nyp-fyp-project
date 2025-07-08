@@ -52,6 +52,7 @@ from .chat import (
     get_chatbot_response,
     get_chat_history,
     search_chat_history,
+    format_search_results,
     rename_chat,
     list_user_chat_ids,  # 'rename_chat_file' removed
 )
@@ -111,6 +112,7 @@ __all__ = [
     "get_chatbot_response",
     "get_chat_history",
     "search_chat_history",
+    "format_search_results",
     "rename_chat",
     "list_user_chat_ids",  # 'rename_chat_file' removed
     # File handling

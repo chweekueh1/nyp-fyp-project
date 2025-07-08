@@ -35,7 +35,15 @@ def sanitize_input(input_text: str) -> str:
     if len(cleaned) > 400000:
         cleaned = cleaned[:400000]
 
-    return cleaned.strip()
+    # Strip whitespace but preserve non-whitespace content
+    cleaned = cleaned.strip()
+
+    # If the result is empty after stripping, return the original input
+    # This prevents short queries like "hi" from becoming empty
+    if not cleaned and input_text.strip():
+        return input_text.strip()
+
+    return cleaned
 
 
 async def _ensure_db_and_folders_async():

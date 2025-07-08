@@ -589,11 +589,10 @@ class UIStateInteractionTests(unittest.TestCase):
             """
             Toggle password visibility for testing.
 
-            Args:
-                visible: Current visibility state.
-
-            Returns:
-                Tuple of gr.update and new visibility state.
+            :param visible: Current visibility state.
+            :type visible: bool
+            :return: Tuple of gr.update and new visibility state.
+            :rtype: Tuple[gr.update, bool]
             """
             return gr.update(type="text" if not visible else "password"), not visible
 
@@ -641,15 +640,18 @@ class UIStateInteractionTests(unittest.TestCase):
                 """
                 Simulate async password change handler for success.
 
-                Args:
-                    username: Current username
-                    old: Old password
-                    new: New password
-                    confirm: Confirmed new password
-                    last: Last change timestamp
-
-                Returns:
-                    Tuple for handler output.
+                :param username: Current username
+                :type username: str
+                :param old: Old password
+                :type old: str
+                :param new: New password
+                :type new: str
+                :param confirm: Confirmed new password
+                :type confirm: str
+                :param last: Last change timestamp
+                :type last: int
+                :return: Tuple for handler output.
+                :rtype: Tuple[gr.update, int, gr.update, bool, str]
                 """
                 return (
                     gr.update(
@@ -686,15 +688,18 @@ class UIStateInteractionTests(unittest.TestCase):
                 """
                 Simulate async password change handler for failure.
 
-                Args:
-                    username: Current username
-                    old: Old password
-                    new: New password
-                    confirm: Confirmed new password
-                    last: Last change timestamp
-
-                Returns:
-                    Tuple for handler output.
+                :param username: Current username
+                :type username: str
+                :param old: Old password
+                :type old: str
+                :param new: New password
+                :type new: str
+                :param confirm: Confirmed new password
+                :type confirm: str
+                :param last: Last change timestamp
+                :type last: int
+                :return: Tuple for handler output.
+                :rtype: Tuple[gr.update, int, gr.update, bool, str]
                 """
                 return (
                     gr.update(visible=True, value="❌ Current password is incorrect."),

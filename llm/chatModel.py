@@ -203,10 +203,12 @@ async def _initialize_langgraph_workflow() -> None:
 
     try:
         logging.info(f"Attempting to connect to SQLite at: {LANGCHAIN_CHECKPOINT_PATH}")
-        # Use aiosqlite for async connection
-        conn = await aiosqlite.connect(LANGCHAIN_CHECKPOINT_PATH)  # <--- CHANGED HERE
+        # Create a new connection for each compilation to avoid event loop binding issues
+        conn = await aiosqlite.connect(LANGCHAIN_CHECKPOINT_PATH)
         sqlite_saver = AsyncSqliteSaver(conn)
         app = workflow.compile(checkpointer=sqlite_saver)
+        # Close the connection after compilation to avoid keeping it bound to the event loop
+        await conn.close()
         logging.info(
             f"LangGraph workflow compiled with checkpointing at {LANGCHAIN_CHECKPOINT_PATH}"
         )
@@ -477,9 +479,22 @@ async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]
     }
 
     try:
-        result = await app.ainvoke(
+        # Create a new SQLite connection for this specific call to avoid event loop binding issues
+        conn = await aiosqlite.connect(LANGCHAIN_CHECKPOINT_PATH)
+        sqlite_saver = AsyncSqliteSaver(conn)
+
+        # Create a new app instance with the fresh connection
+        workflow = StateGraph(state_schema=State)
+        workflow.add_node("model", call_model)
+        workflow.add_edge(START, "model")
+        temp_app = workflow.compile(checkpointer=sqlite_saver)
+
+        result = await temp_app.ainvoke(
             initial_state, config={"configurable": {"thread_id": thread_id}}
         )
+
+        # Close the connection after use
+        await conn.close()
 
         answer = result.get("answer", "No answer generated.")
         context = result.get("context", "No context retrieved.")
