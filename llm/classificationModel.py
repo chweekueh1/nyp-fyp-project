@@ -1,3 +1,10 @@
+"""
+Classification Model module for the NYP FYP Chatbot.
+
+This module provides the core logic for text classification using LLMs, prompt templates, and retrieval-augmented generation (RAG) workflows.
+It includes helper functions for text cleaning, workflow initialization, and classification execution.
+"""
+
 #!/usr/bin/env python3
 import openai
 import os

@@ -1,3 +1,10 @@
+"""
+Infrastructure Utilities for NYP FYP Chatbot
+
+This module provides utility functions for path resolution, directory creation, logging setup, and environment management for both local and Docker deployments.
+It is used throughout the project for consistent infrastructure operations and test environment cleanup.
+"""
+
 #!/usr/bin/env python3
 import os
 import logging

@@ -1,3 +1,10 @@
+"""
+Hashing and Validation Utilities for NYP FYP Chatbot
+
+This module provides functions for password hashing, password verification, and validation of emails, usernames, and passwords.
+It uses bcrypt for secure password storage and includes helpers for user authentication and registration workflows.
+"""
+
 #!/usr/bin/env python3
 import bcrypt
 import re

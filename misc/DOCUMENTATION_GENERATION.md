@@ -191,7 +191,7 @@ If you prefer to build documentation manually:
 
 ```bash
 # Build documentation container
-docker build -f Dockerfile.docs -t nyp-fyp-chatbot:docs .
+docker build --progress=plain -f Dockerfile.docs -t nyp-fyp-chatbot:docs .
 
 # Run documentation server
 docker run --name nyp-fyp-chatbot-docs -p 8080:8080 nyp-fyp-chatbot:docs

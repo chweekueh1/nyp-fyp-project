@@ -1,3 +1,10 @@
+"""
+Data Processing module for the NYP FYP Chatbot.
+
+This module provides utilities for extracting, cleaning, and processing text data from files, as well as keyword extraction and database integration for LLM workflows.
+It supports both test and production environments and includes performance optimizations for large-scale data handling.
+"""
+
 #!/usr/bin/env python3
 import logging
 import os
@@ -35,6 +42,7 @@ from dotenv import load_dotenv
 import yake
 from infra_utils import create_folders, get_chatbot_dir
 from performance_utils import perf_monitor, cache_manager
+from llm.keyword_cache import get_cached_response, set_cached_response
 
 
 warnings.filterwarnings("ignore")
@@ -198,20 +206,23 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
     perf_monitor.end_timer("content_cleaning")
 
     perf_monitor.start_timer("keyword_extraction")
-    keyword_cache = cache_manager.get_cache("keyword_extraction")
 
     def extract_and_process_keywords(doc: Document) -> Document:
         doc_hash = hash(doc.page_content)
+        cache_key = str(doc_hash)
+        cached_data_str = get_cached_response(cache_key)
+        if cached_data_str:
+            try:
+                import json
 
-        cached_data = keyword_cache.get(doc_hash)
-        if cached_data:
-            doc.metadata["keywords"] = cached_data.get("keywords", [])
-            doc.metadata["top_10_keywords"] = cached_data.get("top_10_keywords", "")
-            return doc
-
+                cached_data = json.loads(cached_data_str)
+                doc.metadata["keywords"] = cached_data.get("keywords", [])
+                doc.metadata["top_10_keywords"] = cached_data.get("top_10_keywords", "")
+                return doc
+            except Exception:
+                pass
         doc_with_yake_keywords = FastYAKEMetadataTagger([doc])[0]
         doc.metadata["keywords"] = doc_with_yake_keywords.metadata.get("keywords", [])
-
         all_words_from_yake_keywords: List[str] = []
         for kw_phrase in doc.metadata.get("keywords", []):
             cleaned_kw_phrase = global_clean_text_for_classification(str(kw_phrase))
@@ -222,18 +233,22 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
                     if len(w) > 2
                 ]
             )
-
         word_counts = collections.Counter(all_words_from_yake_keywords)
         top_10_words_list = [w for w, _ in word_counts.most_common(10)]
-
         top_10_keywords_str = ", ".join(top_10_words_list)
         doc.metadata["top_10_keywords"] = top_10_keywords_str
+        # Save to shared keyword cache
+        import json
 
-        keyword_cache[doc_hash] = {
-            "keywords": doc.metadata["keywords"],
-            "top_10_keywords": top_10_keywords_str,
-        }
-
+        set_cached_response(
+            cache_key,
+            json.dumps(
+                {
+                    "keywords": doc.metadata["keywords"],
+                    "top_10_keywords": top_10_keywords_str,
+                }
+            ),
+        )
         return doc
 
     if len(document_list_cleaned) > 8:

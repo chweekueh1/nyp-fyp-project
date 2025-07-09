@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
 """
-Comprehensive Test Suite for NYP FYP Chatbot Project
+Comprehensive Test Suite for NYP FYP Chatbot
 
-This test suite organizes and runs all tests and demos in a structured way:
-- Unit Tests: Individual component testing
-- Integration Tests: Component interaction testing
-- Feature Tests: Specific feature validation
-- Demo Tests: Interactive demonstrations
-- Performance Tests: Speed and reliability testing
+This script organizes and runs all unit, integration, feature, demo, and performance tests for the chatbot project, providing a unified test runner and summary output.
 """
+#!/usr/bin/env python3
 
 import sys
 import time

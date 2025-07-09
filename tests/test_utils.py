@@ -1,3 +1,7 @@
+"""
+Utility functions and helpers for the NYP FYP CNC Chatbot test suite.
+"""
+
 #!/usr/bin/env python3
 """
 Test utilities for isolated testing without persisting to production database.
@@ -6,7 +10,7 @@ Test utilities for isolated testing without persisting to production database.
 import sys
 from pathlib import Path
 from typing import Optional, Any
-import unittest
+# Remove: import unittest
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -222,7 +226,7 @@ def with_test_user(username: Optional[str] = None, password: Optional[str] = Non
                 except Exception:
                     register_result = {}
                 if register_result.get("code") == "409":
-                    raise unittest.SkipTest(
+                    raise Exception(
                         f"Test user '{username_to_use}' already exists. Skipping test."
                     )
                 else:
@@ -269,7 +273,7 @@ class TestUserContext:
             except Exception:
                 register_result = {}
             if register_result.get("code") == "409":
-                raise unittest.SkipTest(
+                raise Exception(
                     f"Test user '{self.username}' already exists. Skipping test."
                 )
             else:

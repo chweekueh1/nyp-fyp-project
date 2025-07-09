@@ -1,3 +1,10 @@
+"""
+Test Utilities for NYP FYP Chatbot
+
+This script provides utility functions for running tests and test suites in Docker containers.
+It is used by the main setup and CI scripts to automate test execution and environment verification.
+"""
+
 import os
 import sys
 import subprocess

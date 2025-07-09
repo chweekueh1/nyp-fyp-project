@@ -1,3 +1,9 @@
+"""
+Environment Utilities for NYP FYP Chatbot
+
+This script provides functions for checking and setting up the environment, including .env file validation and shebang management for Python files.
+"""
+
 import os
 import sys
 from infra_utils import setup_logging

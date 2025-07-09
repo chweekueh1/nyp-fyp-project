@@ -1,3 +1,9 @@
+"""
+Docker Utilities for NYP FYP Chatbot
+
+This script provides functions for building, running, and managing Docker containers and images for development, testing, and documentation environments. It includes helpers for environment checks, venv management, and Docker daemon control.
+"""
+
 import os
 import sys
 import subprocess
@@ -157,6 +163,7 @@ def docker_build():
     build_args = [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         "Dockerfile.dev",
         "-t",
@@ -206,6 +213,7 @@ def docker_build_test():
     build_args = [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         "Dockerfile.test",
         "-t",
@@ -255,6 +263,7 @@ def docker_build_prod():
     build_args = [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         "Dockerfile",
         "-t",
@@ -358,7 +367,7 @@ def get_docker_volume_path(local_path: str) -> str:
     return local_path
 
 
-def docker_run(mode="dev", prompt_for_mode=False):
+def docker_run(mode="dev", prompt_for_mode=False, plaintext=False):
     check_env_file(ENV_FILE_PATH)
 
     # If prompt_for_mode is True, ask user to choose container type
@@ -438,6 +447,8 @@ def docker_run(mode="dev", prompt_for_mode=False):
         port_mapping,
         image,
     ]
+    if plaintext:
+        cmd.append("--plaintext")
 
     try:
         subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)

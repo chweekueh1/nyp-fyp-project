@@ -71,16 +71,16 @@ The Dockerfiles have been optimized to remove unnecessary dependencies and simpl
 
 ```bash
 # Production build
-docker build -f Dockerfile -t nyp-chatbot:latest .
+docker build --progress=plain -f Dockerfile -t nyp-chatbot:latest .
 
 # Development build
-docker build -f Dockerfile.dev -t nyp-chatbot:dev .
+docker build --progress=plain -f Dockerfile.dev -t nyp-chatbot:dev .
 
 # Test build
-docker build -f Dockerfile.test -t nyp-chatbot:test .
+docker build --progress=plain -f Dockerfile.test -t nyp-chatbot:test .
 
 # Legacy enhanced build (same as production)
-docker build -f Dockerfile.enhanced -t nyp-chatbot:enhanced .
+docker build --progress=plain -f Dockerfile.enhanced -t nyp-chatbot:enhanced .
 ```
 
 ## Size Comparison

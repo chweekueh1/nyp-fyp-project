@@ -24,6 +24,8 @@ python scripts/generate_docs.py
 make html
 ```
 
+**Note:** RST files are now auto-generated and managed inside the Docker container. Do not edit or generate them locally. Use the Docker workflow for documentation builds.
+
 ## Features
 
 - **Multi-style docstring support**: Google, Sphinx, and NumPy styles

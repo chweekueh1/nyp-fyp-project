@@ -1,3 +1,9 @@
+"""
+Classification Formatter Module for NYP FYP Chatbot
+
+This module provides formatting utilities for classification results, including security classification, sensitivity, and recommendations, for display in the Gradio UI.
+"""
+
 import json
 from typing import Dict, Any, List  # noqa: F401
 from datetime import datetime  # noqa: F401

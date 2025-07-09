@@ -16,6 +16,13 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
+# Check if running in the correct Docker container
+if not (os.environ.get("DOCKER_MODE") == "test" or os.environ.get("IN_DOCKER") == "1"):
+    print("WARNING: Tests should be run in Docker test environment!")
+    sys.exit(1)
+
+import pytest
+
 # Check if running in Docker test environment
 if not os.environ.get("DOCKER_TEST_ENV"):
     print("⚠️  WARNING: Tests should be run in Docker test environment!")
@@ -259,4 +266,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run all tests using pytest
+    sys.exit(pytest.main())

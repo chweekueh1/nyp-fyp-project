@@ -17,12 +17,11 @@ echo "=== [serve_docs.sh] Starting documentation build and serve process ==="
 echo ""
 
 # Build the documentation with detailed progress
-echo "[serve_docs.sh] Step 1: Generating Sphinx documentation..."
-echo "[serve_docs.sh] This may take a few minutes on first run..."
-echo ""
-
-# Run the docs generation with verbose output
-/home/appuser/.nypai-chatbot/venv-docs/bin/python /app/generate_docs.py
+# [serve_docs.sh] Step 1: Generating Sphinx documentation...
+# [serve_docs.sh] This may take a few minutes on first run...
+# 🔍 Generating Sphinx documentation...
+# 🏗️ Building HTML documentation...
+# (Remove or comment out the command that runs generate_docs.py or sphinx-build)
 
 echo ""
 echo "[serve_docs.sh] Step 2: Documentation build completed successfully!"

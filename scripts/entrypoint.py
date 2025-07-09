@@ -1,3 +1,9 @@
+"""
+Entrypoint Script for NYP FYP Chatbot Docker Containers
+
+This script sets up the environment, drops privileges, and executes the provided command in the correct virtual environment for the chatbot Docker containers.
+"""
+
 #!/usr/bin/env python3
 import os
 import sys

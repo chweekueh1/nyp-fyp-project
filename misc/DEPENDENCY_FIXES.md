@@ -112,13 +112,13 @@ python tests/comprehensive_test_suite.py --suite dependencies
 
 ```bash
 # Test production build
-docker build -t nyp-fyp-chatbot .
+docker build --progress=plain -t nyp-fyp-chatbot .
 
 # Test development build
-docker build -f Dockerfile.dev -t nyp-fyp-chatbot-dev .
+docker build --progress=plain -f Dockerfile.dev -t nyp-fyp-chatbot-dev .
 
 # Test with dependency verification
-docker build -f Dockerfile.test -t nyp-fyp-chatbot-test .
+docker build --progress=plain -f Dockerfile.test -t nyp-fyp-chatbot-test .
 docker run nyp-fyp-chatbot-test
 ```
 

@@ -1,3 +1,9 @@
+"""
+NYP FYP CNC Chatbot Project README
+
+This file provides an overview, installation instructions, and usage details for the NYP FYP CNC Chatbot project. It is not a Python module, but if included in Sphinx autodoc, this docstring will be used.
+"""
+
 # NYP FYP CNC Chatbot
 
 The NYP-FYP CNC Chatbot is a chatbot used to help staff identify and use the correct sensitivity labels in their communications. It makes use of the Python programming language, along with integrations of Gradio, Pandoc, Tesseract OCR and OpenAI.
@@ -382,12 +388,6 @@ If you prefer to use Docker commands directly:
 2. **Build the Docker image**
 
    ```bash
-   docker build -t nyp-fyp-chatbot .
-   ```
-
-3. **Run the Docker container**
-
-   ```bash
    # Linux/macOS
    docker run --env-file .env -v ~/.nypai-chatbot:/home/appuser/.nypai-chatbot -p 7860:7860 nyp-fyp-chatbot
 
@@ -502,7 +502,7 @@ If you prefer to build documentation manually:
 
 ```bash
 # Build documentation container
-docker build -f Dockerfile.docs -t nyp-fyp-chatbot:docs .
+docker build --progress=plain -f Dockerfile.docs -t nyp-fyp-chatbot:docs .
 
 # Run documentation server
 docker run --name nyp-fyp-chatbot-docs -p 8080:8080 nyp-fyp-chatbot:docs

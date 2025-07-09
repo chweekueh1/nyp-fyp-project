@@ -1,3 +1,7 @@
+"""
+Verifies the file and directory organization of the NYP FYP CNC Chatbot project, including demo and utility files.
+"""
+
 #!/usr/bin/env python3
 """
 Verification script for the organized test suite structure.

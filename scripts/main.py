@@ -1,3 +1,10 @@
+"""
+Main Setup Script for NYP FYP Chatbot
+
+This script provides command-line tools for building, running, testing, and managing the chatbot project in Docker environments.
+It supports building containers, running tests, managing pre-commit hooks, and more.
+"""
+
 #!/usr/bin/env python3
 import sys
 import argparse

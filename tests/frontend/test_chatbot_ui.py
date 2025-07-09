@@ -1,3 +1,7 @@
+"""
+Tests for the chatbot UI components in the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 """
 Test script for chatbot UI component creation.

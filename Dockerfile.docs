@@ -73,6 +73,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements-docs.txt
 
+# Install documentation dependencies in the venv
+# (Remove this line, as doc dependencies are already installed)
+# RUN /home/appuser/.nypai-chatbot/venv-docs/bin/pip install -r requirements-docs.txt
+
 # Copy application code
 COPY --chown=appuser:appgroup app.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
 COPY --chown=appuser:appgroup backend/ ./backend/
@@ -94,14 +98,14 @@ COPY --chown=appuser:appgroup docs/index.rst /app/docs/
 COPY --chown=appuser:appgroup docs/Makefile /app/docs/
 COPY --chown=appuser:appgroup docs/extensions/ /app/docs/extensions/
 
-# Copy existing RST files to preserve manual documentation
-COPY --chown=appuser:appgroup docs/modules/ /app/docs/modules/
-
 # Create Sphinx configuration directories
 RUN mkdir -p /app/docs/_templates /app/docs/_static
 
 # Make the script executable
 RUN chmod +x /app/generate_docs.py
+
+# Always auto-generate and update RST files after all code/docs are copied
+RUN /home/appuser/.nypai-chatbot/venv-docs/bin/python /app/generate_docs.py
 
 # Expose port for HTTP server
 EXPOSE 8080

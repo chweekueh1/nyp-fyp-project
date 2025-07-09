@@ -42,7 +42,7 @@ html_static_path = ["_static"]
 
 # Set light theme as default
 html_theme_options = {
-    "color_scheme": "light",  # Set light theme as default
+    # "color_scheme": "light",  # Removed: unsupported by piccolo_theme
 }
 
 # Suppress warnings

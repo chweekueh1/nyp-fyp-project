@@ -1,3 +1,10 @@
+"""
+Environment Check Script for NYP FYP Chatbot
+
+This script verifies the environment setup, .env file, dependencies, and Docker venv for the chatbot project.
+It is used for local and Docker-based environment validation before running tests or starting the application.
+"""
+
 #!/usr/bin/env python3
 import os
 import sys

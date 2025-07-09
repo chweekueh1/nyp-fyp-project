@@ -1,4 +1,3 @@
-# search_interface.py
 #!/usr/bin/env python3
 """
 Search interface module for chat history search functionality.

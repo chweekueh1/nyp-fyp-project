@@ -1,3 +1,9 @@
+"""
+Setup Script for NYP FYP Chatbot
+
+This script manages environment setup, Docker image building, permissions, and test orchestration for the chatbot project.
+It is the main entry point for developers and CI to prepare and manage the project environment.
+"""
 #!/usr/bin/env python3
 # This shebang line ensures the script is executable directly on Linux systems.
 
@@ -49,16 +55,20 @@ if os.path.exists(venv_path):
 
 # Only fix permissions on Unix-like systems, and only before logging is initialized
 if os.name != "nt":
-    # Ensure entrypoint.sh is executable before Docker build (use Python if possible)
-    entrypoint_path = os.path.join(
-        os.path.dirname(__file__), "scripts", "entrypoint.sh"
-    )
-    if os.path.exists(entrypoint_path):
-        try:
-            os.chmod(entrypoint_path, 0o755)
-        except Exception as e:
-            print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
-    fix_nypai_chatbot_permissions()
+    # Skip permission fix for docs/Sphinx commands or if 'sphinx' is in the command
+    if not any(arg in sys.argv for arg in ["--docs"]) and not any(
+        "sphinx" in arg.lower() for arg in sys.argv
+    ):
+        # Ensure entrypoint.sh is executable before Docker build (use Python if possible)
+        entrypoint_path = os.path.join(
+            os.path.dirname(__file__), "scripts", "entrypoint.sh"
+        )
+        if os.path.exists(entrypoint_path):
+            try:
+                os.chmod(entrypoint_path, 0o755)
+            except Exception as e:
+                print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
+        fix_nypai_chatbot_permissions()
 
 # Now continue with the rest of the imports and logger setup
 from infra_utils import setup_logging, get_docker_venv_python
@@ -331,6 +341,7 @@ def docker_build():
         build_cmd = [
             "docker",
             "build",
+            "--progress=plain",
             "-f",
             "Dockerfile.dev",
             "-t",
@@ -339,7 +350,6 @@ def docker_build():
             f"PARALLEL_JOBS={cpu_cores}",
             "--build-arg",
             "BUILDKIT_INLINE_CACHE=1",
-            "--progress=plain",
             ".",
         ]
 
@@ -450,6 +460,7 @@ def docker_build_test():
         build_cmd = [
             "docker",
             "build",
+            "--progress=plain",
             "-f",
             "Dockerfile.test",
             "-t",
@@ -458,7 +469,6 @@ def docker_build_test():
             f"PARALLEL_JOBS={cpu_cores}",
             "--build-arg",
             "BUILDKIT_INLINE_CACHE=1",
-            "--progress=plain",
             ".",
         ]
 
@@ -563,6 +573,7 @@ def docker_build_prod():
         build_cmd = [
             "docker",
             "build",
+            "--progress=plain",
             "-f",
             "Dockerfile",
             "-t",
@@ -571,7 +582,6 @@ def docker_build_prod():
             f"PARALLEL_JOBS={cpu_cores}",
             "--build-arg",
             "BUILDKIT_INLINE_CACHE=1",
-            "--progress=plain",
             ".",
         ]
 
@@ -688,6 +698,7 @@ def docker_build_docs():
         build_command = [
             "docker",
             "build",
+            "--progress=plain",
             "-f",
             dockerfile_path,
             "-t",
@@ -1450,10 +1461,6 @@ def show_help():
     print(
         "  --docs               Build and run Sphinx documentation server (single container)"
     )
-    print("  --build-docs         Build documentation Docker image only")
-    print(
-        "  --run-docs           Run Sphinx documentation server in Docker (requires --build-docs first)"
-    )
     print("  --help               Show this help message")
     print("")
     print("Examples:")
@@ -1525,10 +1532,6 @@ def main():
             "\n=== [docs] Building and running Sphinx documentation server (single container) ==="
         )
         docker_build_docs()
-        docker_docs()
-    elif command == "--build-docs":
-        docker_build_docs()
-    elif command == "--run-docs":
         docker_docs()
     else:
         print(f"❌ Unknown command: {command}")

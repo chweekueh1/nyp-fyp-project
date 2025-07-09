@@ -1,3 +1,7 @@
+"""
+Debug and unit tests for search functionality in the backend of the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 """
 Test script to verify search functionality and debug search-related issues.

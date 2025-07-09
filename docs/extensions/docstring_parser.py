@@ -7,6 +7,7 @@ and ensures that doc comments are properly processed.
 """
 
 import re
+import ast
 from typing import Any, Dict, List, Optional
 
 from docutils import nodes
@@ -92,16 +93,75 @@ class EnhancedNumpyDocstring(NumpyDocstring):
 
 
 class EnhancedModuleDocumenter(ModuleDocumenter):
-    """Enhanced module documenter with better docstring parsing."""
+    """Enhanced module documenter with better docstring parsing and context labeling."""
 
     def get_doc(self) -> Optional[List[List[str]]]:
-        """Get the docstring of the object."""
+        """Get the docstring of the object, with context and fallback extraction for scripts/tests/roots."""
         docstring = super().get_doc()
-        if docstring:
-            # Process doc comments in module docstrings
-            processed_docstring = self._process_doc_comments(docstring)
-            return processed_docstring
-        return docstring
+        module_path = (
+            getattr(self, "modname", None) or getattr(self, "fullname", None) or ""
+        )
+        context_label = self._get_context_label(module_path)
+        # If docstring is missing or empty, try to extract from first function/class or comments
+        if not docstring or not any(
+            any(line.strip() for line in section) for section in docstring
+        ):
+            summary = self._extract_summary_from_source()
+            if summary:
+                docstring = [[summary]]
+            else:
+                docstring = [
+                    [
+                        f".. warning:: No module-level docstring found for {module_path or 'unknown module'}"
+                    ]
+                ]
+        # Prepend context label if relevant
+        if context_label:
+            docstring = [[f"**{context_label}**"]] + docstring
+        # Process doc comments as before
+        processed_docstring = self._process_doc_comments(docstring)
+        return processed_docstring
+
+    def _get_context_label(self, module_path: str) -> str:
+        if module_path.startswith("scripts.") or module_path == "scripts":
+            return "[Script]"
+        if module_path.startswith("tests.") or module_path == "tests":
+            return "[Test]"
+        if "." not in module_path and module_path:
+            return "[Root Module]"
+        return ""
+
+    def _extract_summary_from_source(self) -> Optional[str]:
+        # Try to extract a summary from the first function/class or top-level comments
+        try:
+            if not hasattr(self, "object") or not hasattr(self.object, "__file__"):
+                return None
+            with open(self.object.__file__, "r", encoding="utf-8") as f:
+                source = f.read()
+            # Skip shebang line if present
+            lines = source.splitlines()
+            if lines and lines[0].startswith("#!"):
+                source = "\n".join(lines[1:])
+            tree = ast.parse(source)
+            # Try module docstring
+            mod_doc = ast.get_docstring(tree)
+            if mod_doc:
+                return mod_doc
+            # Try first function/class docstring
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                    doc = ast.get_docstring(node)
+                    if doc:
+                        return doc
+            # Try top-level comments
+            comments = [
+                line[1:].strip() for line in lines if line.strip().startswith("#")
+            ]
+            if comments:
+                return comments[0]
+        except Exception:
+            return None
+        return None
 
     def _process_doc_comments(self, docstring: List[List[str]]) -> List[List[str]]:
         """Process doc comments in the docstring."""

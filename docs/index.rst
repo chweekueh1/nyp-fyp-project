@@ -12,7 +12,11 @@ Welcome to NYP FYP CNC Chatbot's documentation!
    modules/scripts
    modules/tests
    modules/documentation
-   modules/root
+   app
+   system_prompts
+   hashing
+   performance_utils
+   infra_utils
 
 Indices and tables
 ==================

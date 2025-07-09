@@ -1,3 +1,8 @@
+"""
+System Prompts for NYP FYP Chatbot
+
+This module contains all system prompt templates and prompt generation utilities for the chatbot's LLM workflows, including classification, chat, and contextual query rewriting. It centralizes prompt management for consistent LLM behavior and easy updates.
+"""
 #!/usr/bin/env python3
 
 

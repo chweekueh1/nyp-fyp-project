@@ -1,3 +1,7 @@
+"""
+Tests for all frontend interfaces in the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 import gradio as gr
 from pathlib import Path

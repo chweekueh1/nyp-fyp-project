@@ -69,13 +69,13 @@ def test_backend_file_upload_saves_correctly():
                 return {"is_llm_ready": lambda: True}
 
             # Patch the functions
-            import backend
+            # import backend
 
-            original_get_data = getattr(backend, "get_data_processing", None)
-            original_get_llm = getattr(backend, "get_llm_functions", None)
+            # original_get_data = getattr(backend, "get_data_processing", None)
+            # original_get_llm = getattr(backend, "get_llm_functions", None)
 
-            backend.get_data_processing = mock_get_data_processing
-            backend.get_llm_functions = mock_get_llm_functions
+            # backend.get_data_processing = mock_get_data_processing
+            # backend.get_llm_functions = mock_get_llm_functions
 
             try:
                 # Call the upload handler
@@ -118,10 +118,10 @@ def test_backend_file_upload_saves_correctly():
 
             finally:
                 # Restore original functions
-                if original_get_data:
-                    backend.get_data_processing = original_get_data
-                if original_get_llm:
-                    backend.get_llm_functions = original_get_llm
+                # if original_get_data:
+                #     backend.get_data_processing = original_get_data
+                # if original_get_llm:
+                #     backend.get_llm_functions = original_get_llm
 
                 # Clean up test file
                 try:

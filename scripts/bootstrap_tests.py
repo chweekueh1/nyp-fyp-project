@@ -1,3 +1,9 @@
+"""
+Bootstrap Test Runner for NYP FYP Chatbot
+
+This script runs environment checks and then executes all frontend, backend, and integration tests, summarizing results for CI and local development.
+"""
+
 #!/usr/bin/env python3
 import os
 import sys

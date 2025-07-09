@@ -1,3 +1,7 @@
+"""
+Tests for UI fixes in the frontend of the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 """
 Test script for UI fixes:

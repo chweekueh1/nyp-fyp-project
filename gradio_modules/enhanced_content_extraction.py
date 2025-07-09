@@ -1,3 +1,9 @@
+"""
+Enhanced Content Extraction Module for NYP FYP Chatbot
+
+This module provides advanced file content extraction, cleaning, and keyword filtering utilities for the chatbot's file classification and search features. It supports parallel processing, integration with LLM keyword cache, and robust handling of various file types.
+"""
+
 import os
 import subprocess
 import tempfile

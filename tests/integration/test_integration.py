@@ -1,3 +1,7 @@
+"""
+Integration tests for the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 """
 Integration tests for backend API endpoints and LLM services.

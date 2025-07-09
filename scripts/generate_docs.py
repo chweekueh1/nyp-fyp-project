@@ -14,9 +14,21 @@ def generate_docs():
     """
     print("🔍 Generating Sphinx documentation...")
 
-    docs_dir = Path("/app/docs")
+    # Use /app/docs if it exists (Docker), otherwise use local workspace docs
+    docker_docs_dir = Path("/app/docs")
+    local_docs_dir = Path(__file__).parent.parent / "docs"
+    if docker_docs_dir.exists():
+        docs_dir = docker_docs_dir
+    else:
+        docs_dir = local_docs_dir
+
     modules_dir = docs_dir / "modules"
-    modules_dir.mkdir(exist_ok=True)
+    # Clean up old RST files before generating new ones
+    if modules_dir.exists():
+        for f in modules_dir.glob("*.rst"):
+            f.unlink()
+    else:
+        modules_dir.mkdir(parents=True, exist_ok=True)
 
     # List of source directories to scan
     source_dirs = [
@@ -30,178 +42,205 @@ def generate_docs():
         (".", "."),  # root-level modules
     ]
 
-    # Helper to convert file path to Python module path
+    # Helper to convert file path to Python module path (relative to /app, not app.)
     def file_to_module(file_path, base_dir):
-        rel_path = file_path.relative_to(base_dir.parent)
+        rel_path = file_path.relative_to(base_dir)
         parts = rel_path.with_suffix("").parts
         return ".".join(parts)
 
+    # Helper to convert module path to unique RST filename
+    def module_to_rst_name(module_path):
+        # Use the original filename (case-sensitive) for RST filename
+        return module_path.replace(".", "_") + ".rst"
+
     # Scan for all .py files in each source directory
+    generated_rst_files = []  # Track all generated RST files for debugging
+    module_to_rst = {}  # Map module path to rst filename
     for label, src in source_dirs:
         src_path = docs_dir.parent / src
         if not src_path.exists():
+            print(f"[DEBUG] Source path does not exist: {src_path}")
             continue
         for py_file in src_path.rglob("*.py"):
             # Skip __init__.py for now (optional: document packages if desired)
             if py_file.name == "__init__.py":
                 continue
             module_path = file_to_module(py_file, docs_dir.parent)
-            rst_name = f"{py_file.stem}.rst"
+            rst_name = module_to_rst_name(module_path)
             rst_path = modules_dir / rst_name
+            module_to_rst[module_path] = rst_name
             if not rst_path.exists():
                 # Write default RST
                 with open(rst_path, "w", encoding="utf-8") as f:
-                    f.write(f"{py_file.stem.replace('_', ' ').title()}\n")
+                    # Use the exact filename (case-sensitive) for the title
+                    f.write(f"{py_file.stem}\n")
                     f.write(f"{'=' * len(py_file.stem)}\n\n")
                     f.write(f".. automodule:: {module_path}\n")
                     f.write("   :members:\n")
                     f.write("   :undoc-members:\n")
                     f.write("   :show-inheritance:\n")
+                print(f"[DEBUG] Generated RST: {rst_path} for module {module_path}")
+                generated_rst_files.append((str(rst_path), module_path))
+            else:
+                print(
+                    f"[DEBUG] RST already exists: {rst_path} for module {module_path}"
+                )
+                generated_rst_files.append((str(rst_path), module_path))
+
+    # After scanning all source_dirs, ensure app.py and flexcyon_theme.py are included
+    for special_file in ["app.py", "flexcyon_theme.py"]:
+        special_path = docs_dir.parent / special_file
+        if special_path.exists():
+            module_path = file_to_module(special_path, docs_dir.parent)
+            rst_name = module_to_rst_name(module_path)
+            rst_path = modules_dir / rst_name
+            module_to_rst[module_path] = rst_name
+            if not rst_path.exists():
+                with open(rst_path, "w", encoding="utf-8") as f:
+                    # Use the exact filename (case-sensitive) for the title
+                    f.write(f"{special_path.stem}\n")
+                    f.write(f"{'=' * len(special_path.stem)}\n\n")
+                    f.write(f".. automodule:: {module_path}\n")
+                    f.write("   :members:\n")
+                    f.write("   :undoc-members:\n")
+                    f.write("   :show-inheritance:\n")
+                print(f"[DEBUG] Generated RST: {rst_path} for module {module_path}")
+                generated_rst_files.append((str(rst_path), module_path))
+            else:
+                print(
+                    f"[DEBUG] RST already exists: {rst_path} for module {module_path}"
+                )
+                generated_rst_files.append((str(rst_path), module_path))
+
+    # When generating RST for root-level modules, ensure automodule uses just the module name
+    for py_file in docs_dir.parent.glob("*.py"):
+        if py_file.name == "__init__.py":
+            continue
+        module_path = py_file.stem  # Just the filename without .py
+        rst_name = module_to_rst_name(module_path)
+        rst_path = modules_dir / rst_name
+        module_to_rst[module_path] = rst_name
+        if not rst_path.exists():
+            with open(rst_path, "w", encoding="utf-8") as f:
+                # Use the exact filename (case-sensitive) for the title
+                f.write(f"{py_file.stem}\n")
+                f.write(f"{'=' * len(py_file.stem)}\n\n")
+                f.write(f".. automodule:: {module_path}\n")
+                f.write("   :members:\n")
+                f.write("   :undoc-members:\n")
+                f.write("   :show-inheritance:\n\n")
 
     # Rebuild package indexes to only reference existing RSTs
-    create_package_indexes()
+    create_package_indexes(modules_dir, module_to_rst)
     fix_rst_titles(modules_dir)
-    cleanup_duplicate_titles()
+    cleanup_duplicate_titles(modules_dir)
+
+    # Print summary of all generated RST files
+    print("\n[DEBUG] Summary of all RST files generated or found:")
+    for rst_path, module_path in generated_rst_files:
+        try:
+            size = Path(rst_path).stat().st_size
+            print(f"  - {rst_path} (module: {module_path}, size: {size} bytes)")
+            if size == 0:
+                print(f"[WARNING] RST file is empty: {rst_path}")
+            else:
+                with open(rst_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if ".. automodule::" not in content:
+                        print(
+                            f"[WARNING] RST file missing automodule directive: {rst_path}"
+                        )
+        except Exception as e:
+            print(f"[ERROR] Could not stat or read {rst_path}: {e}")
+    print(f"[DEBUG] Total RST files: {len(generated_rst_files)}\n")
 
     # Build HTML documentation
     print("🏗️ Building HTML documentation...")
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "sphinx",
-            "-b",
-            "html",
-            "-D",
-            "napoleon_google_docstring=True",
-            "-D",
-            "napoleon_numpy_docstring=True",
-            "-D",
-            "autodoc_docstring_signature=1",
-            "-D",
-            "autodoc_preserve_defaults=1",
-            "-D",
-            "autodoc_inherit_docstrings=1",
-            "-D",
-            "autodoc_show_inheritance=1",
-            "-D",
-            "autodoc_show_sourcelink=1",
-            ".",
-            "_build/html",
-        ],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "sphinx",
+                "-b",
+                "html",
+                "-D",
+                "napoleon_google_docstring=True",
+                "-D",
+                "napoleon_numpy_docstring=True",
+                "-D",
+                "autodoc_docstring_signature=1",
+                "-D",
+                "autodoc_preserve_defaults=1",
+                "-D",
+                "autodoc_inherit_docstrings=1",
+                str(docs_dir),
+                str(docs_dir / "_build/html"),
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Sphinx build failed: {e}")
+        raise
     print("✅ Sphinx documentation generated successfully!")
     print("📖 Documentation available at: /app/docs/_build/html/index.html")
 
 
-def create_package_indexes():
+def create_package_indexes(modules_dir, module_to_rst):
     """
     Create package index files to organize modules properly.
 
     This function creates RST index files for each package to organize
     the generated documentation in a hierarchical structure.
     """
-    modules_dir = Path("modules")
-
     # Define package structure with more comprehensive module patterns
+    # Dynamically detect all root-level .py files (except __init__.py)
+    root_py_files = [
+        f.stem
+        for f in (modules_dir.parent.parent).glob("*.py")
+        if f.name != "__init__.py"
+    ]
     packages = {
-        "backend": ["backend.*"],
-        "gradio_modules": [
-            "audio_input",
-            "change_password",
-            "chatbot",
-            "classification_formatter",
-            "enhanced_content_extraction",
-            "file_classification",
-            "file_upload",
-            "login_and_register",
-            "search_interface",
-        ],
-        "llm": ["chatModel", "classificationModel", "dataProcessing", "keyword_cache"],
-        "infra_utils": ["infra_utils", "infra_utils.*"],
-        "scripts": [
-            "bootstrap_tests",
-            "check_env",
-            "debug_search_integration",
-            "docker_cleanup",
-            "docker_utils",
-            "entrypoint",
-            "env_utils",
-            "fix_permissions",
-            "generate_docs",
-            "main",
-            "test_utils",
-            "serve_docs",
-        ],
-        "tests": [
-            "test_*",
-            "comprehensive_test_suite",
-            "run_*",
-            "verify_organization",
-            "demo_*",
-        ],
-        "documentation": [
-            "docs",  # Only the main docs module
-        ],
-        "root": [
-            "app",
-            "setup",
-            "system_prompts",
-            "performance_utils",
-            "hashing",
-            "flexcyon_theme",
-            "infra_utils",
-        ],
+        "backend": ["backend."],
+        "gradio_modules": ["gradio_modules."],
+        "llm": ["llm."],
+        "infra_utils": ["infra_utils."],
+        "scripts": ["scripts."],
+        "tests": ["tests."],
+        "documentation": ["docs."],
+        "root": root_py_files,
     }
 
-    # Fix RST files to ensure they have proper titles
     fix_rst_titles(modules_dir)
 
-    for package_name, module_patterns in packages.items():
+    included_modules = set()
+    for package_name, module_prefixes in packages.items():
         index_file = modules_dir / f"{package_name}.rst"
-
         with open(index_file, "w") as f:
             f.write(f"{package_name.replace('_', ' ').title()}\n")
             f.write("=" * len(package_name) + "\n\n")
-
             f.write(".. toctree::\n")
-            f.write("   :maxdepth: 6\n")  # Increased maxdepth
+            f.write("   :maxdepth: 6\n")
             f.write("   :caption: Modules:\n\n")
-
-            # Add modules that match the patterns
-            for rst_file in sorted(modules_dir.glob("*.rst")):
-                if rst_file.name == f"{package_name}.rst":
+            # Add modules that match the prefixes, but only if not already included
+            for module_path, rst_name in sorted(module_to_rst.items()):
+                if module_path in included_modules:
                     continue
-
-                module_name = rst_file.stem
-                include_module = False
-
-                for pattern in module_patterns:
-                    if pattern.endswith("*"):
-                        prefix = pattern[:-1]
-                        if module_name.startswith(prefix):
-                            include_module = True
-                            break
-                    elif module_name == pattern:
-                        include_module = True
+                for prefix in module_prefixes:
+                    if module_path == prefix or module_path.startswith(prefix):
+                        f.write(f"   {rst_name[:-4]}\n")
+                        included_modules.add(module_path)
                         break
-
-                if include_module:
-                    f.write(f"   {module_name}\n")
-
             # Add a section for the package itself if it exists as a module
-            if (modules_dir / f"{package_name}.rst").exists():
+            if package_name in module_to_rst:
                 f.write(f"\n.. automodule:: {package_name}\n")
                 f.write("   :members:\n")
                 f.write("   :undoc-members:\n")
                 f.write("   :show-inheritance:\n")
-
-    # Create a main modules index
     create_main_modules_index(modules_dir)
 
 
-def fix_rst_titles(modules_dir: Path):
+def fix_rst_titles(modules_dir: Path) -> None:
     """
     Fix RST files to ensure they have proper titles and remove duplicates.
 
@@ -255,12 +294,10 @@ def fix_rst_titles(modules_dir: Path):
             print(f"Warning: Could not fix title for {rst_file}: {e}")
 
 
-def cleanup_duplicate_titles():
+def cleanup_duplicate_titles(modules_dir: Path) -> None:
     """
     Clean up duplicate titles and ensure proper documentation organization.
     """
-    modules_dir = Path("modules")
-
     # Remove duplicate RST files that might have been created
     processed_files = set()
 
@@ -287,7 +324,7 @@ def cleanup_duplicate_titles():
             print(f"Warning: Could not process {rst_file}: {e}")
 
 
-def create_main_modules_index(modules_dir: Path):
+def create_main_modules_index(modules_dir: Path) -> None:
     """
     Create a main modules index file to organize all modules.
 

@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+"""
+Custom Sphinx theme and utility functions for NYP FYP CNC Chatbot documentation.
+Provides theme configuration and helpers for documentation generation.
+"""
+
 from gradio.themes import Base
 
 

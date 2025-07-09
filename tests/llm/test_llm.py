@@ -8,7 +8,6 @@ import sys
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent.parent
@@ -56,10 +55,11 @@ def test_chat_model_call():
     print("🔍 Testing get_convo_hist_answer function...")
     try:
         # Mock the function to avoid actual API calls
-        with patch(
-            "llm.chatModel.get_convo_hist_answer",
-            return_value={"answer": "Mock response"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Hello, how are you?")
+            temp_file = f.name
+
+        try:
             # Test with valid input
             result = get_convo_hist_answer("Hello, how are you?", "test_thread")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
@@ -70,6 +70,9 @@ def test_chat_model_call():
             result = get_convo_hist_answer("", "test_thread")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             print("  ✅ Empty input call passed")
+
+        finally:
+            os.unlink(temp_file)
 
         print("✅ test_chat_model_call: PASSED")
     except Exception as e:
@@ -102,10 +105,11 @@ def test_classification_classify_text():
     print("🔍 Testing classify_text function...")
     try:
         # Mock the classification response to avoid actual API calls
-        with patch(
-            "llm.classificationModel.classify_text",
-            return_value={"answer": "Mock classification"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("This is a test document for classification.")
+            temp_file = f.name
+
+        try:
             # Test with valid text
             result = classify_text("This is a test document for classification.")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
@@ -120,6 +124,9 @@ def test_classification_classify_text():
             result = classify_text("Test with special chars: @#$%^&*()")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             print("  ✅ Special characters classification passed")
+
+        finally:
+            os.unlink(temp_file)
 
         print("✅ test_classification_classify_text: PASSED")
     except Exception as e:
@@ -216,26 +223,34 @@ def test_backward_compatibility():
     print("🔍 Testing backward compatibility functions...")
     try:
         # Test chat model backward compatibility with mock
-        with patch(
-            "llm.chatModel.get_convo_hist_answer",
-            return_value={"answer": "Mock response"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Hello, how are you?")
+            temp_file = f.name
+
+        try:
             from llm.chatModel import get_convo_hist_answer
 
-            result = get_convo_hist_answer("Test question", "test_user")
+            result = get_convo_hist_answer("Hello, how are you?", "test_user")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             print("  ✅ Chat model backward compatibility passed")
 
+        finally:
+            os.unlink(temp_file)
+
         # Test classification backward compatibility with mock
-        with patch(
-            "llm.classificationModel.classify_text",
-            return_value={"answer": "Mock classification"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("This is a test document for classification.")
+            temp_file = f.name
+
+        try:
             from llm.classificationModel import classify_text
 
-            result = classify_text("Test document")
+            result = classify_text("This is a test document for classification.")
             assert isinstance(result, dict), f"Expected dict, got {type(result)}"
             print("  ✅ Classification backward compatibility passed")
+
+        finally:
+            os.unlink(temp_file)
 
         # Test data processing backward compatibility
         from llm.dataProcessing import dataProcessing
@@ -277,21 +292,34 @@ def test_error_handling():
     print("🔍 Testing error handling in LLM functions...")
     try:
         # Test chat model error handling with mock
-        with patch(
-            "llm.chatModel.get_convo_hist_answer", return_value={"error": "Test error"}
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Hello, how are you?")
+            temp_file = f.name
+
+        try:
+            from llm.chatModel import get_convo_hist_answer
+
             result = get_convo_hist_answer("", "test_thread")
             assert isinstance(result, dict), "Should handle empty input gracefully"
             print("  ✅ Chat model error handling passed")
 
+        finally:
+            os.unlink(temp_file)
+
         # Test classification error handling with mock
-        with patch(
-            "llm.classificationModel.classify_text",
-            return_value={"error": "Test error"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("This is a test document for classification.")
+            temp_file = f.name
+
+        try:
+            from llm.classificationModel import classify_text
+
             result = classify_text("")
             assert isinstance(result, dict), "Should handle empty input gracefully"
             print("  ✅ Classification error handling passed")
+
+        finally:
+            os.unlink(temp_file)
 
         print("✅ test_error_handling: PASSED")
     except Exception as e:
@@ -307,10 +335,13 @@ def test_performance():
     print("🔍 Testing performance of LLM functions...")
     try:
         # Mock the function to avoid actual API calls
-        with patch(
-            "llm.chatModel.get_convo_hist_answer",
-            return_value={"answer": "Mock response"},
-        ):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Hello, how are you?")
+            temp_file = f.name
+
+        try:
+            from llm.chatModel import get_convo_hist_answer
+
             # Test call speed (should complete within reasonable time)
             import time
 
@@ -323,6 +354,9 @@ def test_performance():
                 "Call should complete within 5 seconds (mocked)"
             )
             print("  ✅ Performance test passed")
+
+        finally:
+            os.unlink(temp_file)
 
         print("✅ test_performance: PASSED")
     except Exception as e:

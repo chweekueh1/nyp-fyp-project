@@ -1,3 +1,10 @@
+"""
+Fix Permissions Script for NYP FYP Chatbot
+
+This script ensures that the ~/.nypai-chatbot directory and its contents have the correct permissions for both local and Docker environments.
+It supports Linux, macOS, and Windows, and is used to avoid permission issues during development and CI/CD.
+"""
+
 import os
 import sys
 import getpass

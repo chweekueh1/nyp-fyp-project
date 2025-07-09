@@ -1,3 +1,7 @@
+"""
+Unit tests for audio-related fixes in the backend of the NYP FYP CNC Chatbot project.
+"""
+
 #!/usr/bin/env python3
 """
 Test script to verify that the audio transcription event loop and chat ID fixes work correctly.

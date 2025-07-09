@@ -1,8 +1,9 @@
+"""
+Debug Search Integration Script for NYP FYP Chatbot
+
+This script diagnoses and simulates the integration between the chat search interface and backend, helping to identify issues with chat data updates and search functionality.
+"""
 #!/usr/bin/env python3
-"""
-Debug script to diagnose search interface integration issues.
-This script helps identify why the search interface might not be getting updated chat data.
-"""
 
 import sys
 from pathlib import Path
