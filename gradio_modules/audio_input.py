@@ -8,39 +8,38 @@ Users can record audio or upload audio files for transcription and chatbot inter
 
 import asyncio
 import time
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional  # noqa: F401
 
 import gradio as gr
 
 from backend import transcribe_audio
 from backend.chat import get_chatbot_response
+from backend.markdown_formatter import format_markdown
 from infra_utils import setup_logging
 
 logger = setup_logging()
 
 
 def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
-    """
-    Create audio input interface.
-
-    :param username_state: Gradio state containing the current username (optional for testing)
-    :type username_state: str
-    :param setup_events: Whether to set up event handlers (default: True)
-    :type setup_events: bool
-    :return: Tuple of Gradio components for the interface:
-             - audio_input: Audio input component
-             - process_audio_btn: Process audio button
-             - transcription_output: Transcription textbox
-             - response_output: Response textbox
-             - status_message: Status message component
-             - edit_transcription: Edit transcription textbox
-             - edit_btn: Edit button
-             - send_edited_btn: Send edited button
-             - history_output: History display
-             - clear_history_btn: Clear history button
-             - audio_history: Audio history state
-    :rtype: Tuple
-    """
+    # Create audio input interface.
+    #
+    # :param username_state: Gradio state containing the current username (optional for testing)
+    # :type username_state: str
+    # :param setup_events: Whether to set up event handlers (default: True)
+    # :type setup_events: bool
+    # :return: Tuple of Gradio components for the interface:
+    #          - audio_input: Audio input component
+    #          - process_audio_btn: Process audio button
+    #          - transcription_output: Transcription textbox
+    #          - response_output: Response textbox
+    #          - status_message: Status message component
+    #          - edit_transcription: Edit transcription textbox
+    #          - edit_btn: Edit button
+    #          - send_edited_btn: Send edited button
+    #          - history_output: History display
+    #          - clear_history_btn: Clear history button
+    #          - audio_history: Audio history state
+    # :rtype: Tuple
 
     with gr.Column(elem_classes=["audio-interface-container"]):
         # Header
@@ -171,18 +170,16 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
         List[Dict[str, Any]],
         str,
     ]:
-        """
-        Process audio file and get chatbot response.
-
-        :param audio_file: Path to the audio file to process
-        :type audio_file: Optional[str]
-        :param username: Current username for authentication
-        :type username: Optional[str]
-        :param history: List of previous audio processing history
-        :type history: List[Dict[str, Any]]
-        :return: Tuple containing transcription, response, status update, edit update, edit button update, send edited update, updated history, and formatted history.
-        :rtype: Tuple[str, str, gr.update, gr.update, gr.update, gr.update, List[Dict[str, Any]], str]
-        """
+        # Process audio file and get chatbot response.
+        #
+        # :param audio_file: Path to the audio file to process
+        # :type audio_file: Optional[str]
+        # :param username: Current username for authentication
+        # :type username: Optional[str]
+        # :param history: List of previous audio processing history
+        # :type history: List[Dict[str, Any]]
+        # :return: Tuple containing transcription, response, status update, edit update, edit button update, send edited update, updated history, and formatted history.
+        # :rtype: Tuple[str, str, gr.update, gr.update, gr.update, gr.update, List[Dict[str, Any]], str]
         if not audio_file:
             return (
                 "",
@@ -250,6 +247,8 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                         if len(updated_history[-1]) > 1
                         else "No response received"
                     )
+                    # Format markdown content for safe rendering
+                    response = format_markdown(response)
                 else:
                     response = "No response received"
             else:
@@ -316,22 +315,20 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
     async def send_edited_transcription_async(
         edited_text: str, username: Optional[str], history: List[Dict[str, Any]]
     ) -> Tuple[str, gr.update, List[Dict[str, Any]], str]:
-        """
-        Send edited transcription to chatbot.
-
-        :param edited_text: The edited transcription text
-        :type edited_text: str
-        :param username: Current username for authentication
-        :type username: Optional[str]
-        :param history: List of previous audio processing history
-        :type history: List[Dict[str, Any]]
-        :return: Tuple containing:
-                 - response: Chatbot response
-                 - status_update: Status message update
-                 - updated_history: Updated history list
-                 - formatted_history: Formatted history for display
-        :rtype: Tuple[str, gr.update, List[Dict[str, Any]], str]
-        """
+        # Send edited transcription to chatbot.
+        #
+        # :param edited_text: The edited transcription text
+        # :type edited_text: str
+        # :param username: Current username for authentication
+        # :type username: Optional[str]
+        # :param history: List of previous audio processing history
+        # :type history: List[Dict[str, Any]]
+        # :return: Tuple containing:
+        #          - response: Chatbot response
+        #          - status_update: Status message update
+        #          - updated_history: Updated history list
+        #          - formatted_history: Formatted history for display
+        # :rtype: Tuple[str, gr.update, List[Dict[str, Any]], str]
         if not edited_text or not edited_text.strip():
             return (
                 "",
@@ -370,6 +367,8 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                         if len(updated_history[-1]) > 1
                         else "No response received"
                     )
+                    # Format markdown content for safe rendering
+                    response = format_markdown(response)
                 else:
                     response = "No response received"
             else:
@@ -403,12 +402,10 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
             )
 
     def toggle_edit_mode() -> Tuple[gr.update, gr.update, gr.update]:
-        """
-        Toggle edit mode for transcription.
-
-        :return: Tuple containing visibility updates for edit components
-        :rtype: Tuple[gr.update, gr.update, gr.update]
-        """
+        # Toggle edit mode for transcription.
+        #
+        # :return: Tuple containing visibility updates for edit components
+        # :rtype: Tuple[gr.update, gr.update, gr.update]
         return (
             gr.update(visible=True),
             gr.update(visible=False),
@@ -416,12 +413,10 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
         )
 
     def clear_audio_history() -> Tuple[List[Dict[str, Any]], str]:
-        """
-        Clear the audio session history.
-
-        :return: Tuple containing empty history list and success message
-        :rtype: Tuple[List[Dict[str, Any]], str]
-        """
+        # Clear the audio session history.
+        #
+        # :return: Tuple containing empty history list and success message
+        # :rtype: Tuple[List[Dict[str, Any]], str]
         return [], "Audio history cleared."
 
     def format_history(history: List[Dict[str, Any]]) -> str:

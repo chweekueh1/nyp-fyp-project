@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 import time
 from infra_utils import get_chatbot_dir
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any  # noqa: F401
 import re  # Import regex module for cleaning
 
 
@@ -200,7 +200,7 @@ def classify_text(
     This function now expects 'text' to be the already concise and cleaned content
     (e.g., `concise_content_for_llm` from data_classification.py)
     and 'keywords' to be the already processed keyword string
-    (e.g., `top_50_str` from data_classification.py).
+    (e.g., `top_10_str` from data_classification.py).
 
     :param text: The concise and cleaned content to be used for RAG input.
     :type text: str
@@ -222,7 +222,7 @@ def classify_text(
     # which has been cleaned and filtered upstream. So no further processing on 'text' itself.
     rag_input_content = text
 
-    # The 'keywords' parameter here is expected to already be 'top_50_str'
+    # The 'keywords' parameter here is expected to already be 'top_10_str'
     # which has been generated and cleaned upstream.
     keywords_str_for_llm = keywords if keywords is not None else ""
 

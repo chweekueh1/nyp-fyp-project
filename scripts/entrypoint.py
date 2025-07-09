@@ -8,7 +8,13 @@ os.environ.setdefault("TZ", "Asia/Singapore")
 
 
 # Determine if running as root (Unix)
-def is_root():
+def is_root() -> bool:
+    """
+    Check if the current process is running as root (Unix only).
+
+    :return: True if running as root, False otherwise.
+    :rtype: bool
+    """
     if hasattr(os, "geteuid"):
         return os.geteuid() == 0
     return False

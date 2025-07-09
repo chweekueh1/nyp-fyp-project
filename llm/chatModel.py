@@ -1,13 +1,28 @@
 # llm/chatModel.py
 #!/usr/bin/env python3
-# llm/chatModel.py
+"""
+Chat Model module for the NYP FYP CNC Chatbot.
+
+This module provides the core LLM integration and conversational AI functionality including:
+
+- OpenAI LLM and embedding model initialization
+- LangGraph workflow for conversational AI
+- DuckDB vector store integration for context retrieval
+- Keyword matching and caching for performance optimization
+- State management for conversation history
+- Error handling and fallback mechanisms
+
+The module integrates with LangChain ecosystem components and provides
+both synchronous and asynchronous interfaces for chat operations.
+"""
+
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import START, StateGraph
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.prompts import PromptTemplate
-from typing import Sequence, List, Any, Optional, Dict, TypedDict
+from typing import Sequence, List, Any, Optional, Dict, TypedDict  # noqa: F401
 import openai
 import os
 import json
@@ -75,6 +90,12 @@ llm_init_lock = threading.Lock()
 async def initialize_llm_and_db() -> None:
     """
     Initialize LLM and database with performance optimizations.
+
+    This function sets up the OpenAI LLM, embedding model, client, and DuckDB vector store.
+    It also initializes the LangGraph workflow for conversational AI.
+
+    Raises:
+        Exception: If initialization of any component fails.
     """
     global llm, embedding, client, db, app
     with llm_init_lock:
@@ -192,8 +213,10 @@ async def initialize_llm_and_db() -> None:
 
 
 async def _initialize_langgraph_workflow() -> None:
-    """
-    Initialize the LangGraph workflow for conversational AI.
+    """Initialize the LangGraph workflow for conversational AI.
+
+    This function creates and configures the LangGraph state machine
+    for handling conversational AI workflows with memory persistence.
     """
     global app
 
@@ -221,6 +244,12 @@ async def _initialize_langgraph_workflow() -> None:
 
 
 def is_llm_ready() -> bool:
+    """
+    Check if the LLM system is ready for use.
+
+    :return: True if all components (LLM, database, client, and app) are initialized.
+    :rtype: bool
+    """
     return llm is not None and db is not None and client is not None and app is not None
 
 
@@ -253,6 +282,13 @@ qa_prompt = ChatPromptTemplate.from_messages(
 
 # --- Keyword Matching Function ---
 def match_keywords(question: str) -> List[str]:
+    """Match a question to relevant keywords using OpenAI function calling.
+
+    :param question: The question text to match against keywords.
+    :type question: str
+    :return: List of matched keywords.
+    :rtype: List[str]
+    """
     if not question:
         return []
     cached = get_cached_response(question)
@@ -317,6 +353,15 @@ def match_keywords(question: str) -> List[str]:
 
 
 def _extract_predictions_from_response(r: Any, question: str) -> List[str]:
+    """Extract keyword predictions from OpenAI function call response.
+
+    :param r: OpenAI response object.
+    :type r: Any
+    :param question: Original question (for logging).
+    :type question: str
+    :return: List of extracted keywords.
+    :rtype: List[str]
+    """
     predictions = []
     if r.choices and r.choices[0].message.tool_calls:
         first_tool_call = r.choices[0].message.tool_calls[0]
@@ -338,9 +383,14 @@ def _extract_predictions_from_response(r: Any, question: str) -> List[str]:
 def build_keyword_filter(
     matched_keywords: List[str], max_keywords: int = 10
 ) -> Dict[str, Any]:
-    """
-    Builds a ChromaDB filter dictionary for given keywords.
-    Assumes keywords are stored in metadata fields like 'keyword0', 'keyword1', etc.
+    """Builds a filter dictionary for keyword-based document retrieval.
+
+    :param matched_keywords: List of keywords to filter by.
+    :type matched_keywords: List[str]
+    :param max_keywords: Maximum number of keyword fields to check.
+    :type max_keywords: int
+    :return: Filter dictionary for vector store queries.
+    :rtype: Dict[str, Any]
     """
     if not matched_keywords:
         return {}
@@ -354,8 +404,12 @@ def build_keyword_filter(
 
 # --- Retriever Routing and RAG Chain Definition ---
 def route_retriever(question: str) -> Optional[Any]:
-    """
-    Dynamically selects a retriever based on keyword matching.
+    """Dynamically selects a retriever based on keyword matching.
+
+    :param question: The question to route.
+    :type question: str
+    :return: LangChain retriever instance or None if not available.
+    :rtype: Optional[Any]
     """
     if db is None:
         logging.error(
@@ -388,6 +442,16 @@ def route_retriever(question: str) -> Optional[Any]:
 
 # --- LangGraph State and Nodes ---
 class State(TypedDict):
+    """
+    LangGraph state schema for conversational AI workflow.
+
+    Attributes:
+        input: Current user input.
+        chat_history: Sequence of conversation messages.
+        context: Retrieved context for the current query.
+        answer: Generated response.
+    """
+
     input: str
     chat_history: Sequence[BaseMessage]
     context: str
@@ -395,7 +459,18 @@ class State(TypedDict):
 
 
 async def call_model(state: State) -> State:
-    """Call the model with the given state."""
+    """
+    Call the LLM model with the given state.
+
+    Args:
+        state: Current LangGraph state.
+
+    Returns:
+        Updated state with model response.
+
+    Raises:
+        Exception: If model call fails.
+    """
     if llm is None:
         logging.error("LLM not initialized")
         return _error_state(
@@ -437,7 +512,18 @@ async def call_model(state: State) -> State:
 def _error_state(
     question: str, chat_history: Sequence[BaseMessage], answer: str, context: str
 ) -> State:
-    """Create an error state."""
+    """
+    Create an error state for LangGraph workflow.
+
+    Args:
+        question: Original question that caused the error.
+        chat_history: Current conversation history.
+        answer: Error message to return to user.
+        context: Context information about the error.
+
+    Returns:
+        LangGraph state with error information.
+    """
     return {
         "input": str(question),
         "chat_history": chat_history,
@@ -450,6 +536,16 @@ def _error_state(
 async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]:
     """
     Retrieves a conversational answer using the LangGraph RAG workflow.
+
+    Args:
+        question: The user's question.
+        thread_id: Unique identifier for the conversation thread.
+
+    Returns:
+        Dictionary containing the answer and context.
+
+    Raises:
+        Exception: If LangGraph workflow fails or components are not initialized.
     """
     print(
         f"[DEBUG] chatModel.get_convo_hist_answer called with question: {question}, thread_id: {thread_id}"

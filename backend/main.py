@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
-"""
-Main module for the backend.
-Contains initialization functions and main entry points.
+"""Main module for the NYP FYP CNC Chatbot backend.
+
+This module contains the core initialization functions and main entry points
+for the backend system. It handles:
+
+- Backend system initialization
+- LLM and database setup
+- Performance monitoring integration
+- System status reporting
+
+The module provides both synchronous and asynchronous initialization
+functions to support different deployment scenarios.
 """
 
 import logging
@@ -13,8 +22,18 @@ from performance_utils import perf_monitor
 logger = logging.getLogger(__name__)
 
 
-async def init_backend():
-    """Initialize the backend system."""
+async def init_backend() -> None:
+    """
+    Initialize the backend system.
+
+    This function initializes all backend components including:
+    - Database and folder structure
+    - LLM functions and database connections
+    - DuckDB vector store
+
+    Raises:
+        Exception: If any component fails to initialize
+    """
     try:
         logger.info("🚀 Initializing backend...")
 
@@ -51,8 +70,17 @@ async def init_backend():
         raise
 
 
-async def init_backend_async_internal():
-    """Internal async initialization function."""
+async def init_backend_async_internal() -> None:
+    """
+    Internal async initialization function.
+
+    Performs comprehensive backend initialization with performance monitoring.
+    This function is called internally and includes detailed logging and
+    performance tracking for each component.
+
+    Raises:
+        Exception: If any component fails to initialize
+    """
     try:
         logger.info("🔄 Starting internal backend initialization...")
 
@@ -112,7 +140,12 @@ async def init_backend_async_internal():
 
 
 def get_backend_status() -> dict:
-    """Get the current status of the backend components."""
+    """
+    Get the current status of the backend components.
+
+    :return: Dictionary containing backend status information.
+    :rtype: dict
+    """
     try:
         status = {"backend_initialized": True, "components": {}}
 

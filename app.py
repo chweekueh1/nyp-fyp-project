@@ -8,7 +8,7 @@ Organized with tabbed interfaces and modular components.
 import sys
 import asyncio
 from pathlib import Path
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any  # noqa: F401
 import gradio as gr
 from infra_utils import setup_logging
 from performance_utils import (
@@ -21,7 +21,7 @@ from performance_utils import (
 )
 from flexcyon_theme import FlexcyonTheme
 import os
-from datetime import datetime  # Import datetime for handling timestamps
+from datetime import datetime  # Import datetime for handling timestamps  # noqa: F401
 
 
 # Add parent directory to path for imports
@@ -209,12 +209,10 @@ def load_css_file(filename: str) -> str:
 
 
 def create_main_app() -> gr.Blocks:
-    """
-    Creates the main Gradio application with performance optimizations.
-
-    :return: The configured Gradio Blocks application instance.
-    :rtype: gr.Blocks
-    """
+    # Creates the main Gradio application with performance optimizations.
+    #
+    # :return: The configured Gradio Blocks application instance.
+    # :rtype: gr.Blocks
 
     # Load optimized CSS and theme
     mark_startup_milestone("loading_css")
@@ -816,12 +814,10 @@ def create_main_app() -> gr.Blocks:
         )
 
         def check_backend_status() -> gr.Markdown:
-            """
-            Checks the current backend initialization status and returns a formatted message.
-
-            :return: Gradio Markdown update with the backend status.
-            :rtype: gr.Markdown
-            """
+            # Checks the current backend initialization status and returns a formatted message.
+            #
+            # :return: Gradio Markdown update with the backend status.
+            # :rtype: gr.Markdown
             current_status = get_backend_status()
             if current_status == "initializing":
                 return gr.update(value="🔄 **Initializing backend...** Please wait...")
@@ -836,13 +832,11 @@ def create_main_app() -> gr.Blocks:
         refresh_status_btn.click(fn=check_backend_status, outputs=[backend_status])
 
         def start_backend_and_wait_for_completion() -> Tuple[gr.Column, gr.Column, str]:
-            """
-            Starts backend initialization in the background and waits for it to complete
-            before showing the login interface.
-
-            :return: A tuple of Gradio updates to show/hide sections and update status.
-            :rtype: Tuple[gr.Column, gr.Column, str]
-            """
+            # Starts backend initialization in the background and waits for it to complete
+            # before showing the login interface.
+            #
+            # :return: A tuple of Gradio updates to show/hide sections and update status.
+            # :rtype: Tuple[gr.Column, gr.Column, str]
             import time
 
             # Step 1: Start backend initialization in background (non-blocking)
@@ -896,12 +890,10 @@ def create_main_app() -> gr.Blocks:
         )
 
         def proceed_anyway() -> Tuple[gr.Column, gr.Column, str]:
-            """
-            Allows users to proceed to login even if backend isn't ready.
-
-            :return: A tuple of Gradio updates to show/hide sections and update status.
-            :rtype: Tuple[gr.Column, gr.Column, str]
-            """
+            # Allows users to proceed to login even if backend isn't ready.
+            #
+            # :return: A tuple of Gradio updates to show/hide sections and update status.
+            # :rtype: Tuple[gr.Column, gr.Column, str]
             return (
                 gr.update(visible=False),  # Hide loading screen
                 gr.update(visible=True),  # Show login interface
@@ -916,6 +908,18 @@ def create_main_app() -> gr.Blocks:
 
 
 if __name__ == "__main__":
+    import signal
+
+    def signal_handler(signum, frame):
+        """Handle graceful shutdown on SIGTERM/SIGINT"""
+        print("\n🛑 Received shutdown signal. Cleaning up...")
+        print("👋 Shutting down gracefully. Goodbye!")
+        sys.exit(0)
+
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
     print("🚀 Starting NYP FYP Chatbot - Modular Interface Design")
     print("=" * 60)
     print("🎨 Creating application with tabbed interfaces...")
@@ -987,6 +991,10 @@ if __name__ == "__main__":
         runtime = perf_monitor.get_metrics().get("app_runtime", 0)
         logger.info(f"🏁 App runtime: {runtime:.2f}s")
 
+    except KeyboardInterrupt:
+        print("\n🛑 Received Ctrl+C. Shutting down gracefully...")
+        print("👋 Goodbye!")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"❌ Failed to create or launch application: {e}")
         import traceback

@@ -75,6 +75,30 @@ services:
       retries: 3
       start_period: 60s
 
+  # Documentation service
+  nyp-chatbot-docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    image: nyp-fyp-chatbot:docs-optimized
+    container_name: nyp-chatbot-docs
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - DOCUMENTATION=true
+      - DOCKER_MODE=docs
+    volumes:
+      - nyp_chatbot_data:/home/appuser/.nypai-chatbot/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
 volumes:
   nyp_chatbot_data:
     driver: local

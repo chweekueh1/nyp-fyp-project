@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 """
-Backend module for the NYP FYP Chatbot.
-Provides all backend functionality through modular components.
+Backend module for the NYP FYP CNC Chatbot.
+
+This module provides all backend functionality through modular components including:
+
+- Authentication and user management
+- Chat functionality and history management
+- File upload and classification
+- Audio transcription and processing
+- Database operations and LLM integration
+- Rate limiting and security features
+- Timezone utilities for Singapore time
+
+The module exports all public functions and constants for easy access
+from other parts of the application.
 """
 
 # Import all modules explicitly to avoid star import issues

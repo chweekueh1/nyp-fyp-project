@@ -19,7 +19,19 @@ from .config import (
 
 
 class RateLimiter:
-    def __init__(self, max_requests: int = 60, time_window: int = 60):
+    """
+    Rate limiter class for managing request limits per user.
+
+    This class implements a sliding window rate limiting mechanism that tracks
+    requests per user and enforces limits based on a configurable time window.
+
+    :param max_requests: Maximum number of requests allowed in the time window.
+    :type max_requests: int
+    :param time_window: Time window in seconds.
+    :type time_window: int
+    """
+
+    def __init__(self, max_requests: int = 60, time_window: int = 60) -> None:
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = defaultdict(deque)
@@ -49,7 +61,16 @@ auth_rate_limiter = RateLimiter(AUTH_RATE_LIMIT_REQUESTS, AUTH_RATE_LIMIT_WINDOW
 
 
 async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
-    """Check if a user has exceeded their rate limit for a specific operation."""
+    """
+    Check if a user has exceeded their rate limit for a specific operation.
+
+    :param user_id: User identifier to check rate limit for.
+    :type user_id: str
+    :param operation_type: Type of operation to check rate limit for.
+    :type operation_type: str
+    :return: True if rate limit not exceeded, False otherwise.
+    :rtype: bool
+    """
     if operation_type == "chat":
         return await chat_rate_limiter.check_and_update(user_id)
     elif operation_type == "file_upload":

@@ -2,16 +2,23 @@
 #!/usr/bin/env python3
 
 """
-Chatbot Interface Module
+Chatbot Interface Module for the NYP FYP CNC Chatbot.
 
-This module provides the main chatbot interface for the NYP FYP Chatbot application.
+This module provides the main chatbot interface for the NYP FYP CNC Chatbot application.
 Users can send messages, manage chat sessions, search history, and rename chats.
+
+The module integrates with Gradio to provide a web-based chat interface with:
+- Real-time messaging with LLM-powered responses
+- Chat session management (create, load, rename, clear)
+- Chat history search functionality
+- User-friendly UI components and state management
+- Integration with backend chat and authentication systems
 """
 
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List  # noqa: F401
 import gradio as gr
 import logging
-from datetime import datetime
+from datetime import datetime  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +43,19 @@ from gradio_modules.search_interface import search_interface
 def _load_chat_by_id(
     selected_chat_id: str, username: str, all_chats_data: Dict[str, Dict[str, Any]]
 ) -> Tuple[List[List[str]], str, str, str]:
-    """
-    Loads chat history for a selected chat ID from the `all_chats_data_state`.
-    This function now only returns data/values, not interactive updates,
-    as interactivity is managed by app.py's _enable_chat_inputs_on_login.
-
-    :param selected_chat_id: The ID of the chat to load.
-    :type selected_chat_id: str
-    :param username: The current username.
-    :type username: str
-    :param all_chats_data: Dictionary of all chat metadata and histories.
-    :type all_chats_data: Dict[str, Dict[str, Any]]
-    :return: A tuple containing the chat history, chat ID, rename input value, and debug message.
-    :rtype: Tuple[List[List[str]], str, str, str]
-    """
+    # Loads chat history for a selected chat ID from the `all_chats_data_state`.
+    #
+    # This function now only returns data/values, not interactive updates,
+    # as interactivity is managed by app.py's _enable_chat_inputs_on_login.
+    #
+    # :param selected_chat_id: The ID of the chat to load.
+    # :type selected_chat_id: str
+    # :param username: The current username.
+    # :type username: str
+    # :param all_chats_data: Dictionary of all chat metadata and histories.
+    # :type all_chats_data: Dict[str, Dict[str, Any]]
+    # :return: A tuple containing the chat history, chat ID, rename input value, and debug message.
+    # :rtype: Tuple[List[List[str]], str, str, str]
     if not selected_chat_id:
         return (
             [],
@@ -76,20 +82,19 @@ def _clear_current_chat(
     chat_id: str,
     username: str,
 ) -> Tuple[List[List[str]], str, str, Dict[str, Any], str]:
-    """
-    Clears the history of the currently selected chat.
-    Does not delete the chat, just its messages.
-    This function now only returns data/values, not interactive updates,
-    as interactivity is managed by app.py's _enable_chat_inputs_on_login.
-
-    :param chat_id: The ID of the chat to clear.
-    :type chat_id: str
-    :param username: The current username.
-    :type username: str
-    :return: A tuple containing cleared chat history, current chat ID, status message,
-             updated all_chats_data, and debug message.
-    :rtype: Tuple[List[List[str]], str, str, Dict[str, Any], str]
-    """
+    # Clears the history of the currently selected chat.
+    #
+    # Does not delete the chat, just its messages.
+    # This function now only returns data/values, not interactive updates,
+    # as interactivity is managed by app.py's _enable_chat_inputs_on_login.
+    #
+    # :param chat_id: The ID of the chat to clear.
+    # :type chat_id: str
+    # :param username: The current username.
+    # :type username: str
+    # :return: A tuple containing cleared chat history, current chat ID, status message,
+    #          updated all_chats_data, and debug message.
+    # :rtype: Tuple[List[List[str]], str, str, Dict[str, Any], str]
     if not chat_id or chat_id == "new_chat_id":
         return (
             [],
@@ -138,19 +143,20 @@ def _create_new_chat_ui_handler(
 ) -> Tuple[str, List[List[str]], str, Dict[str, Any], gr.update]:
     """
     Handles the UI logic for creating a new chat.
+
     Sets the chat_id_state to a temporary "new_chat_id" and clears the chatbot.
     The actual chat creation (with a real ID) happens when the first message is sent.
     This function now only returns data/values, not interactive updates for individual components,
     as interactivity is managed by app.py's _enable_chat_inputs_on_login.
 
-    :param username: The current username.
-    :type username: str
-    :param all_chats_data: Dictionary of all chat metadata and histories.
-    :type all_chats_data: Dict[str, Dict[str, Any]]
-    :return: A tuple containing the temporary chat ID, cleared chat history,
-             temporary rename input value, all_chats_data (unchanged here),
-             and an update for the chat selector.
-    :rtype: Tuple[str, List[List[str]], str, Dict[str, Any], gr.update]
+    Args:
+        username: The current username.
+        all_chats_data: Dictionary of all chat metadata and histories.
+
+    Returns:
+        A tuple containing the temporary chat ID, cleared chat history,
+        temporary rename input value, all_chats_data (unchanged here),
+        and an update for the chat selector.
     """
     new_chat_id_temp = "new_chat_id"
 
@@ -210,18 +216,15 @@ def chatbot_ui(
     Constructs the chatbot UI, integrating chat history, message input,
     send functionality, chat selection, renaming, and clearing.
 
-    :param username_state: Gradio state holding the current username.
-    :type username_state: gr.State
-    :param chat_id_state: Gradio state holding the ID of the currently active chat.
-    :type chat_id_state: gr.State
-    :param chat_history_state: Gradio state holding the history of the current chat.
-    :type chat_history_state: gr.State
-    :param all_chats_data_state: Gradio state holding all chat metadata and histories.
-    :type all_chats_data_state: gr.State
-    :param debug_info_state: Gradio state for displaying debug information.
-    :type debug_info_state: gr.State
-    :return: A tuple of Gradio components for the chatbot interface.
-    :rtype: Tuple[gr.Dropdown, gr.Chatbot, gr.Textbox, gr.Button, gr.Textbox, gr.Button, gr.Markdown, gr.Column, gr.Markdown, gr.Button, gr.Markdown, gr.Button]
+    Args:
+        username_state: Gradio state holding the current username.
+        chat_id_state: Gradio state holding the ID of the currently active chat.
+        chat_history_state: Gradio state holding the history of the current chat.
+        all_chats_data_state: Gradio state holding all chat metadata and histories.
+        debug_info_state: Gradio state for displaying debug information.
+
+    Returns:
+        A tuple of Gradio components for the chatbot interface.
     """
 
     with gr.Column(elem_classes=["overall-chatbot-container"]):

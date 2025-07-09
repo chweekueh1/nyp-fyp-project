@@ -3,28 +3,27 @@
 
 import gradio as gr
 import backend
-from typing import Tuple, Any, List, Dict
+from typing import Tuple, Any, List, Dict  # noqa: F401
 
 
 def file_upload_ui(
     username_state: gr.State, chat_history_state: gr.State, chat_id_state: gr.State
 ) -> Tuple[gr.File, gr.Button, gr.Markdown]:
-    """Create the file upload interface components.
-
-    This function creates the file upload UI components including:
-    - File upload input
-    - Send button
-    - Debug markdown for status messages
-
-    :param username_state: State component for the current username
-    :type username_state: gr.State
-    :param chat_history_state: State component for the chat history
-    :type chat_history_state: gr.State
-    :param chat_id_state: State component for the current chat ID
-    :type chat_id_state: gr.State
-    :return: File upload, send button, and debug markdown
-    :rtype: Tuple[gr.File, gr.Button, gr.Markdown]
-    """
+    # Create the file upload interface components.
+    #
+    # This function creates the file upload UI components including:
+    # - File upload input
+    # - Send button
+    # - Debug markdown for status messages
+    #
+    # :param username_state: State component for the current username
+    # :type username_state: gr.State
+    # :param chat_history_state: State component for the chat history
+    # :type chat_history_state: gr.State
+    # :param chat_id_state: State component for the current chat ID
+    # :type chat_id_state: gr.State
+    # :return: File upload, send button, and debug markdown
+    # :rtype: Tuple[gr.File, gr.Button, gr.Markdown]
     file_upload = gr.File(label="Upload a file for the chatbot")
     file_btn = gr.Button("Send File")
     file_debug_md = gr.Markdown(visible=True)

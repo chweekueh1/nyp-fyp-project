@@ -42,7 +42,6 @@ logs/
 # Documentation
 README.md
 *.md
-docs/
 
 # Docker files (except the main Dockerfile)
 Dockerfile

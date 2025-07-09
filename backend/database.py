@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 """
-Database module for the backend.
-Contains lazy loading functions for DuckDB-based vector store and database-related utilities.
+Database module for the NYP FYP CNC Chatbot backend.
+
+This module provides database functionality including:
+
+- DuckDB-based vector store implementation for document storage and retrieval
+- LangChain-compatible retriever interface
+- Lazy loading functions for database connections
+- Document embedding and similarity search
+- Keyword-based filtering capabilities
+- Integration with OpenAI embeddings
+
+The module supports both synchronous and asynchronous operations
+and provides a scalable vector database solution for the chatbot.
 """
 
 import os
 import duckdb
 import json
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional  # noqa: F401
 from performance_utils import lazy_loader
 from .config import DATABASE_PATH, EMBEDDING_MODEL
 from langchain_openai import OpenAIEmbeddings
@@ -21,6 +32,12 @@ from infra_utils import create_folders
 
 
 class DuckDBVectorStore:
+    """DuckDB-based vector store for document storage and retrieval.
+
+    This class provides a vector store implementation using DuckDB as the backend,
+    compatible with LangChain's vector store interface.
+    """
+
     def __init__(self, db_path: str, collection_name: str, embedding_model: str):
         self.db_path = db_path
         self.collection_name = collection_name
@@ -36,6 +53,11 @@ class DuckDBVectorStore:
         self.embedding = OpenAIEmbeddings(model=embedding_model)
 
     def _ensure_table(self):
+        """Ensure the database table exists with the correct schema.
+
+        Creates a table with columns for id, content, embedding (JSON),
+        metadata (JSON), and 10 keyword columns for filtering.
+        """
         # Table schema: id, content, embedding (JSON), metadata (JSON), keyword0...keyword9
         cols = ", ".join([f"keyword{i} VARCHAR" for i in range(10)])
         self.conn.execute(f"""
@@ -49,6 +71,15 @@ class DuckDBVectorStore:
         """)
 
     def add_documents(self, documents: List[Dict[str, Any]]):
+        """Add documents to the vector store.
+
+        :param documents: List of document dictionaries with keys:
+                         - id: Document identifier (optional, auto-generated if missing)
+                         - content: Document text content
+                         - metadata: Document metadata dictionary
+                         - keywords: List of keywords for filtering (stored in metadata)
+        :type documents: List[Dict[str, Any]]
+        """
         # Each document: {id, content, metadata, keywords}
         to_insert = []
         for doc in documents:
@@ -73,6 +104,17 @@ class DuckDBVectorStore:
     def query(
         self, query_text: str, k: int = 5, keyword_filter: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
+        """Query the vector store for similar documents.
+
+        :param query_text: The query text to search for.
+        :type query_text: str
+        :param k: Number of top results to return.
+        :type k: int
+        :param keyword_filter: Optional list of keywords to filter results.
+        :type keyword_filter: Optional[List[str]]
+        :return: List of document dictionaries with similarity scores.
+        :rtype: List[Dict[str, Any]]
+        """
         # Compute embedding for query
         query_emb = np.array(self.embedding.embed_query(query_text))
         # Build SQL filter for keywords
@@ -110,7 +152,13 @@ class DuckDBVectorStore:
         return results[:k]
 
     def get(self, limit: int = 1) -> List[Dict[str, Any]]:
-        """Get documents from the collection (for compatibility with ChromaDB)."""
+        """Get documents from the collection.
+
+        :param limit: Maximum number of documents to return.
+        :type limit: int
+        :return: List of document dictionaries.
+        :rtype: List[Dict[str, Any]]
+        """
         sql = f"SELECT id, content, metadata FROM {self.collection_name} LIMIT {limit}"
         docs = self.conn.execute(sql).fetchall()
         return [
@@ -121,20 +169,42 @@ class DuckDBVectorStore:
     def as_retriever(
         self, search_kwargs: Optional[Dict[str, Any]] = None
     ) -> "DuckDBRetriever":
-        """Return a retriever interface (for compatibility with ChromaDB)."""
+        """Return a retriever interface compatible with LangChain.
+
+        :param search_kwargs: Optional search parameters for the retriever.
+        :type search_kwargs: Optional[Dict[str, Any]]
+        :return: DuckDBRetriever instance.
+        :rtype: DuckDBRetriever
+        """
         return DuckDBRetriever(self, search_kwargs or {})
 
 
 class DuckDBRetriever(BaseRetriever):
+    """Retriever interface for DuckDB vector store compatible with LangChain.
+
+    This class provides a LangChain-compatible retriever interface for the
+    DuckDB vector store, allowing integration with LangChain workflows.
+    """
+
     @property
-    def lc_namespace(self):
+    def lc_namespace(self) -> list:
+        """
+        LangChain namespace for this retriever.
+
+        :return: List of namespace components.
+        :rtype: list
+        """
         return ["backend", "database", "DuckDBRetriever"]
 
     @property
-    def lc_id(self):
-        return "duckdb_retriever"
+    def lc_id(self) -> str:
+        """
+        LangChain identifier for this retriever.
 
-    """Retriever interface for DuckDB vector store (compatible with LangChain)."""
+        :return: Unique identifier string.
+        :rtype: str
+        """
+        return "duckdb_retriever"
 
     def __init__(self, vector_store: DuckDBVectorStore, search_kwargs: Dict[str, Any]):
         super().__init__()
@@ -142,13 +212,27 @@ class DuckDBRetriever(BaseRetriever):
         self._search_kwargs = search_kwargs
 
     @property
-    def vector_store(self):
+    def vector_store(self) -> DuckDBVectorStore:
+        """
+        Get the underlying vector store instance.
+
+        :return: The DuckDB vector store instance.
+        :rtype: DuckDBVectorStore
+        """
         return self._vector_store
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        """Get relevant documents for a query."""
+        """Get relevant documents for a query using LangChain interface.
+
+        :param query: The search query.
+        :type query: str
+        :param run_manager: LangChain callback manager for the retrieval run.
+        :type run_manager: CallbackManagerForRetrieverRun
+        :return: List of LangChain Document objects.
+        :rtype: List[Document]
+        """
         k = self._search_kwargs.get("k", 5)
         keyword_filter = self._search_kwargs.get("filter", {}).get("keywords", None)
 
@@ -158,7 +242,13 @@ class DuckDBRetriever(BaseRetriever):
         ]
 
     def get_relevant_documents(self, query: str) -> List[Document]:
-        """Get relevant documents for a query (legacy compatibility method)."""
+        """Get relevant documents for a query (legacy compatibility method).
+
+        :param query: The search query.
+        :type query: str
+        :return: List of LangChain Document objects.
+        :rtype: List[Document]
+        """
         k = self._search_kwargs.get("k", 5)
         keyword_filter = self._search_kwargs.get("filter", {}).get("keywords", None)
 
@@ -170,27 +260,47 @@ class DuckDBRetriever(BaseRetriever):
 
 # --- Lazy loading for collections ---
 def get_duckdb_collection(collection_name: str) -> DuckDBVectorStore:
-    """Lazy load DuckDB vector store collection."""
+    """Lazy load DuckDB vector store collection.
+
+    :param collection_name: Name of the collection to load.
+    :type collection_name: str
+    :return: DuckDBVectorStore instance for the specified collection.
+    :rtype: DuckDBVectorStore
+    """
     return lazy_loader.load_module(
         f"duckdb_{collection_name}",
         lambda: DuckDBVectorStore(DATABASE_PATH, collection_name, EMBEDDING_MODEL),
     )
 
 
-# For chat collection:
-def get_chat_db():
-    """Get DuckDB chat collection."""
+def get_chat_db() -> DuckDBVectorStore:
+    """
+    Get DuckDB chat collection for conversation history.
+
+    :return: DuckDBVectorStore instance for chat documents.
+    :rtype: DuckDBVectorStore
+    """
     return get_duckdb_collection("chat")
 
 
-# For classification collection:
-def get_classification_db():
-    """Get DuckDB classification collection."""
+def get_classification_db() -> DuckDBVectorStore:
+    """
+    Get DuckDB classification collection for document classification.
+
+    :return: DuckDBVectorStore instance for classification documents.
+    :rtype: DuckDBVectorStore
+    """
     return get_duckdb_collection("classification")
 
 
 # --- Other lazy loading functions (unchanged) ---
-def get_llm_functions():
+def get_llm_functions() -> Dict[str, Any]:
+    """
+    Get LLM functions for chat operations.
+
+    :return: Dictionary containing LLM function references.
+    :rtype: Dict[str, Any]
+    """
     from llm import chatModel
 
     # Return a dictionary of functions instead of the module
@@ -201,13 +311,25 @@ def get_llm_functions():
     }
 
 
-def get_data_processing():
+def get_data_processing() -> Any:
+    """
+    Get data processing module.
+
+    :return: Data processing module.
+    :rtype: Any
+    """
     from llm import dataProcessing
 
     return dataProcessing
 
 
-def get_classification():
+def get_classification() -> Any:
+    """
+    Get classification module.
+
+    :return: Classification module.
+    :rtype: Any
+    """
     from llm import classificationModel
 
     return classificationModel

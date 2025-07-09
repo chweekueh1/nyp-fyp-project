@@ -9,7 +9,8 @@ import logging
 import filetype
 import zipfile
 import mimetypes
-from datetime import datetime, timezone
+from typing import Optional
+from datetime import datetime, timezone  # noqa: F401
 from .config import CHAT_DATA_PATH
 from .rate_limiting import check_rate_limit
 from .database import get_classification
@@ -20,7 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 async def detectFileType_async(file_path: str) -> str | None:
-    """Detect the file type asynchronously."""
+    """
+    Detect the file type asynchronously.
+
+    :param file_path: Path to the file to detect.
+    :type file_path: str
+    :return: MIME type string or None if detection fails.
+    :rtype: str | None
+    """
     try:
         if not os.path.exists(file_path):
             return None
@@ -75,6 +83,11 @@ async def detectFileType_async(file_path: str) -> str | None:
 async def handle_uploaded_file(ui_state: dict) -> dict:
     """
     File upload interface: processes the file and saves it permanently.
+
+    :param ui_state: UI state containing file and user information.
+    :type ui_state: dict
+    :return: Processing result with status and details.
+    :rtype: dict
     """
     print(f"[DEBUG] backend.handle_uploaded_file called with ui_state: {ui_state}")
     username = ui_state.get("username")
@@ -166,7 +179,18 @@ async def handle_uploaded_file(ui_state: dict) -> dict:
 
 
 async def upload_file(file_content: bytes, filename: str, username: str) -> dict:
-    """Upload a file and save it to the user's directory."""
+    """
+    Upload a file and save it to the user's directory.
+
+    :param file_content: Binary content of the file.
+    :type file_content: bytes
+    :param filename: Original filename.
+    :type filename: str
+    :param username: Username for directory organization.
+    :type username: str
+    :return: Upload result with file details.
+    :rtype: dict
+    """
     try:
         # Create user directory
         user_dir = os.path.join(CHAT_DATA_PATH, username, "uploads")
@@ -204,8 +228,17 @@ async def upload_file(file_content: bytes, filename: str, username: str) -> dict
         return {"error": str(e)}
 
 
-async def data_classification(content: str, keywords: str = None) -> dict:
-    """Classify the content of a text file, using filtered keywords if provided."""
+async def data_classification(content: str, keywords: Optional[str] = None) -> dict:
+    """
+    Classify the content of a text file, using filtered keywords if provided.
+
+    :param content: Text content to classify.
+    :type content: str
+    :param keywords: Optional keywords to filter classification.
+    :type keywords: Optional[str]
+    :return: Classification result with details.
+    :rtype: dict
+    """
     try:
         # Get classification functions lazily
         classification_funcs = get_classification()
@@ -229,7 +262,18 @@ async def data_classification(content: str, keywords: str = None) -> dict:
 
 
 async def process_zip_file(file_content: bytes, filename: str, username: str) -> dict:
-    """Process a ZIP file and extract its contents."""
+    """
+    Process a ZIP file and extract its contents.
+
+    :param file_content: Binary content of the ZIP file.
+    :type file_content: bytes
+    :param filename: Original ZIP filename.
+    :type filename: str
+    :param username: Username for processing context.
+    :type username: str
+    :return: Processing result with extracted file details.
+    :rtype: dict
+    """
     try:
         # Create temporary directory for extraction
         import tempfile
@@ -293,7 +337,18 @@ async def process_zip_file(file_content: bytes, filename: str, username: str) ->
 
 
 def generateUniqueFilename(prefix: str, username: str, extension: str) -> str:
-    """Generate a unique filename for uploaded files."""
+    """
+    Generate a unique filename for uploaded files.
+
+    :param prefix: Prefix for the filename.
+    :type prefix: str
+    :param username: Username to include in filename.
+    :type username: str
+    :param extension: File extension.
+    :type extension: str
+    :return: Unique filename with timestamp.
+    :rtype: str
+    """
     try:
         # Use Singapore timezone for filename generation
         from .timezone_utils import now_singapore

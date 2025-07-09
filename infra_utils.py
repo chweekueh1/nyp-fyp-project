@@ -116,7 +116,7 @@ def clear_chat_history(chat_id: str, username: str) -> tuple[bool, dict]:
             _get_chat_metadata_cache_internal,
             _save_chat_metadata_cache,
         )
-        from datetime import datetime
+        from datetime import datetime  # noqa: F401
 
         # Get the user's chat metadata cache
         user_chats = _get_chat_metadata_cache_internal().get(username, {})

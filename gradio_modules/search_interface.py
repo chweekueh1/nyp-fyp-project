@@ -26,7 +26,7 @@ Features:
 - Automatic refresh when new messages are added
 """
 
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any  # noqa: F401
 import gradio as gr
 import logging
 import sys
@@ -39,6 +39,7 @@ if str(parent_dir) not in sys.path:
 
 # Now import from parent directory
 from backend.chat import search_chat_history, format_search_results  # DO NOT RENAME
+from backend.markdown_formatter import format_markdown
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -52,32 +53,30 @@ def search_interface(
     all_chats_data_state: gr.State,
     debug_info_state: gr.State,
 ) -> Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown]:
+    # Create the search interface components.
+    #
+    # This function creates the search UI components including:
+    # - Search input box (can also send messages to chatbot).
+    # - Search button to trigger the search.
+    # - Search results markdown to display results.
+    # - A container column to hold these components.
+    #
+    # :param username_state: State for storing the current username.
+    # :type username_state: gr.State
+    # :param current_chat_id_state: State for storing the current chat ID.
+    # :type current_chat_id_state: gr.State
+    # :param chat_history_state: State for storing the current chat history.
+    # :type chat_history_state: gr.State
+    # :param all_chats_data_state: State for storing all chat data.
+    # :type all_chats_data_state: gr.State
+    # :param debug_info_state: State for debug information.
+    # :type debug_info_state: gr.State
+    # :return: A tuple containing the search container (gr.Column), search query textbox,
+    #          search button, and search results markdown.
+    # :rtype: Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown]
     logger.info(
         "🔍 [SEARCH_UI] search_interface function called - initializing search components"
     )
-    """
-    Create the search interface components.
-
-    This function creates the search UI components including:
-    - Search input box (can also send messages to chatbot).
-    - Search button to trigger the search.
-    - Search results markdown to display results.
-    - A container column to hold these components.
-
-    :param username_state: State for storing the current username.
-    :type username_state: gr.State
-    :param current_chat_id_state: State for storing the current chat ID.
-    :type current_chat_id_state: gr.State
-    :param chat_history_state: State for storing the current chat history.
-    :type chat_history_state: gr.State
-    :param all_chats_data_state: State for storing all chat data.
-    :type all_chats_data_state: gr.State
-    :param debug_info_state: State for debug information.
-    :type debug_info_state: gr.State
-    :return: A tuple containing the search container (gr.Column), search query textbox,
-              search button, and search results markdown.
-    :rtype: Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown]
-    """
     logger.info("🔍 [SEARCH_UI] Creating search container and components")
     with gr.Column(visible=False) as search_container:  # Container for search UI
         with gr.Row():
@@ -95,19 +94,17 @@ def search_interface(
     logger.info("🔍 [SEARCH_UI] Search container and components created successfully")
 
     def _handle_search_query(query: str, username: str) -> str:
-        """
-        Handle a search query from the UI and return formatted results.
-
-        This function calls the backend's `search_chat_history` and formats
-        the results for display in a Markdown component.
-
-        :param query: The search query string.
-        :type query: str
-        :param username: The current username.
-        :type username: str
-        :return: Formatted markdown string with search results.
-        :rtype: str
-        """
+        # Handle a search query from the UI and return formatted results.
+        #
+        # This function calls the backend's `search_chat_history` and formats
+        # the results for display in a Markdown component.
+        #
+        # :param query: The search query string.
+        # :type query: str
+        # :param username: The current username.
+        # :type username: str
+        # :return: Formatted markdown string with search results.
+        # :rtype: str
         logger.info(
             f"🔍 [SEARCH_UI] _handle_search_query called with query: '{query}', username: '{username}'"
         )
@@ -140,7 +137,7 @@ def search_interface(
             logger.info(
                 f"🔍 [SEARCH_UI] Search completed for '{query}': {len(found_results)} results found"
             )
-            return result_text
+            return format_markdown(result_text)
 
         except Exception as e:
             logger.error(f"Error handling search: {e}")
@@ -149,21 +146,19 @@ def search_interface(
     def _refresh_search_results_on_data_change(
         current_query: str, username: str, all_chats_data: Dict[str, Any]
     ) -> str:
-        """
-        Refresh search results when chat data changes (e.g., new messages added).
-
-        This function is called automatically when all_chats_data_state changes,
-        ensuring search results stay up-to-date with new messages.
-
-        :param current_query: The current search query (if any).
-        :type current_query: str
-        :param username: The current username.
-        :type username: str
-        :param all_chats_data: The updated chat data.
-        :type all_chats_data: Dict[str, Any]
-        :return: Updated search results or current display.
-        :rtype: str
-        """
+        # Refresh search results when chat data changes (e.g., new messages added).
+        #
+        # This function is called automatically when all_chats_data_state changes,
+        # ensuring search results stay up-to-date with new messages.
+        #
+        # :param current_query: The current search query (if any).
+        # :type current_query: str
+        # :param username: The current username.
+        # :type username: str
+        # :param all_chats_data: The updated chat data.
+        # :type all_chats_data: Dict[str, Any]
+        # :return: Updated search results or current display.
+        # :rtype: str
         logger.info("🔍 [SEARCH_REFRESH] _refresh_search_results_on_data_change called")
         logger.info(
             f"🔍 [SEARCH_REFRESH] current_query: '{current_query}', username: '{username}'"
@@ -200,32 +195,18 @@ def search_interface(
             else:
                 logger.warning(f"No all_chats_data provided for user {username}")
 
-            # Re-run the search with the current query
-            # The search function will use the internal cache which should be up-to-date
-            # since _update_chat_history calls _save_chat_metadata_cache
+            # Re-run the search with the current query and username
             found_results, status_message = search_chat_history(
                 current_query.strip(), username
             )
-
             if not found_results:
-                logger.info(f"No search results found for '{current_query}'")
-                return f"**No results found for '{current_query}'**\n\n{status_message}"
-
-            # Use shared utility function for consistent formatting
+                return f"**No results found for '{current_query}'**\n\n{status_message}. Try increasing the length of the query."
             result_text = format_search_results(
                 found_results, current_query, include_similarity=True
             )
-
-            logger.info(
-                f"Search refreshed for '{current_query}': {len(found_results)} results found"
-            )
-            return result_text
-
+            return format_markdown(result_text)
         except Exception as e:
-            logger.error(f"Error refreshing search: {e}")
-            import traceback
-
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.error(f"Error refreshing search results: {e}")
             return f"**Error occurred during search refresh:** {str(e)}"
 
     def _clear_search_results() -> str:

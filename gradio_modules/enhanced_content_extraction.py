@@ -2,7 +2,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional  # noqa: F401
 import logging
 import shutil
 import concurrent.futures
@@ -53,13 +53,21 @@ except ImportError:
 # Set up logging
 logger = logging.getLogger(__name__)
 
-# CHUNK_CHAR_THRESHOLD now actively limits text file reads to the first 40000 characters.
-CHUNK_CHAR_THRESHOLD = 40000  # characters
-CLASSIFICATION_WORD_LIMIT = 50  # New constant for classification input word limit
+# CHUNK_CHAR_THRESHOLD now actively limits text file reads to the first 20000 characters.
+CHUNK_CHAR_THRESHOLD = 20000  # characters
+CLASSIFICATION_WORD_LIMIT = 10  # New constant for classification input word limit
 MAX_WORKERS = 8
 
 
 def find_tool(tool_name: str) -> Optional[str]:
+    """
+    Find the path to a tool executable.
+
+    :param tool_name: Name of the tool to find.
+    :type tool_name: str
+    :return: Path to the tool executable or None if not found.
+    :rtype: Optional[str]
+    """
     if os.getenv("IN_DOCKER", "false").lower() in ("1", "true"):
         path = shutil.which(tool_name)
         if path:
@@ -75,7 +83,16 @@ def find_tool(tool_name: str) -> Optional[str]:
 
 
 def apply_text_processing(content: str, file_ext: str) -> str:
-    """Applies text cleaning and filler word filtering to extracted content."""
+    """
+    Applies text cleaning and filler word filtering to extracted content.
+
+    :param content: The text content to process.
+    :type content: str
+    :param file_ext: File extension for logging purposes.
+    :type file_ext: str
+    :return: Processed text content with cleaning and filtering applied.
+    :rtype: str
+    """
     # This function should apply to any text content that has been extracted,
     # regardless of whether the original file was text-based or binary.
 
@@ -92,7 +109,14 @@ def apply_text_processing(content: str, file_ext: str) -> str:
 
 
 def split_markdown_chunks(md_path: str) -> list:
-    """Splits markdown file into chunks based on headers."""
+    """
+    Splits markdown file into chunks based on headers.
+
+    :param md_path: Path to the markdown file.
+    :type md_path: str
+    :return: List of markdown chunks.
+    :rtype: list
+    """
     with open(md_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
     chunks = []
@@ -109,11 +133,20 @@ def split_markdown_chunks(md_path: str) -> list:
 
 
 def parallel_pandoc_chunks(md_path: str, input_format: str) -> str:
-    """Processes markdown chunks in parallel using Pandoc."""
+    """
+    Processes markdown chunks in parallel using Pandoc.
+
+    :param md_path: Path to the markdown file.
+    :type md_path: str
+    :param input_format: Input format for Pandoc.
+    :type input_format: str
+    :return: Processed text content.
+    :rtype: str
+    """
     chunks = split_markdown_chunks(md_path)
     results = [None] * len(chunks)
 
-    def process_chunk(idx_chunk):
+    def process_chunk(idx_chunk) -> tuple[int, str]:
         idx, chunk = idx_chunk
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=".md", mode="w", encoding="utf-8"
@@ -147,11 +180,18 @@ def parallel_pandoc_chunks(md_path: str, input_format: str) -> str:
 
 
 def parallel_plaintext_chunks(md_path: str) -> str:
-    """Processes markdown chunks in parallel as plain text."""
+    """
+    Processes markdown chunks in parallel as plain text.
+
+    :param md_path: Path to the markdown file.
+    :type md_path: str
+    :return: Processed text content.
+    :rtype: str
+    """
     chunks = split_markdown_chunks(md_path)
     results = [None] * len(chunks)
 
-    def process_chunk(idx_chunk):
+    def process_chunk(idx_chunk) -> tuple[int, str]:
         idx, chunk = idx_chunk
         return (idx, chunk.strip())
 
@@ -164,7 +204,16 @@ def parallel_plaintext_chunks(md_path: str) -> str:
 def extract_with_pandoc(
     file_path: str, pre_stripped_temp: Optional[str] = None
 ) -> Optional[str]:
-    """Extracts content using Pandoc for various document types."""
+    """
+    Extracts content using Pandoc for various document types.
+
+    :param file_path: Path to the file to extract content from.
+    :type file_path: str
+    :param pre_stripped_temp: Optional pre-stripped temporary file path.
+    :type pre_stripped_temp: Optional[str]
+    :return: Extracted text content or None if extraction fails.
+    :rtype: Optional[str]
+    """
     try:
         pandoc_path = find_tool("pandoc")
         if not pandoc_path:
@@ -308,9 +357,8 @@ def extract_pdf_content(file_path: str) -> Optional[str]:
                     logger.info(
                         f"Successfully extracted PDF content using fallback method from {file_path}"
                     )
-                    return apply_text_processing(
-                        content, Path(file_path).suffix.lower()
-                    )
+                    # DO NOT apply apply_text_processing for PDFs!
+                    return content  # Just return the raw extracted content
         except Exception as e:
             logger.warning(f"Fallback PDF extraction failed for {file_path}: {e}")
     except Exception as e:
@@ -334,7 +382,7 @@ def extract_text_file_content(
         content_chars = []
         char_count = 0
         with open(file_path, "r", encoding="utf-8") as f:
-            while char_count < CHUNK_CHAR_THRESHOLD:  # Loop until 40000 chars or EOF
+            while char_count < CHUNK_CHAR_THRESHOLD:  # Loop until 20000 chars or EOF
                 next_line = f.readline()
                 if not next_line:
                     break  # End of file
@@ -421,7 +469,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
             )  # Placeholder for Excel
 
         # Handle Markdown and direct text files: Prioritize extract_text_file_content
-        # as it aligns with the user's explicit request for 40000 char limit for these.
+        # as it aligns with the user's explicit request for 20000 char limit for these.
         if file_ext in {".txt", ".csv", ".log", ".md", ".markdown"}:
             # Add at the beginning of the list to prioritize, then fallback to pandoc if applicable
             extraction_methods.insert(0, ("text_file", extract_text_file_content))
@@ -431,7 +479,7 @@ def enhanced_extract_file_content(file_path: str) -> Dict[str, Any]:
                 extraction_methods.insert(1, ("pandoc", extract_with_pandoc))
 
         # General fallback: Try to read any file as a plain text file if no other method worked
-        # This will also respect the 40000 character limit due to extract_text_file_content's current logic.
+        # This will also respect the 20000 character limit due to extract_text_file_content's current logic.
         extraction_methods.append(("generic_text_fallback", extract_text_file_content))
 
         for method_name, method_func in extraction_methods:

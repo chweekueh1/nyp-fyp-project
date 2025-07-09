@@ -9,7 +9,9 @@ This package contains utility modules for:
 # Import functions from the main infra_utils.py file to maintain compatibility
 import sys
 import os
+import logging
 from pathlib import Path
+from typing import Callable
 
 # Add the parent directory to the path to import from infra_utils.py
 parent_dir = Path(__file__).parent.parent
@@ -57,46 +59,115 @@ except Exception:
     # If we can't import from the main file, define minimal stubs
     import os
 
-    def rel2abspath(path):
+    def rel2abspath(path: str) -> str:
+        """
+        Convert a relative path to an absolute path.
+
+        :param path: The path to convert.
+        :type path: str
+        :return: The absolute path.
+        :rtype: str
+        """
         return os.path.abspath(path)
 
-    def create_folders(path):
+    def create_folders(path: str) -> None:
+        """
+        Create directories recursively if they do not exist.
+
+        :param path: The directory path to create.
+        :type path: str
+        """
         os.makedirs(path, exist_ok=True)
 
-    def ensure_chatbot_dir_exists():
+    def ensure_chatbot_dir_exists() -> str:
+        """
+        Ensure the chatbot directory exists and create it if not.
+
+        :return: The chatbot directory path.
+        :rtype: str
+        """
         chatbot_dir = get_chatbot_dir()
         create_folders(chatbot_dir)
         return chatbot_dir
 
-    def get_chatbot_dir():
+    def get_chatbot_dir() -> str:
+        """
+        Get the chatbot directory path (~/.nypai-chatbot).
+
+        :return: The chatbot directory path.
+        :rtype: str
+        """
         return os.path.expanduser("~/.nypai-chatbot")
 
-    def setup_logging():
-        import logging
+    def setup_logging() -> logging.Logger:
+        """
+        Set up and return a logger instance.
 
+        :return: Logger instance.
+        :rtype: logging.Logger
+        """
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         return logger
 
-    def clear_chat_history(chat_id: str, username: str):
-        """Stub function for clearing chat history."""
+    def clear_chat_history(chat_id: str, username: str) -> tuple[bool, dict]:
+        """
+        Stub function for clearing chat history.
+
+        :param chat_id: The chat ID.
+        :type chat_id: str
+        :param username: The username.
+        :type username: str
+        :return: Tuple of (success, all_chats).
+        :rtype: tuple[bool, dict]
+        """
         return False, {}
 
-    def clear_all_chat_history():
-        """Stub function for clearing all chat history."""
+    def clear_all_chat_history() -> None:
+        """
+        Stub function for clearing all chat history.
+        """
         pass
 
-    def clear_uploaded_files():
+    def clear_uploaded_files() -> None:
+        """
+        Stub function for clearing uploaded files.
+        """
         pass
 
-    def cleanup_test_environment(test_dir=None, original_get_chatbot_dir=None):
-        """Stub function for cleaning up test environment."""
+    def cleanup_test_environment(
+        test_dir: str | None = None, original_get_chatbot_dir: Callable | None = None
+    ) -> None:
+        """
+        Stub function for cleaning up test environment.
+
+        :param test_dir: Optional test directory to remove.
+        :type test_dir: str | None
+        :param original_get_chatbot_dir: Optional original function to restore.
+        :type original_get_chatbot_dir: Callable | None
+        """
         pass
 
-    def get_docker_venv_path(mode="prod"):
+    def get_docker_venv_path(mode: str = "prod") -> str:
+        """
+        Get the Docker venv path for the given mode.
+
+        :param mode: The mode (e.g., 'prod').
+        :type mode: str
+        :return: The venv path.
+        :rtype: str
+        """
         return f"/home/appuser/.nypai-chatbot/venv-{mode}"
 
-    def get_docker_venv_python(mode="prod"):
+    def get_docker_venv_python(mode: str = "prod") -> str:
+        """
+        Get the Docker venv python path for the given mode.
+
+        :param mode: The mode (e.g., 'prod').
+        :type mode: str
+        :return: The python path.
+        :rtype: str
+        """
         return f"/home/appuser/.nypai-chatbot/venv-{mode}/bin/python"
 
     __all__ = [

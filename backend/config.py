@@ -5,7 +5,7 @@ Contains all environment variables, paths, and configuration constants.
 """
 
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: F401
 from infra_utils import get_chatbot_dir
 
 # Load environment variables

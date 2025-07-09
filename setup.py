@@ -6,11 +6,34 @@ import sys
 import subprocess
 import shutil
 import time
-from typing import Optional
+import signal
+from typing import Optional, Any
+
+# Global variable to track if shutdown is requested
+shutdown_requested = False
+
+
+def signal_handler(signum: int, frame: Any) -> None:
+    """
+    Handle shutdown signals gracefully.
+
+    :param signum: Signal number received.
+    :type signum: int
+    :param frame: Current stack frame.
+    :type frame: Any
+    """
+    global shutdown_requested
+    print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+    shutdown_requested = True
+    sys.exit(0)
+
+
+# Register signal handlers for graceful shutdown
+signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scripts"))
 from fix_permissions import fix_nypai_chatbot_permissions
-from main import main
 
 # Remove any existing venv in the Docker venv location before building
 if os.name == "nt":
@@ -243,9 +266,13 @@ def get_dockerfile_venv_path(dockerfile_path):
 
 
 def docker_build():
-    """
-    Build the development Docker image 'nyp-fyp-chatbot-dev' with optimized CPU utilization.
-    """
+    # Build the development Docker image 'nyp-fyp-chatbot-dev' with optimized CPU utilization.
+    global shutdown_requested
+
+    # Check for shutdown request
+    if shutdown_requested:
+        print("🛑 Shutdown requested, skipping Docker build...")
+        return
     ensure_docker_running()  # Ensures Docker daemon is running before attempting to build
 
     # Determine venv_path for debug print based on build type
@@ -363,9 +390,13 @@ def docker_build():
 
 
 def docker_build_test():
-    """
-    Build the test Docker image 'nyp-fyp-chatbot-test' with optimized CPU utilization.
-    """
+    # Build the test Docker image 'nyp-fyp-chatbot-test' with optimized CPU utilization.
+    global shutdown_requested
+
+    # Check for shutdown request
+    if shutdown_requested:
+        print("🛑 Shutdown requested, skipping Docker test build...")
+        return
     ensure_docker_running()
 
     print(
@@ -641,6 +672,56 @@ def docker_build_all():
         sys.exit(1)
 
 
+def docker_build_docs():
+    """Build Docker image for Sphinx documentation generation."""
+    print("🔍 Building Docker image for Sphinx documentation...")
+    try:
+        # Check if Dockerfile.docs exists
+        dockerfile_path = "Dockerfile.docs"
+        if not os.path.exists(dockerfile_path):
+            print(f"❌ Dockerfile.docs not found at {dockerfile_path}")
+            logger.error(f"Dockerfile.docs not found at {dockerfile_path}")
+            sys.exit(1)
+
+        # Build the documentation image
+        image_name = "nyp-fyp-chatbot:docs"
+        build_command = [
+            "docker",
+            "build",
+            "-f",
+            dockerfile_path,
+            "-t",
+            image_name,
+            "--build-arg",
+            f"PARALLEL_JOBS={os.cpu_count() or 4}",
+            ".",
+        ]
+
+        print(f"🏗️ Building {image_name}...")
+        logger.info(f"Building Docker image: {' '.join(build_command)}")
+
+        result = subprocess.run(
+            build_command, check=True, capture_output=False, text=True
+        )
+
+        if result.returncode == 0:
+            print(f"✅ Docker image {image_name} built successfully!")
+            logger.info(f"Docker image {image_name} built successfully")
+        else:
+            print(f"❌ Failed to build Docker image {image_name}")
+            logger.error(f"Failed to build Docker image {image_name}")
+            sys.exit(1)
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker build failed: {e}")
+        logger.error(f"Docker build failed: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error building documentation Docker image: {e}")
+        logger.error(f"Error building documentation Docker image: {e}", exc_info=True)
+        raise
+
+
 def ensure_docker_image():
     """Check if the Docker image exists, build if not."""
     try:
@@ -873,39 +954,189 @@ def list_available_tests():
 
 
 def docker_shell():
-    check_env_file(ENV_FILE_PATH)
-    ensure_docker_image()
-    print("🐳 Opening a shell in the development Docker container...")
-    logger.info("Opening a shell in development Docker container.")
-    chatbot_dir = os.path.expanduser("~/.nypai-chatbot")
-    docker_volume_path = get_docker_volume_path(chatbot_dir)
-    cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "-it",
-        "--env-file",
-        ENV_FILE_PATH,
-        "-v",
-        f"{docker_volume_path}:/home/appuser/.nypai-chatbot",
-        "nyp-fyp-chatbot-dev",
-        "/bin/bash",
-    ]
+    """Open a shell in the Docker container."""
+    print("🔍 Opening shell in Docker container...")
     try:
-        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
-        logger.info("Development Docker shell session exited.")
+        # Check if Docker is running
+        ensure_docker_running()
+
+        # Check if the image exists
+        image_name = "nyp-fyp-chatbot:dev"
+        try:
+            subprocess.run(
+                ["docker", "image", "inspect", image_name],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            print(f"❌ Docker image {image_name} not found. Building it first...")
+            docker_build_test()
+
+        # Run the container with shell
+        container_name = "nyp-fyp-chatbot-shell"
+
+        # Stop and remove existing container if it exists
+        try:
+            subprocess.run(
+                ["docker", "stop", container_name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["docker", "rm", container_name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
+        # Start new container with shell
+        run_command = [
+            "docker",
+            "run",
+            "-it",
+            "--name",
+            container_name,
+            "-v",
+            f"{os.getcwd()}:/app",
+            "-p",
+            "7680:7680",
+            "-p",
+            "7860:7860",
+            image_name,
+            "/bin/sh",
+        ]
+
+        print(f"🐳 Starting shell in {image_name}...")
+        logger.info(f"Starting Docker shell: {' '.join(run_command)}")
+
+        subprocess.run(run_command, check=True)
+
     except subprocess.CalledProcessError as e:
-        print(f"❌ Development Docker shell session exited with an error: {e}")
-        logger.error(
-            f"Development Docker shell session exited with an error: {e}", exc_info=True
-        )
+        print(f"❌ Docker shell failed: {e}")
+        logger.error(f"Docker shell failed: {e}", exc_info=True)
         sys.exit(1)
     except Exception as e:
-        print(f"❌ An unexpected error occurred during development Docker shell: {e}")
-        logger.error(
-            f"Unexpected error during development Docker shell: {e}", exc_info=True
+        print(f"❌ Error opening Docker shell: {e}")
+        logger.error(f"Error opening Docker shell: {e}", exc_info=True)
+        raise
+
+
+def docker_generate_docs_in_container():
+    """Run Sphinx documentation build in a temporary container, outputting debug info."""
+    print("\n🔧 [docs] Generating documentation in a temporary container...")
+    image_name = "nyp-fyp-chatbot:docs"
+    container_name = "nyp-fyp-chatbot-docs-build"
+    try:
+        # Remove any previous build container
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
+        # Run the docs build
+        run_cmd = [
+            "docker",
+            "run",
+            "--name",
+            container_name,
+            image_name,
+            "/home/appuser/.nypai-chatbot/venv-docs/bin/python",
+            "/app/generate_docs.py",
+        ]
+        print(f"🐳 [docs] Running: {' '.join(run_cmd)}")
+        result = subprocess.run(run_cmd)
+        if result.returncode == 0:
+            print("✅ [docs] Documentation generated successfully in container.")
+        else:
+            print("❌ [docs] Documentation generation failed in container.")
+            sys.exit(1)
+        # Copy the built docs out (optional, not needed for serving in container)
+        # subprocess.run(["docker", "cp", f"{container_name}:/app/docs/_build/html", "./docs/_build/html"])
+    finally:
+        # Clean up the build container
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def docker_docs():
+    """Run Sphinx documentation server in Docker with real-time progress display."""
+    print("\n🚀 [docs] Starting Sphinx documentation server in Docker...")
+    print("📊 [docs] Showing real-time build progress (this may take a few minutes)...")
+    print("")
+
+    try:
+        ensure_docker_running()
+        image_name = "nyp-fyp-chatbot:docs"
+        container_name = "nyp-fyp-chatbot-docs"
+
+        # Stop and remove existing container if it exists
+        subprocess.run(
+            ["docker", "stop", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["docker", "rm", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Start new container and show real-time logs
+        run_command = [
+            "docker",
+            "run",
+            "--name",
+            container_name,
+            "-p",
+            "8080:8080",
+            image_name,
+        ]
+
+        print(f"🐳 [docs] Starting container: {' '.join(run_command)}")
+        print("")
+        print("=" * 80)
+        print("📋 [docs] REAL-TIME BUILD PROGRESS:")
+        print("=" * 80)
+
+        # Run the container and show logs in real-time
+        process = subprocess.Popen(
+            run_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        # Show logs in real-time
+        for line in process.stdout:
+            print(line.rstrip())
+
+        # Wait for the process to complete
+        process.wait()
+
+        if process.returncode == 0:
+            print("")
+            print("=" * 80)
+            print("✅ [docs] Documentation server is now running!")
+            print("📖 [docs] Documentation available at: http://localhost:8080")
+            print("🛑 [docs] To stop the server, run: docker stop nyp-fyp-chatbot-docs")
+            print("=" * 80)
+        else:
+            print(f"❌ [docs] Container failed with exit code: {process.returncode}")
+            sys.exit(1)
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ [docs] Docker docs server failed: {e}")
         sys.exit(1)
+    except Exception as e:
+        print(f"❌ [docs] Error starting Docker docs server: {e}")
+        raise
 
 
 def docker_export():
@@ -930,6 +1161,120 @@ def docker_export():
     except Exception as e:
         print(f"❌ An unexpected error occurred during Docker export: {e}")
         logger.error(f"Unexpected error during Docker export: {e}", exc_info=True)
+        sys.exit(1)
+
+
+def docker_wipe():
+    """Remove all Docker containers, images, and volumes related to this project."""
+    ensure_docker_running()
+    print("🧹 Wiping all Docker containers, images, and volumes...")
+    logger.info("Starting Docker wipe operation.")
+
+    # List of project-related images to remove
+    project_images = [
+        "nyp-fyp-chatbot-dev",
+        "nyp-fyp-chatbot-test",
+        "nyp-fyp-chatbot-prod",
+        "nyp-fyp-chatbot:docs",
+    ]
+
+    # List of project-related containers to remove
+    project_containers = [
+        "nyp-fyp-chatbot-dev",
+        "nyp-fyp-chatbot-test",
+        "nyp-fyp-chatbot-prod",
+        "nyp-fyp-chatbot-docs",
+    ]
+
+    try:
+        # Stop and remove containers
+        print("🛑 Stopping and removing containers...")
+        for container in project_containers:
+            try:
+                # Stop container if running
+                subprocess.run(
+                    ["docker", "stop", container],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                # Remove container
+                subprocess.run(
+                    ["docker", "rm", container],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                print(f"✅ Removed container: {container}")
+            except Exception:
+                pass  # Container might not exist
+
+        # Remove images
+        print("🗑️ Removing images...")
+        for image in project_images:
+            try:
+                subprocess.run(
+                    ["docker", "rmi", "-f", image],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                print(f"✅ Removed image: {image}")
+            except Exception:
+                pass  # Image might not exist
+
+        # Remove dangling images and build cache
+        print("🧽 Cleaning up dangling images and build cache...")
+        try:
+            subprocess.run(
+                ["docker", "image", "prune", "-f"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["docker", "builder", "prune", "-f"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("✅ Cleaned up dangling images and build cache")
+        except Exception:
+            pass
+
+        # Remove volumes (optional - more aggressive cleanup)
+        print("💾 Removing project volumes...")
+        try:
+            # List and remove volumes that might be related to the project
+            result = subprocess.run(
+                ["docker", "volume", "ls", "-q"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            volumes = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+            for volume in volumes:
+                if volume and ("nyp" in volume.lower() or "chatbot" in volume.lower()):
+                    try:
+                        subprocess.run(
+                            ["docker", "volume", "rm", volume],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        print(f"✅ Removed volume: {volume}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        print("✅ Docker wipe completed successfully!")
+        logger.info("Docker wipe completed successfully")
+
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Docker wipe: {e}")
+        logger.error(f"Unexpected error during Docker wipe: {e}", exc_info=True)
         sys.exit(1)
 
 
@@ -1061,28 +1406,135 @@ repos:
         sys.exit(1)
 
 
-def update_test_shebangs():
-    """
-    Update all test files to use a dynamic shell shebang that uses VENV_PATH.
-    """
-    import glob
-    import re
+def update_shebangs():
+    """Update shebang lines in Python files."""
+    print("🔍 Updating shebang lines in Python files...")
+    try:
+        _add_shebang_to_python_files(".")
+        print("✅ Shebang update completed.")
+    except Exception as e:
+        print(f"❌ Error updating shebangs: {e}")
+        logger.error(f"Error updating shebangs: {e}", exc_info=True)
 
-    test_files = glob.glob("tests/**/*.py", recursive=True)
-    dynamic_shebang = "#!/bin/sh\n'''exec' \"${VENV_PATH:-/home/appuser/.nypai-chatbot/venv-test}/bin/python\" \"$0\" \"$@\"\n' '''\n"
-    for file_path in test_files:
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        # Always print the shebang line, even if not a python shebang
-        if lines:
-            print(f"[setup.py] {file_path} shebang: {lines[0].strip()}")
-        # Replace only if the first line is a python shebang
-        if lines and re.match(r"^#!.*python", lines[0]):
-            if lines[0] != dynamic_shebang:
-                print(f"[setup.py] Updating shebang in {file_path}")
-                lines[0] = dynamic_shebang
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.writelines(lines)
+
+def update_test_shebangs():
+    # Update shebang lines in test files.
+    print("🔍 Updating shebang lines in test files...")
+    try:
+        _add_shebang_to_python_files("tests")
+        print("✅ Test shebang update completed.")
+    except Exception as e:
+        print(f"❌ Error updating test shebangs: {e}")
+        logger.error(f"Error updating test shebangs: {e}", exc_info=True)
+
+
+def show_help():
+    # Display help information for setup.py commands.
+    print("Usage: python setup.py <command>")
+    print("")
+    print("Available commands:")
+    print("  --build              Build Docker image")
+    print("  --build-test         Build test Docker image")
+    print("  --build-prod         Build production Docker image")
+    print("  --build-all          Build all Docker images")
+    print("  --test               Run tests in Docker")
+    print("  --test-suite <suite> Run specific test suite")
+    print("  --test-file <file>   Run specific test file")
+    print("  --list-tests         List available tests")
+    print("  --shell              Open shell in Docker container")
+    print("  --export             Export Docker image")
+    print("  --docker-wipe        Remove all Docker containers, images, and volumes")
+    print("  --pre-commit         Setup pre-commit hooks")
+    print("  --update-shebangs    Update shebang lines in Python files")
+    print("  --update-test-shebangs Update shebang lines in test files")
+    print(
+        "  --docs               Build and run Sphinx documentation server (single container)"
+    )
+    print("  --build-docs         Build documentation Docker image only")
+    print(
+        "  --run-docs           Run Sphinx documentation server in Docker (requires --build-docs first)"
+    )
+    print("  --help               Show this help message")
+    print("")
+    print("Examples:")
+    print("  python setup.py --build")
+    print("  python setup.py --test")
+    print("  python setup.py --docs")
+    print("  python setup.py --help")
+
+
+def main():
+    # Main function to handle command line arguments.
+    global shutdown_requested
+
+    # Show help if no arguments provided
+    if len(sys.argv) < 2:
+        show_help()
+        sys.exit(0)
+
+    # Check for shutdown request
+    if shutdown_requested:
+        print("🛑 Shutdown requested, exiting gracefully...")
+        sys.exit(0)
+
+    command = sys.argv[1]
+
+    # Show help for help commands
+    if command == "--help" or command == "help" or command == "-h":
+        show_help()
+        sys.exit(0)
+    elif command == "--build":
+        docker_build()
+    elif command == "--build-test":
+        docker_build_test()
+    elif command == "--build-prod":
+        docker_build_prod()
+    elif command == "--build-all":
+        docker_build_all()
+    elif command == "--test":
+        test_target = sys.argv[2] if len(sys.argv) > 2 else None
+        docker_test(test_target)
+    elif command == "--test-suite":
+        if len(sys.argv) < 3:
+            print("Usage: python setup.py --test-suite <suite_name>")
+            sys.exit(1)
+        suite_name = sys.argv[2]
+        docker_test_suite(suite_name)
+    elif command == "--test-file":
+        if len(sys.argv) < 3:
+            print("Usage: python setup.py --test-file <test_file>")
+            sys.exit(1)
+        test_file = sys.argv[2]
+        docker_test_file(test_file)
+    elif command == "--list-tests":
+        list_available_tests()
+    elif command == "--shell":
+        docker_shell()
+    elif command == "--export":
+        docker_export()
+    elif command == "--docker-wipe":
+        docker_wipe()
+    elif command == "--pre-commit":
+        setup_pre_commit()
+    elif command == "--update-shebangs":
+        update_shebangs()
+    elif command == "--update-test-shebangs":
+        update_test_shebangs()
+    elif command == "--docs":
+        print(
+            "\n=== [docs] Building and running Sphinx documentation server (single container) ==="
+        )
+        docker_build_docs()
+        docker_docs()
+    elif command == "--build-docs":
+        docker_build_docs()
+    elif command == "--run-docs":
+        docker_docs()
+    else:
+        print(f"❌ Unknown command: {command}")
+        print("")
+        show_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

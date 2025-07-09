@@ -17,17 +17,16 @@ from backend import change_password
 def change_password_interface(
     username_state: gr.State, logged_in_state: gr.State, rate_limit_seconds: int = 60
 ) -> Tuple[gr.Button, gr.Column, gr.State]:
-    """Create change password interface with popup and password toggles.
-
-    :param username_state: Gradio state containing the current username
-    :type username_state: gr.State
-    :param logged_in_state: Gradio state containing the login status
-    :type logged_in_state: gr.State
-    :param rate_limit_seconds: Number of seconds to rate limit password changes, defaults to 60
-    :type rate_limit_seconds: int
-    :return: Tuple containing change password button, popup column, and last change time state
-    :rtype: Tuple[gr.Button, gr.Column, gr.State]
-    """
+    # Create change password interface with popup and password toggles.
+    #
+    # :param username_state: Gradio state containing the current username
+    # :type username_state: gr.State
+    # :param logged_in_state: Gradio state containing the login status
+    # :type logged_in_state: gr.State
+    # :param rate_limit_seconds: Number of seconds to rate limit password changes, defaults to 60
+    # :type rate_limit_seconds: int
+    # :return: Tuple containing change password button, popup column, and last change time state
+    # :rtype: Tuple[gr.Button, gr.Column, gr.State]
     # Button to show the change password popup (only visible when logged in)
     change_password_btn = gr.Button(
         "🔐 Change Password",
@@ -121,39 +120,36 @@ def change_password_interface(
     confirm_password_visible = gr.State(False)
 
     def toggle_old_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        """Toggle the visibility of the old password field.
-
-        :param visible: Current visibility state
-        :type visible: bool
-        :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        :rtype: Tuple[gr.update, str, bool]
-        """
+        # Toggle the visibility of the old password field.
+        #
+        # :param visible: Current visibility state
+        # :type visible: bool
+        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
+        # :rtype: Tuple[gr.update, str, bool]
         if visible:
             return gr.update(type="password"), "👁️", False
         else:
             return gr.update(type="text"), "🙈", True
 
     def toggle_new_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        """Toggle the visibility of the new password field.
-
-        :param visible: Current visibility state
-        :type visible: bool
-        :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        :rtype: Tuple[gr.update, str, bool]
-        """
+        # Toggle the visibility of the new password field.
+        #
+        # :param visible: Current visibility state
+        # :type visible: bool
+        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
+        # :rtype: Tuple[gr.update, str, bool]
         if visible:
             return gr.update(type="password"), "👁️", False
         else:
             return gr.update(type="text"), "🙈", True
 
     def toggle_confirm_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        """Toggle the visibility of the confirm password field.
-
-        :param visible: Current visibility state
-        :type visible: bool
-        :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        :rtype: Tuple[gr.update, str, bool]
-        """
+        # Toggle the visibility of the confirm password field.
+        #
+        # :param visible: Current visibility state
+        # :type visible: bool
+        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
+        # :rtype: Tuple[gr.update, str, bool]
         if visible:
             return gr.update(type="password"), "👁️", False
         else:
@@ -183,21 +179,19 @@ def change_password_interface(
     )
 
     def close_popup() -> gr.update:
-        """Close the change password popup.
-
-        :return: gr.update to hide the popup
-        :rtype: gr.update
-        """
+        # Close the change password popup.
+        #
+        # :return: gr.update to hide the popup
+        # :rtype: gr.update
         return gr.update(visible=False)
 
     cancel_btn.click(fn=close_popup, outputs=[change_password_popup])
 
     def show_change_password_popup() -> gr.update:
-        """Show the change password popup.
-
-        :return: gr.update to show the popup
-        :rtype: gr.update
-        """
+        # Show the change password popup.
+        #
+        # :return: gr.update to show the popup
+        # :rtype: gr.update
         return gr.update(visible=True)
 
     change_password_btn.click(
@@ -205,11 +199,10 @@ def change_password_interface(
     )
 
     def show_loading() -> gr.update:
-        """Show loading indicator.
-
-        :return: Loading indicator update
-        :rtype: gr.update
-        """
+        # Show loading indicator.
+        #
+        # :return: Loading indicator update
+        # :rtype: gr.update
         return gr.update(
             visible=True,
             value="""
@@ -227,11 +220,10 @@ def change_password_interface(
         )
 
     def hide_loading() -> gr.update:
-        """Hide loading indicator.
-
-        :return: Loading indicator update
-        :rtype: gr.update
-        """
+        # Hide loading indicator.
+        #
+        # :return: Loading indicator update
+        # :rtype: gr.update
         return gr.update(visible=False, value="")
 
     async def handle_change_password(
@@ -241,21 +233,20 @@ def change_password_interface(
         confirm_new_password: str,
         last_time: float,
     ) -> Tuple[gr.update, float, gr.update, bool, str, gr.update]:
-        """Handle the password change logic and UI updates.
-
-        :param username: The username of the user changing password
-        :type username: str
-        :param old_password: The user's current password
-        :type old_password: str
-        :param new_password: The new password to set
-        :type new_password: str
-        :param confirm_new_password: Confirmation of the new password
-        :type confirm_new_password: str
-        :param last_time: The last time the password was changed (timestamp)
-        :type last_time: float
-        :return: Tuple containing message update, new timestamp, popup update, logout flag (True=keep logged in, False=logout), username, and loading update
-        :rtype: Tuple[gr.update, float, gr.update, bool, str, gr.update]
-        """
+        # Handle the password change logic and UI updates.
+        #
+        # :param username: The username of the user changing password
+        # :type username: str
+        # :param old_password: The user's current password
+        # :type old_password: str
+        # :param new_password: The new password to set
+        # :type new_password: str
+        # :param confirm_new_password: Confirmation of the new password
+        # :type confirm_new_password: str
+        # :param last_time: The last time the password was changed (timestamp)
+        # :type last_time: float
+        # :return: Tuple containing message update, new timestamp, popup update, logout flag (True=keep logged in, False=logout), username, and loading update
+        # :rtype: Tuple[gr.update, float, gr.update, bool, str, gr.update]
 
         now = time.time()
         if now - last_time < rate_limit_seconds:

@@ -8,7 +8,7 @@ import os
 import html
 import re
 import json
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union  # noqa: F401
 from infra_utils import setup_logging, ensure_chatbot_dir_exists
 from .config import CHAT_DATA_PATH, CHAT_SESSIONS_PATH, USER_DB_PATH
 from .timezone_utils import get_utc_timestamp
@@ -18,7 +18,14 @@ logger = setup_logging()
 
 
 def sanitize_input(input_text: str) -> str:
-    """Sanitize user input to prevent XSS and other attacks."""
+    """
+    Sanitize user input to prevent XSS and other attacks.
+
+    :param input_text: The input text to sanitize.
+    :type input_text: str
+    :return: Sanitized input text with HTML tags removed and entities escaped.
+    :rtype: str
+    """
     if not input_text:
         return ""
 
@@ -46,8 +53,13 @@ def sanitize_input(input_text: str) -> str:
     return cleaned
 
 
-async def _ensure_db_and_folders_async():
-    """Ensure all necessary directories and files exist."""
+async def _ensure_db_and_folders_async() -> None:
+    """
+    Ensure all necessary directories and files exist.
+
+    Raises:
+        Exception: If directory or file creation fails.
+    """
     try:
         # Ensure chatbot directory exists
         ensure_chatbot_dir_exists()
@@ -74,8 +86,18 @@ async def _ensure_db_and_folders_async():
         raise
 
 
-async def ensure_user_folder_file_exists_async(username, chat_id):
-    """Ensure user folder and chat file exist."""
+async def ensure_user_folder_file_exists_async(username: str, chat_id: str) -> str:
+    """
+    Ensure user folder and chat file exist.
+
+    :param username: Username for the folder.
+    :type username: str
+    :param chat_id: Chat ID for the file.
+    :type chat_id: str
+    :return: Path to the chat file.
+    :rtype: str
+    :raises Exception: If folder or file creation fails.
+    """
     try:
         user_folder = os.path.join(CHAT_DATA_PATH, username)
         os.makedirs(user_folder, exist_ok=True)
@@ -91,8 +113,20 @@ async def ensure_user_folder_file_exists_async(username, chat_id):
         raise
 
 
-async def save_message_async(username, chat_id, message):
-    """Save a message to the user's chat file."""
+async def save_message_async(
+    username: str, chat_id: str, message: Dict[str, Any]
+) -> None:
+    """
+    Save a message to the user's chat file.
+
+    :param username: Username for the message.
+    :type username: str
+    :param chat_id: Chat ID for the message.
+    :type chat_id: str
+    :param message: Message data to save.
+    :type message: Dict[str, Any]
+    :raises Exception: If message saving fails.
+    """
     try:
         chat_file = await ensure_user_folder_file_exists_async(username, chat_id)
 
@@ -118,7 +152,12 @@ async def save_message_async(username, chat_id, message):
 
 
 async def check_health() -> dict[str, str]:
-    """Check the health of the backend system."""
+    """
+    Check the health of the backend system.
+
+    :return: Dictionary containing health status and message.
+    :rtype: dict[str, str]
+    """
     try:
         # Check if essential directories exist
         dirs_to_check = [

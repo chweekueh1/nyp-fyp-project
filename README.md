@@ -130,6 +130,7 @@ The project uses separate Docker containers for different purposes. For detailed
 python setup.py --docker-build        # Development
 python setup.py --docker-build-test   # Testing
 python setup.py --docker-build-prod   # Production
+python setup.py --docs                # Documentation
 
 # Run application
 python setup.py --docker-run
@@ -396,6 +397,154 @@ If you prefer to use Docker commands directly:
 
 ---
 
+## 📚 Documentation Generation
+
+The project includes comprehensive Sphinx documentation generation that automatically documents all Python modules, functions, and classes. The documentation is built using Docker and served via HTTP.
+
+### **Quick Start - Generate Documentation**
+
+```bash
+# Generate and serve documentation
+python setup.py --docs
+```
+
+This will:
+
+1. Build a Docker container with all documentation dependencies
+2. Generate comprehensive API documentation for all modules
+3. Start an HTTP server on port 8080
+4. Make documentation available at <http://localhost:8080>
+
+### **Documentation Features**
+
+✅ **Complete API Coverage**: Documents all Python modules, functions, and classes
+✅ **Automatic Module Discovery**: Recursively finds and documents all code files
+✅ **Cross-Reference Support**: Links between related functions and modules
+✅ **Search Functionality**: Full-text search across all documentation
+✅ **Modern Theme**: Uses Piccolo theme for clean, responsive design
+✅ **Docker-Based**: Consistent build environment across platforms
+
+### **What Gets Documented**
+
+The documentation generator covers:
+
+* **Backend Modules**: All backend functionality (`backend/`, `auth.py`, `chat.py`, etc.)
+* **Gradio Interface**: All UI components (`gradio_modules/`)
+* **LLM Components**: AI/ML functionality (`llm/`)
+* **Infrastructure**: Utilities and configuration (`infra_utils/`, `scripts/`)
+* **Test Suite**: All test files and utilities (`tests/`)
+* **Root Modules**: Main application files (`app.py`, `setup.py`, etc.)
+
+### **Documentation Structure**
+
+```
+Documentation
+├── Backend Modules          # Core backend functionality
+├── Gradio Modules          # UI components and interfaces
+├── LLM Modules            # AI/ML and language model components
+├── Infrastructure Modules  # Utilities, scripts, and configuration
+├── Tests                  # Complete test suite documentation
+└── Root Modules           # Main application entry points
+```
+
+### **Troubleshooting Documentation Build**
+
+#### **UV Installation Failures**
+
+The documentation build uses `uv` for fast dependency installation. Occasionally, `uv` may fail due to network connectivity issues:
+
+```
+error: Failed to fetch: `https://pypi.org/simple/pypdfium2/`
+Caused by: peer closed connection without sending TLS close_notify
+```
+
+**Solution**: Simply try again - this is usually a temporary network issue:
+
+```bash
+# Clean up and retry
+python setup.py --docker-wipe
+python setup.py --docs
+```
+
+**Why this happens**: `uv` uses Rust-based networking which can be sensitive to TLS handshake issues in some Docker environments. The failure is temporary and retrying usually resolves it.
+
+#### **Other Common Issues**
+
+1. **Port 8080 Already in Use**
+
+   ```bash
+   # Check what's using the port
+   lsof -i :8080
+   # Or use a different port by modifying scripts/serve_docs.sh
+   ```
+
+2. **Docker Build Fails**
+
+   ```bash
+   # Clean up Docker and retry
+   python setup.py --docker-wipe
+   python setup.py --docs
+   ```
+
+3. **Documentation Not Updating**
+
+   ```bash
+   # Force rebuild by wiping Docker cache
+   python setup.py --docker-wipe
+   python setup.py --docs
+   ```
+
+### **Advanced Documentation Options**
+
+#### **Manual Docker Commands**
+
+If you prefer to build documentation manually:
+
+```bash
+# Build documentation container
+docker build -f Dockerfile.docs -t nyp-fyp-chatbot:docs .
+
+# Run documentation server
+docker run --name nyp-fyp-chatbot-docs -p 8080:8080 nyp-fyp-chatbot:docs
+```
+
+#### **Local Documentation Development**
+
+For documentation development without Docker:
+
+```bash
+# Install documentation dependencies
+pip install -r requirements-docs.txt
+
+# Generate documentation locally
+cd docs
+sphinx-apidoc -o modules --separate --module-first --maxdepth=6 --private --no-headings ../backend ../gradio_modules ../llm ../infra_utils ../scripts ../tests ../misc ../
+sphinx-build -b html . _build/html
+
+# Serve locally
+python -m http.server 8080 --directory _build/html
+```
+
+### **Documentation Configuration**
+
+The documentation is configured in:
+
+* `docs/conf.py`: Sphinx configuration
+* `scripts/generate_docs.py`: Documentation generation script
+* `scripts/serve_docs.sh`: Documentation server script
+* `requirements-docs.txt`: Documentation-specific dependencies
+
+### **Customizing Documentation**
+
+To customize the documentation:
+
+1. **Add new modules**: They'll be automatically discovered and documented
+2. **Modify theme**: Edit `docs/conf.py` to change the Sphinx theme
+3. **Add custom pages**: Create `.rst` files in the `docs/` directory
+4. **Update structure**: Modify `scripts/generate_docs.py` to change organization
+
+---
+
 ## 🔥 Firewall Configuration (Linux)
 
 When running the application in Docker on Linux, you may need to configure firewalld to allow external access to the application. The following configurations are only needed if you want to access the app from other machines on your network or from the internet.
@@ -511,6 +660,7 @@ nyp-fyp-project/
 ├── Dockerfile                      # Production Docker image
 ├── Dockerfile.dev                  # Development Docker image
 ├── Dockerfile.test                 # Test Docker image
+├── Dockerfile.docs                 # Documentation Docker image
 ├── .env.dev                        # Environment variables template
 ├── .pre-commit-config.yaml         # Pre-commit hooks configuration
 ├── ruff.toml                       # Ruff linter configuration
@@ -548,11 +698,20 @@ nyp-fyp-project/
 │
 ├── scripts/                       # Utility scripts
 │   ├── scripts.js                 # JavaScript utilities
-│   └── entrypoint.sh              # Docker entrypoint script
+│   ├── entrypoint.sh              # Docker entrypoint script
+│   ├── generate_docs.py           # Documentation generation script
+│   └── serve_docs.sh              # Documentation server script
 │
 ├── styles/                        # CSS styling
 │   ├── styles.css                 # Main stylesheet
 │   └── performance.css            # Performance optimizations
+│
+├── docs/                          # Documentation
+│   ├── conf.py                    # Sphinx configuration
+│   ├── index.rst                  # Documentation index
+│   └── Makefile                   # Documentation build rules
+│
+├── requirements-docs.txt          # Documentation dependencies
 │
 ├── tests/                         # Comprehensive test suite
 │   ├── README.md                  # Test documentation
@@ -645,6 +804,7 @@ nyp-fyp-project/
 * **UI Components**: Reusable Gradio components for different functionalities
 * **LLM Integration**: Dedicated modules for AI/ML functionality
 * **Performance Optimization**: Utilities for monitoring and improving performance
+* **Auto-Generated Documentation**: Comprehensive Sphinx documentation for all code modules
 
 ---
 
@@ -714,6 +874,7 @@ python3 app.py
 
 For detailed technical information, see the `misc/` directory:
 
+* **`misc/DOCUMENTATION_GENERATION.md`**: Comprehensive documentation generation system guide
 * **`misc/DOCKER_BUILD_OPTIMIZATION.md`**: Docker build optimization details and size comparisons
 * **`misc/DEPENDENCY_FIXES.md`**: Dependency resolution and fixes applied
 * **`misc/FILE_CLASSIFICATION_IMPLEMENTATION.md`**: Detailed file classification feature implementation

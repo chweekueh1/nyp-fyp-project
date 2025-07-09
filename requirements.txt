@@ -32,6 +32,7 @@ nest_asyncio==1.6.0
 nltk
 # Core dependencies (install first - these are often pre-compiled)
 numpy==1.26.4
+olefile
 
 # AI and ML libraries (these often have heavy compilation)
 openai==1.72.0
@@ -51,9 +52,13 @@ python-multipart==0.0.20
 pytz==2025.2
 PyYAML==6.0.2
 requests==2.32.3
+
+# Documentation
+sphinx>=7.0.0
+sphinx-napoleon>=0.7
 SQLAlchemy==2.0.40
 starlette==0.46.1
 tiktoken==0.9.0
-# unstructured  # Installed separately in Dockerfile due to compatibility issues on Alpine
+unstructured
 uvicorn==0.34.0
 yake

@@ -7,7 +7,8 @@ Contains audio transcription and processing functions.
 import os
 import logging
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone  # noqa: F401
+from typing import Dict  # noqa: F401
 from .rate_limiting import check_rate_limit
 from .database import get_llm_functions
 from .timezone_utils import get_utc_timestamp
@@ -16,8 +17,12 @@ from .timezone_utils import get_utc_timestamp
 logger = logging.getLogger(__name__)
 
 
-def _ensure_client_initialized():
-    """Ensure the OpenAI client is properly initialized."""
+def _ensure_client_initialized() -> bool:
+    """
+    Ensure the OpenAI client is properly initialized.
+
+    :return: True if client is initialized, False otherwise.
+    """
     try:
         from . import config
 
@@ -34,6 +39,11 @@ def _ensure_client_initialized():
 async def audio_to_text(ui_state: dict) -> dict:
     """
     Audio input interface: transcribes audio and gets a chatbot response.
+
+    :param ui_state: Dictionary containing UI state with username, audio_file, history, and chat_id.
+    :type ui_state: dict
+    :return: Dictionary containing history, response, transcript, and debug information.
+    :rtype: dict
     """
     print(f"[DEBUG] backend.audio_to_text called with ui_state: {ui_state}")
     username = ui_state.get("username")
@@ -201,8 +211,15 @@ async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
         return {"status": "error", "message": f"Error transcribing audio: {e}"}
 
 
-async def transcribe_audio_file_async(audio_path):
-    """Transcribe an audio file asynchronously."""
+async def transcribe_audio_file_async(audio_path: str) -> Dict[str, str]:
+    """
+    Transcribe an audio file asynchronously.
+
+    :param audio_path: Path to the audio file to transcribe.
+    :type audio_path: str
+    :return: Dictionary containing transcription result or error.
+    :rtype: Dict[str, str]
+    """
     try:
         # Ensure client is initialized
         if not _ensure_client_initialized():

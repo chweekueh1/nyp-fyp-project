@@ -37,6 +37,9 @@ from backend import (
     do_login_test as do_login_backend,
 )
 
+# Import markdown formatter
+from backend.markdown_formatter import format_markdown, safe_markdown_format
+
 # Import utils functions
 from infra_utils import (
     rel2abspath,
@@ -645,6 +648,62 @@ def test_render_all_chats():
         print("✅ test_render_all_chats: PASSED")
     except Exception as e:
         print(f"❌ test_render_all_chats: FAILED - {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise
+
+
+def test_markdown_formatter():
+    """Test the markdown formatter for proper spacing and safety."""
+    print("🔍 Testing format_markdown and safe_markdown_format functions...")
+    try:
+        # Test mermaid block formatting
+        input_md = """```mermaid\nabc```"""
+        expected = """
+
+```mermaid
+abc
+```
+
+"""
+        result = format_markdown(input_md)
+        assert result == expected, (
+            f"Expected mermaid block formatting, got: {repr(result)}"
+        )
+        print("  ✅ Mermaid block formatting passed")
+
+        # Test double newline replaced by triple
+        input_md = "Line1\n\nLine2"
+        expected = "Line1\n\n\nLine2"
+        result = format_markdown(input_md)
+        assert result == expected, f"Expected triple newline, got: {repr(result)}"
+        print("  ✅ Double newline normalization passed")
+
+        # Test code block formatting
+        input_md = """```python\nprint('hi')\n```"""
+        expected = """
+
+```python
+print('hi')
+```
+
+"""
+        result = format_markdown(input_md)
+        assert result == expected, (
+            f"Expected code block formatting, got: {repr(result)}"
+        )
+        print("  ✅ Code block formatting passed")
+
+        # Test safe_markdown_format with max_length
+        input_md = "A" * 120
+        result = safe_markdown_format(input_md, max_length=100)
+        assert result.endswith("..."), "Expected truncation with ellipsis"
+        print("  ✅ safe_markdown_format truncation passed")
+
+        print("✅ test_markdown_formatter: PASSED")
+    except Exception as e:
+        print(f"❌ test_markdown_formatter: FAILED - {e}")
         import traceback
 
         traceback.print_exc()

@@ -168,12 +168,12 @@ def global_clean_text_for_classification(text: str) -> str:
 def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) -> None:
     """
     Ultra-optimized data processing with performance improvements,
-    including text cleaning and top 50 keyword processing per document.
+    including text cleaning and top 10 keyword processing per document.
     - Uses thread pool for parallel keyword extraction and chunking if many documents.
     - Caches embedding and keyword extraction results for repeated content.
     - All major steps are performance monitored.
     - Batch size and thread pool are configurable via env vars.
-    - Now includes cleaning of document content and extraction of top 50 words for metadata.
+    - Now includes cleaning of document content and extraction of top 10 words for metadata.
 
     :param file: The path to the file to be processed.
     :type file: str
@@ -206,7 +206,7 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
         cached_data = keyword_cache.get(doc_hash)
         if cached_data:
             doc.metadata["keywords"] = cached_data.get("keywords", [])
-            doc.metadata["top_50_keywords"] = cached_data.get("top_50_keywords", "")
+            doc.metadata["top_10_keywords"] = cached_data.get("top_10_keywords", "")
             return doc
 
         doc_with_yake_keywords = FastYAKEMetadataTagger([doc])[0]
@@ -224,14 +224,14 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
             )
 
         word_counts = collections.Counter(all_words_from_yake_keywords)
-        top_50_words_list = [w for w, _ in word_counts.most_common(50)]
+        top_10_words_list = [w for w, _ in word_counts.most_common(10)]
 
-        top_50_keywords_str = ", ".join(top_50_words_list)
-        doc.metadata["top_50_keywords"] = top_50_keywords_str
+        top_10_keywords_str = ", ".join(top_10_words_list)
+        doc.metadata["top_10_keywords"] = top_10_keywords_str
 
         keyword_cache[doc_hash] = {
             "keywords": doc.metadata["keywords"],
-            "top_50_keywords": top_50_keywords_str,
+            "top_10_keywords": top_10_keywords_str,
         }
 
         return doc

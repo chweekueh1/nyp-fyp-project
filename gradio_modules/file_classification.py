@@ -9,8 +9,8 @@ import gradio as gr
 import os
 import shutil
 from pathlib import Path
-from typing import Tuple, Any, List
-from datetime import datetime
+from typing import Tuple, Any, List, Dict  # noqa: F401
+from datetime import datetime  # noqa: F401
 from performance_utils import perf_monitor
 from gradio_modules.enhanced_content_extraction import (
     enhanced_extract_file_content,
@@ -248,7 +248,15 @@ def handle_clear_uploaded_files() -> tuple:
         return (gr.update(visible=True, value=f"❌ Error clearing files: {str(e)}"),)
 
 
-def call_backend_data_classification(content_text):
+def call_backend_data_classification(content_text: str) -> Dict[str, Any]:
+    """
+    Call the backend data classification function.
+
+    :param content_text: Text content to classify.
+    :type content_text: str
+    :return: Classification result dictionary.
+    :rtype: Dict[str, Any]
+    """
     # Directly call the imported async function using asyncio
     try:
         loop = asyncio.get_running_loop()
@@ -502,19 +510,18 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
 
 
 def file_classification_interface(username_state: gr.State) -> tuple:
-    """Create the file upload and classification interface.
-    :param username_state: Gradio state containing the current username
-    :type username_state: gr.State
-    :return: Tuple of Gradio components for the interface
-    :rtype: tuple
-    """
+    # Create the file upload and classification interface.
+    # :param username_state: Gradio state containing the current username
+    # :type username_state: gr.State
+    # :return: Tuple of Gradio components for the interface
+    # :rtype: tuple
 
     gr.Markdown("## 📁 File Upload & Classification")
     gr.Markdown(
         "Upload files for automatic security classification and sensitivity analysis."
     )
     gr.Markdown(
-        "For the sake of performance, only the first 40 000 characters and the top 50 keywords are extracted for text based files. Non-text based files are handled normally"
+        "For the sake of performance, only the first 20 000 characters and the top 10 keywords are extracted for text based files. Non-text based files are handled normally"
     )
     gr.Markdown("### 📤 Upload New File")
 
