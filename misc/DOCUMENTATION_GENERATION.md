@@ -20,10 +20,10 @@ The documentation will be available at <http://localhost:8080>
 ### Components
 
 1. **Dockerfile.docs**: Specialized Docker image for documentation building
-2. **scripts/generate_docs.py**: Main documentation generation script
-3. **scripts/serve_docs.sh**: HTTP server for serving documentation
-4. **docs/conf.py**: Sphinx configuration
-5. **docs/index.rst**: Documentation index and structure
+2. **src/scripts/generate_docs.py**: Main documentation generation script
+3. **src/scripts/serve_docs.sh**: HTTP server for serving documentation
+4. **src/docs/conf.py**: Sphinx configuration
+5. **src/docs/index.rst**: Documentation index and structure
 6. **requirements-docs.txt**: Documentation-specific dependencies
 
 ### Build Process
@@ -203,10 +203,10 @@ For documentation development without Docker:
 
 ```bash
 # Install documentation dependencies
-pip install -r requirements-docs.txt
+pip install -r requirements/requirements-docs.txt
 
 # Generate documentation locally
-cd docs
+cd src/docs
 sphinx-apidoc -o modules --separate --module-first --maxdepth=6 --private --no-headings ../backend ../gradio_modules ../llm ../infra_utils ../scripts ../tests ../misc ../
 sphinx-build -b html . _build/html
 

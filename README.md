@@ -434,7 +434,7 @@ The documentation generator covers:
 * **LLM Components**: AI/ML functionality (`llm/`)
 * **Infrastructure**: Utilities and configuration (`infra_utils/`, `scripts/`)
 * **Test Suite**: All test files and utilities (`tests/`)
-* **Root Modules**: Main application files (`app.py`, `setup.py`, etc.)
+* **Root Modules**: Main application files (`app.py` entry point, `setup.py`, etc.)
 
 ### **Documentation Structure**
 
@@ -650,7 +650,7 @@ sudo systemctl start firewalld
 
 ```
 nyp-fyp-project/
-├── app.py                          # Main Gradio application entry point
+├── app.py                          # Main application entry point (imports from src/)
 ├── backend.py                      # Legacy backend (being modularized)
 ├── infra_utils.py                  # Infrastructure utilities (logging, paths)
 ├── performance_utils.py            # Performance optimization utilities

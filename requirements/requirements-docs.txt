@@ -1,0 +1,18 @@
+graphviz>=0.20.1
+piccolo-theme>=0.18.0
+pypdf>=4.0.0
+
+# Sphinx documentation dependencies
+sphinx>=7.0.0
+sphinx-autodoc-typehints>=1.25.0
+sphinxcontrib-applehelp>=1.0.4
+sphinxcontrib-bibtex>=2.5.0
+sphinxcontrib-devhelp>=1.0.2
+sphinxcontrib-htmlhelp>=2.0.1
+sphinxcontrib-httpdomain>=1.8.0
+sphinxcontrib-jsmath>=1.0.1
+sphinxcontrib-mermaid>=0.8.1
+sphinxcontrib-plantuml>=0.25
+sphinxcontrib-programoutput>=0.17
+sphinxcontrib-qthelp>=1.0.3
+sphinxcontrib-serializinghtml>=1.1.5

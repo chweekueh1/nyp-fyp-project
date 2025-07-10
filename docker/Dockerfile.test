@@ -1,0 +1,117 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-alpine
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    GRADIO_SERVER_NAME="0.0.0.0" \
+    GRADIO_SERVER_PORT="7861" \
+    IN_DOCKER="true" \
+    TESTING="true" \
+    DOCKER_TEST_ENV="true" \
+    DOCKER_MODE="test" \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=Asia/Singapore \
+    MAKEFLAGS="-j$(nproc)" \
+    PYTHONHASHSEED=random \
+    PIP_USE_PEP517=1 \
+    PIP_PREFER_BINARY=1 \
+    PIP_ONLY_BINARY=:all: \
+    NLTK_DATA="/home/appuser/.nypai-chatbot/data/nltk_data"
+
+# Build arguments
+ARG PARALLEL_JOBS=4
+ARG VENV_PATH=/home/appuser/.nypai-chatbot/venv-test
+
+# Set environment variables from build args
+ENV PIP_JOBS=${PARALLEL_JOBS} \
+    VENV_PATH=${VENV_PATH}
+
+WORKDIR /app
+
+# Install system dependencies in a single layer
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    zlib-dev \
+    jpeg-dev \
+    freetype-dev \
+    libpng-dev \
+    libgomp \
+    libstdc++ \
+    libgcc \
+    pandoc \
+    poppler-utils \
+    tesseract-ocr \
+    curl \
+    tzdata \
+    ca-certificates \
+    git \
+    imagemagick \
+    vim \
+    nano \
+    netcat-openbsd \
+    gzip \
+    bzip2 \
+    xz \
+    procps \
+    sysstat \
+    wkhtmltopdf \
+    && update-ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
+# Create user and directories
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/{cache,vector_store/chroma_db,memory_persistence,nltk_data,chat_sessions,user_info,uploads,test_uploads,logs} && \
+    mkdir -p /app/data && \
+    chown -R appuser:appgroup /app && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /app
+
+# Switch to non-root user
+USER appuser
+
+# Create virtual environment
+RUN python3 -m venv ${VENV_PATH}
+ENV PATH="${VENV_PATH}/bin:$PATH" \
+    PYTHONPATH=/app
+
+# Copy requirements first for better layer caching
+COPY --chown=appuser:appgroup requirements/requirements.txt ./
+
+# Install Python dependencies
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    chmod +x $HOME/.local/bin/uv && \
+    export PATH="$HOME/.local/bin:$PATH" && \
+    ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
+    ${VENV_PATH}/bin/pip install uv && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements.txt && \
+    uv pip install --prerelease=allow overrides tenacity rich tqdm typer
+
+# Download NLTK data during build time
+RUN ${VENV_PATH}/bin/python -c "import nltk; import os; nltk_data_path = '/home/appuser/.nypai-chatbot/data/nltk_data'; os.makedirs(nltk_data_path, exist_ok=True); required_data = ['stopwords', 'punkt', 'wordnet', 'averaged_perceptron_tagger']; [nltk.download(data_name, download_dir=nltk_data_path, quiet=True) for data_name in required_data]; print('NLTK data download completed')"
+
+# Copy application code
+COPY --chown=appuser:appgroup src/ ./src/
+COPY --chown=appuser:appgroup styles/ ./styles/
+COPY --chown=appuser:appgroup src/scripts/entrypoint.py ./
+COPY --chown=appuser:appgroup src/tests/ ./tests/
+
+# Expose port
+EXPOSE 7861
+
+# Set entrypoint and command
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-test/bin/python", "/app/entrypoint.py"]
+CMD ["python", "tests/test_docker_environment.py"]
+
+# Print build information
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /app/entrypoint.py" && \
+    echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
+    echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
+    echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)" && \
+    echo "[BUILD] NLTK data path: ${NLTK_DATA}"
