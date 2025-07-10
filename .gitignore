@@ -11,3 +11,14 @@ __pycache__/
 logs/
 logs/*
 a.txt
+
+# Ignore generated documentation files
+docs/modules/*.rst
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Ignore any accidentally generated RST files on host
+*.rst
+!docs/index.rst
+!docs/conf.py

@@ -7,6 +7,14 @@ from gradio.themes import Base
 
 
 class FlexcyonTheme(Base):
+    """
+    Custom Gradio theme for the NYP FYP CNC Chatbot interface.
+
+    This theme provides a dark color scheme with green and purple accents,
+    optimized for the chatbot's user interface. It extends the base Gradio theme
+    with custom colors and styling for better visual consistency.
+    """
+
     def __init__(self):
         super().__init__(
             primary_hue="green", secondary_hue="purple", neutral_hue="gray"

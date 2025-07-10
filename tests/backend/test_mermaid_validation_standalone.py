@@ -2,82 +2,18 @@
 """
 Standalone test script to validate Mermaid syntax formatting.
 This file has been moved from the root directory to tests/backend/ for better organization.
+Updated to use the unified markdown formatter.
 """
 
-import re
+import sys
+from pathlib import Path
 
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
-def validate_and_sanitize_mermaid_syntax(text):
-    """
-    Validates and sanitizes Mermaid syntax in text to prevent rendering errors.
-    """
-    if not text:
-        return text
-
-    # Pattern to match Mermaid code blocks
-    mermaid_pattern = r"```mermaid\s*\n(.*?)\n```"
-
-    def sanitize_mermaid_block(match):
-        mermaid_content = match.group(1)
-
-        # Basic Mermaid syntax validation and sanitization
-        try:
-            # Check if it starts with a valid Mermaid directive
-            valid_directives = [
-                "graph",
-                "flowchart",
-                "sequenceDiagram",
-                "classDiagram",
-                "gantt",
-                "pie",
-                "mindmap",
-                "erDiagram",
-                "journey",
-                "gitgraph",
-            ]
-
-            lines = mermaid_content.strip().split("\n")
-            if not lines:
-                # Add extra newlines for proper Markdown rendering
-                return "\n\n```mermaid\nflowchart TD\n    A[Invalid Diagram]\n    B[Please check syntax]\n    A --> B\n```\n\n"
-
-            first_line = lines[0].strip().lower()
-            has_valid_directive = any(
-                first_line.startswith(directive) for directive in valid_directives
-            )
-
-            if not has_valid_directive:
-                # Add a valid directive if missing
-                lines.insert(0, "flowchart TD")
-                mermaid_content = "\n".join(lines)
-
-            # Sanitize special characters that might cause issues
-            sanitized_content = re.sub(
-                r'[<>"&]',
-                lambda m: {"<": "&lt;", ">": "&gt;", '"': "&quot;", "&": "&amp;"}.get(
-                    m.group(0), m.group(0)
-                ),
-                mermaid_content,
-            )
-
-            # Ensure proper line endings
-            sanitized_content = "\n".join(
-                line.rstrip() for line in sanitized_content.split("\n")
-            )
-
-            # Add extra newlines for proper Markdown rendering
-            return f"\n\n```mermaid\n{sanitized_content}\n```\n\n"
-
-        except Exception:
-            # Return a safe fallback diagram with extra newlines
-            return "\n\n```mermaid\nflowchart TD\n    A[Diagram Error]\n    B[Please try again]\n    A --> B\n```\n\n"
-
-    # Replace all Mermaid blocks with sanitized versions
-    sanitized_text = re.sub(
-        mermaid_pattern, sanitize_mermaid_block, text, flags=re.DOTALL
-    )
-
-    return sanitized_text
+from backend.markdown_formatter import format_markdown
 
 
 # Test cases
@@ -100,7 +36,7 @@ def test_mermaid_validation():
     for i, test in enumerate(test_cases, 1):
         print(f"\nTest {i}:")
         print(f"Input: {repr(test)}")
-        result = validate_and_sanitize_mermaid_syntax(test)
+        result = format_markdown(test)
         print(f"Output: {repr(result)}")
 
         # Check if we have proper newlines

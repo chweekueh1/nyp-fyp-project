@@ -400,6 +400,7 @@ If you prefer to use Docker commands directly:
 ## 📚 Documentation Generation
 
 The project includes comprehensive Sphinx documentation generation that automatically documents all Python modules, functions, and classes. The documentation is built using Docker and served via HTTP.
+> Not everything is documented as there are constant changes to certain APIs
 
 ### **Quick Start - Generate Documentation**
 

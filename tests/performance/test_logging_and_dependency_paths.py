@@ -15,7 +15,9 @@ sys.path.insert(0, str(project_root))
 from llm.chatModel import initialize_llm_and_db
 from infra_utils import setup_logging
 
-initialize_llm_and_db()
+# Only initialize if not in documentation mode
+if "DOCUMENTATION" not in os.environ:
+    initialize_llm_and_db()
 
 
 def test_logging_directory_setup():

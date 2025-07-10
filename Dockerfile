@@ -90,7 +90,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 RUN ${VENV_PATH}/bin/python -c "import nltk; import os; nltk_data_path = '/home/appuser/.nypai-chatbot/data/nltk_data'; os.makedirs(nltk_data_path, exist_ok=True); required_data = ['stopwords', 'punkt', 'wordnet', 'averaged_perceptron_tagger']; [nltk.download(data_name, download_dir=nltk_data_path, quiet=True) for data_name in required_data]; print('NLTK data download completed')"
 
 # Copy application code
-COPY --chown=appuser:appgroup app.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
+COPY --chown=appuser:appgroup app.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
 COPY --chown=appuser:appgroup backend/ ./backend/
 COPY --chown=appuser:appgroup gradio_modules/ ./gradio_modules/
 COPY --chown=appuser:appgroup llm/ ./llm/
@@ -102,8 +102,8 @@ COPY --chown=appuser:appgroup infra_utils/ ./infra_utils/
 EXPOSE 7860
 
 # Set entrypoint and command
-ENTRYPOINT ["sh", "-c", "${VENV_PATH}/bin/python /app/entrypoint.py \"$@\"", "--"]
-CMD ["sh", "-c", "${VENV_PATH}/bin/python app.py"]
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv/bin/python", "/app/entrypoint.py"]
+CMD ["python", "app.py"]
 
 # Print build information
 RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /app/entrypoint.py" && \

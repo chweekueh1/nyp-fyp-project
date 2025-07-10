@@ -207,6 +207,7 @@ def chatbot_ui(
     gr.Button,
     gr.Markdown,
     gr.Column,  # This will be the search_container
+    gr.Markdown,  # search_stats_md
     gr.Markdown,  # debug_md
     gr.Button,  # clear_chat_btn
     gr.Markdown,  # clear_chat_status
@@ -247,13 +248,13 @@ def chatbot_ui(
 
         with gr.Column(elem_classes=["chat-display-area"]):
             chatbot = gr.Chatbot(
-                height=500,
                 show_copy_button=True,
                 avatar_images=(
                     "https://www.gravatar.com/avatar/?d=mp",  # User avatar
                     "https://i.imgur.com/g0W45C8.png",  # Bot avatar
                 ),
                 elem_classes=["chatbot-display"],
+                render_markdown=True,  # Enable markdown rendering for bot responses
             )
             msg = gr.Textbox(
                 show_label=False,
@@ -282,6 +283,7 @@ def chatbot_ui(
             search_query,
             search_btn_from_interface,  # This variable is now assigned from search_interface's return
             search_results_md,
+            search_stats_md,  # New search stats component
         ) = search_interface(
             username_state,
             chat_id_state,
@@ -290,7 +292,7 @@ def chatbot_ui(
             debug_info_state,
         )
         logger.info(
-            f"🔍 [CHATBOT_UI] search_interface returned: search_container={search_container is not None}"
+            f"🔍 [CHATBOT_UI] search_interface returned: search_container={search_container is not None}, search_stats={search_stats_md is not None}"
         )
 
         # Ensure search container is properly integrated with the chat interface
@@ -440,7 +442,7 @@ def chatbot_ui(
 
     # Return all necessary components to the calling module (e.g., app.py)
     logger.info(
-        f"🔍 [CHATBOT_UI] Returning components, search_container={search_container is not None}"
+        f"🔍 [CHATBOT_UI] Returning components, search_container={search_container is not None}, search_stats={search_stats_md is not None}"
     )
     return (
         chat_selector,
@@ -451,6 +453,7 @@ def chatbot_ui(
         rename_btn,
         rename_status_md,
         search_container,  # Returning the integrated search container
+        search_stats_md,  # Returning the search stats component
         debug_md,
         clear_chat_btn,
         clear_chat_status,

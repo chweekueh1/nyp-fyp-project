@@ -3,7 +3,6 @@
 Script to generate Sphinx documentation for the NYP FYP CNC Chatbot.
 """
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -11,24 +10,48 @@ from pathlib import Path
 def generate_docs():
     """
     Generate Sphinx documentation by scanning source directories and generating RST files for each module.
+    Only generates RST files when running in Docker container, not on the host filesystem.
     """
     print("🔍 Generating Sphinx documentation...")
 
     # Use /app/docs if it exists (Docker), otherwise use local workspace docs
     docker_docs_dir = Path("/app/docs")
     local_docs_dir = Path(__file__).parent.parent / "docs"
-    if docker_docs_dir.exists():
+
+    # Check if we're running in Docker - look for /app directory and Docker environment
+    in_docker = docker_docs_dir.exists() and Path("/app").exists()
+
+    if in_docker:
         docs_dir = docker_docs_dir
+        print("🐳 Running in Docker container - RST files will be generated")
+        print(f"[DEBUG] Docker docs dir: {docker_docs_dir}")
+        print(f"[DEBUG] Docker docs dir exists: {docker_docs_dir.exists()}")
+        print(f"[DEBUG] /app directory exists: {Path('/app').exists()}")
+        print(f"[DEBUG] Current working directory: {Path.cwd()}")
+        print(f"[DEBUG] /app contents: {list(Path('/app').iterdir())}")
+        print(f"[DEBUG] /app/docs contents: {list(Path('/app/docs').iterdir())}")
     else:
         docs_dir = local_docs_dir
+        print("🖥️  Running on host filesystem - RST files will NOT be generated")
+        print(
+            "   RST files are only generated within Docker containers to avoid polluting the host filesystem"
+        )
 
     modules_dir = docs_dir / "modules"
-    # Clean up old RST files before generating new ones
-    if modules_dir.exists():
-        for f in modules_dir.glob("*.rst"):
-            f.unlink()
+
+    # Only generate RST files if we're in Docker
+    if in_docker:
+        # Clean up old RST files before generating new ones
+        if modules_dir.exists():
+            for f in modules_dir.glob("*.rst"):
+                f.unlink()
+        else:
+            modules_dir.mkdir(parents=True, exist_ok=True)
     else:
-        modules_dir.mkdir(parents=True, exist_ok=True)
+        # On host, just ensure the modules directory exists but don't generate RST files
+        if not modules_dir.exists():
+            modules_dir.mkdir(parents=True, exist_ok=True)
+        print("   Skipping RST file generation on host filesystem")
 
     # List of source directories to scan
     source_dirs = [
@@ -39,8 +62,52 @@ def generate_docs():
         ("scripts", "scripts"),
         ("tests", "tests"),
         ("docs", "docs"),
-        (".", "."),  # root-level modules
     ]
+
+    # Files to exclude from documentation generation
+    exclude_patterns = [
+        "__init__.py",
+        "*.sh",  # Shell scripts
+        "*.bash",  # Bash scripts
+        "*.zsh",  # Zsh scripts
+        "*.fish",  # Fish scripts
+        "*.ps1",  # PowerShell scripts
+        "*.bat",  # Batch files
+        "*.cmd",  # Command files
+        "*.exe",  # Executables
+        "*.pyc",  # Compiled Python
+        "*.pyo",  # Optimized Python
+        "*.pyd",  # Python DLLs
+        "*.so",  # Shared objects
+        "*.dll",  # Dynamic link libraries
+        "*.dylib",  # macOS dynamic libraries
+    ]
+
+    # Root-level Python files to include in documentation
+    root_modules = [
+        "app.py",
+        "system_prompts.py",
+        "hashing.py",
+        "performance_utils.py",
+        "setup.py",
+        "flexcyon_theme.py",
+    ]
+
+    def should_exclude_file(file_path):
+        """Check if a file should be excluded from documentation."""
+        filename = file_path.name
+
+        # Check exact filename matches
+        if filename in exclude_patterns:
+            return True
+
+        # Check pattern matches
+        for pattern in exclude_patterns:
+            if pattern.startswith("*."):
+                if filename.endswith(pattern[1:]):
+                    return True
+
+        return False
 
     # Helper to convert file path to Python module path (relative to /app, not app.)
     def file_to_module(file_path, base_dir):
@@ -51,139 +118,151 @@ def generate_docs():
     # Helper to convert module path to unique RST filename
     def module_to_rst_name(module_path):
         # Use the original filename (case-sensitive) for RST filename
+        # Handle special cases like llm.dataProcessing -> llm_dataProcessing
         return module_path.replace(".", "_") + ".rst"
 
-    # Scan for all .py files in each source directory
+    # Helper to get the correct module path for automodule directive
+    def get_automodule_path(file_path, base_dir):
+        """Get the correct module path for the automodule directive."""
+        rel_path = file_path.relative_to(base_dir)
+        parts = rel_path.with_suffix("").parts
+        module_path = ".".join(parts)
+
+        # For root-level files, use just the filename without .py
+        if len(parts) == 1:
+            return parts[0]
+
+        return module_path
+
+    # Helper to check if a module should be included in documentation
+    def should_include_module(module_path: str) -> bool:
+        """Check if a module should be included in documentation."""
+        # Include __init__.py files as they often contain important package documentation
+        # Skip test files that don't have meaningful docstrings
+        if module_path.startswith("tests.") and "test_" in module_path:
+            # Only include test files that have proper docstrings
+            return True
+
+        return True
+
+    # Only scan and generate RST files if we're in Docker
     generated_rst_files = []  # Track all generated RST files for debugging
     module_to_rst = {}  # Map module path to rst filename
-    for label, src in source_dirs:
-        src_path = docs_dir.parent / src
-        if not src_path.exists():
-            print(f"[DEBUG] Source path does not exist: {src_path}")
-            continue
-        for py_file in src_path.rglob("*.py"):
-            # Skip __init__.py for now (optional: document packages if desired)
-            if py_file.name == "__init__.py":
+
+    if in_docker:
+        # First, handle root-level modules
+        for root_file in root_modules:
+            root_path = docs_dir.parent / root_file
+            if root_path.exists():
+                module_path = root_file.replace(".py", "")  # Remove .py extension
+                rst_name = module_to_rst_name(module_path)
+                rst_path = modules_dir / rst_name
+                module_to_rst[module_path] = rst_name
+
+                with open(rst_path, "w", encoding="utf-8") as f:
+                    # Use the exact filename (case-sensitive) for the title
+                    title = root_path.stem
+                    f.write(f"{title}\n")
+                    f.write(f"{'=' * len(title)}\n\n")
+                    # Use the correct module path for automodule
+                    automodule_path = module_path
+                    f.write(f".. automodule:: {automodule_path}\n")
+                    f.write("   :members:\n")
+                    f.write("   :undoc-members:\n")
+                    f.write("   :show-inheritance:\n")
+                print(f"[DEBUG] Generated RST: {rst_path} for module {automodule_path}")
+                generated_rst_files.append((str(rst_path), automodule_path))
+
+        # Scan for all .py files in each source directory
+        for label, src in source_dirs:
+            src_path = docs_dir.parent / src
+            if not src_path.exists():
+                print(f"[DEBUG] Source path does not exist: {src_path}")
                 continue
-            module_path = file_to_module(py_file, docs_dir.parent)
-            rst_name = module_to_rst_name(module_path)
-            rst_path = modules_dir / rst_name
-            module_to_rst[module_path] = rst_name
-            if not rst_path.exists():
-                # Write default RST
-                with open(rst_path, "w", encoding="utf-8") as f:
-                    # Use the exact filename (case-sensitive) for the title
-                    f.write(f"{py_file.stem}\n")
-                    f.write(f"{'=' * len(py_file.stem)}\n\n")
-                    f.write(f".. automodule:: {module_path}\n")
-                    f.write("   :members:\n")
-                    f.write("   :undoc-members:\n")
-                    f.write("   :show-inheritance:\n")
-                print(f"[DEBUG] Generated RST: {rst_path} for module {module_path}")
-                generated_rst_files.append((str(rst_path), module_path))
-            else:
-                print(
-                    f"[DEBUG] RST already exists: {rst_path} for module {module_path}"
-                )
-                generated_rst_files.append((str(rst_path), module_path))
+            for py_file in src_path.rglob("*.py"):
+                # Skip excluded files
+                if should_exclude_file(py_file):
+                    print(f"[DEBUG] Excluding file: {py_file}")
+                    continue
 
-    # After scanning all source_dirs, ensure app.py and flexcyon_theme.py are included
-    for special_file in ["app.py", "flexcyon_theme.py"]:
-        special_path = docs_dir.parent / special_file
-        if special_path.exists():
-            module_path = file_to_module(special_path, docs_dir.parent)
-            rst_name = module_to_rst_name(module_path)
-            rst_path = modules_dir / rst_name
-            module_to_rst[module_path] = rst_name
-            if not rst_path.exists():
-                with open(rst_path, "w", encoding="utf-8") as f:
-                    # Use the exact filename (case-sensitive) for the title
-                    f.write(f"{special_path.stem}\n")
-                    f.write(f"{'=' * len(special_path.stem)}\n\n")
-                    f.write(f".. automodule:: {module_path}\n")
-                    f.write("   :members:\n")
-                    f.write("   :undoc-members:\n")
-                    f.write("   :show-inheritance:\n")
-                print(f"[DEBUG] Generated RST: {rst_path} for module {module_path}")
-                generated_rst_files.append((str(rst_path), module_path))
-            else:
-                print(
-                    f"[DEBUG] RST already exists: {rst_path} for module {module_path}"
-                )
-                generated_rst_files.append((str(rst_path), module_path))
+                module_path = file_to_module(py_file, docs_dir.parent)
+                rst_name = module_to_rst_name(module_path)
+                rst_path = modules_dir / rst_name
+                module_to_rst[module_path] = rst_name
 
-    # When generating RST for root-level modules, ensure automodule uses just the module name
-    for py_file in docs_dir.parent.glob("*.py"):
-        if py_file.name == "__init__.py":
-            continue
-        module_path = py_file.stem  # Just the filename without .py
-        rst_name = module_to_rst_name(module_path)
-        rst_path = modules_dir / rst_name
-        module_to_rst[module_path] = rst_name
-        if not rst_path.exists():
-            with open(rst_path, "w", encoding="utf-8") as f:
-                # Use the exact filename (case-sensitive) for the title
-                f.write(f"{py_file.stem}\n")
-                f.write(f"{'=' * len(py_file.stem)}\n\n")
-                f.write(f".. automodule:: {module_path}\n")
-                f.write("   :members:\n")
-                f.write("   :undoc-members:\n")
-                f.write("   :show-inheritance:\n\n")
+                # Check if module should be included
+                if not should_include_module(module_path):
+                    print(f"[DEBUG] Skipping module: {module_path}")
+                    continue
 
-    # Rebuild package indexes to only reference existing RSTs
-    create_package_indexes(modules_dir, module_to_rst)
-    fix_rst_titles(modules_dir)
-    cleanup_duplicate_titles(modules_dir)
+                if not rst_path.exists():
+                    # Write default RST
+                    with open(rst_path, "w", encoding="utf-8") as f:
+                        # Generate appropriate title
+                        if py_file.name == "__init__.py":
+                            # For __init__.py files, use the package name
+                            package_name = py_file.parent.name
+                            title = f"{package_name} Package"
+                        else:
+                            # Use the exact filename (case-sensitive) for the title
+                            title = py_file.stem
 
-    # Print summary of all generated RST files
-    print("\n[DEBUG] Summary of all RST files generated or found:")
-    for rst_path, module_path in generated_rst_files:
-        try:
-            size = Path(rst_path).stat().st_size
-            print(f"  - {rst_path} (module: {module_path}, size: {size} bytes)")
-            if size == 0:
-                print(f"[WARNING] RST file is empty: {rst_path}")
-            else:
-                with open(rst_path, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
-                    if ".. automodule::" not in content:
-                        print(
-                            f"[WARNING] RST file missing automodule directive: {rst_path}"
-                        )
-        except Exception as e:
-            print(f"[ERROR] Could not stat or read {rst_path}: {e}")
-    print(f"[DEBUG] Total RST files: {len(generated_rst_files)}\n")
+                        f.write(f"{title}\n")
+                        f.write(f"{'=' * len(title)}\n\n")
+                        # Use the correct module path for automodule
+                        automodule_path = get_automodule_path(py_file, docs_dir.parent)
+                        f.write(f".. automodule:: {automodule_path}\n")
+                        f.write("   :members:\n")
+                        f.write("   :undoc-members:\n")
+                        f.write("   :show-inheritance:\n")
+                        f.write("   :special-members:\n")
+                        f.write("   :exclude-members: __weakref__\n")
 
-    # Build HTML documentation
-    print("🏗️ Building HTML documentation...")
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "sphinx",
-                "-b",
-                "html",
-                "-D",
-                "napoleon_google_docstring=True",
-                "-D",
-                "napoleon_numpy_docstring=True",
-                "-D",
-                "autodoc_docstring_signature=1",
-                "-D",
-                "autodoc_preserve_defaults=1",
-                "-D",
-                "autodoc_inherit_docstrings=1",
-                str(docs_dir),
-                str(docs_dir / "_build/html"),
-            ],
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] Sphinx build failed: {e}")
-        raise
-    print("✅ Sphinx documentation generated successfully!")
-    print("📖 Documentation available at: /app/docs/_build/html/index.html")
+                        # Special handling for __init__.py files
+                        if py_file.name == "__init__.py":
+                            f.write("   :show-module-summary:\n")
+                            f.write("   :imported-members:\n")
+                    print(
+                        f"[DEBUG] Generated RST: {rst_path} for module {automodule_path}"
+                    )
+                    generated_rst_files.append((str(rst_path), automodule_path))
+                else:
+                    print(
+                        f"[DEBUG] RST already exists: {rst_path} for module {automodule_path}"
+                    )
+                    generated_rst_files.append((str(rst_path), automodule_path))
+
+        # Rebuild package indexes to only reference existing RSTs
+        create_package_indexes(modules_dir, module_to_rst)
+        fix_rst_titles(modules_dir)
+        cleanup_duplicate_titles(modules_dir)
+
+        # Print summary of all generated RST files
+        print("\n[DEBUG] Summary of all RST files generated or found:")
+        for rst_path, module_path in generated_rst_files:
+            try:
+                size = Path(rst_path).stat().st_size
+                print(f"  - {rst_path} (module: {module_path}, size: {size} bytes)")
+                if size == 0:
+                    print(f"[WARNING] RST file is empty: {rst_path}")
+                else:
+                    with open(rst_path, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                        if ".. automodule::" not in content:
+                            print(
+                                f"[WARNING] RST file missing automodule directive: {rst_path}"
+                            )
+            except Exception as e:
+                print(f"[ERROR] Error processing {rst_path}: {e}")
+
+        print(f"\n[DEBUG] Total RST files: {len(generated_rst_files)}")
+
+    # RST files have been generated successfully
+    print("\n✅ RST files generated successfully!")
+    print(f"📁 Generated {len(generated_rst_files)} RST files in {modules_dir}")
+    print("🏗️ HTML documentation will be built by the calling script")
+
+    return True
 
 
 def create_package_indexes(modules_dir, module_to_rst):
@@ -200,6 +279,8 @@ def create_package_indexes(modules_dir, module_to_rst):
         for f in (modules_dir.parent.parent).glob("*.py")
         if f.name != "__init__.py"
     ]
+
+    # Create a more robust package structure
     packages = {
         "backend": ["backend."],
         "gradio_modules": ["gradio_modules."],
@@ -210,6 +291,20 @@ def create_package_indexes(modules_dir, module_to_rst):
         "documentation": ["docs."],
         "root": root_py_files,
     }
+
+    # Ensure all package directories exist and have __init__.py files
+    for package_name in [
+        "backend",
+        "gradio_modules",
+        "llm",
+        "infra_utils",
+        "scripts",
+        "tests",
+        "docs",
+    ]:
+        package_dir = modules_dir.parent.parent / package_name
+        if package_dir.exists() and not (package_dir / "__init__.py").exists():
+            print(f"[WARNING] Missing __init__.py in {package_name} directory")
 
     fix_rst_titles(modules_dir)
 
@@ -223,20 +318,41 @@ def create_package_indexes(modules_dir, module_to_rst):
             f.write("   :maxdepth: 6\n")
             f.write("   :caption: Modules:\n\n")
             # Add modules that match the prefixes, but only if not already included
+            package_modules = []
             for module_path, rst_name in sorted(module_to_rst.items()):
                 if module_path in included_modules:
                     continue
                 for prefix in module_prefixes:
                     if module_path == prefix or module_path.startswith(prefix):
-                        f.write(f"   {rst_name[:-4]}\n")
+                        # Include all modules including __init__.py files
+                        package_modules.append((module_path, rst_name))
                         included_modules.add(module_path)
                         break
+
+            # Write the package modules
+            for module_path, rst_name in package_modules:
+                f.write(f"   {rst_name[:-4]}\n")
+
             # Add a section for the package itself if it exists as a module
             if package_name in module_to_rst:
                 f.write(f"\n.. automodule:: {package_name}\n")
                 f.write("   :members:\n")
                 f.write("   :undoc-members:\n")
                 f.write("   :show-inheritance:\n")
+
+    # Debug: Print what was included in each package
+    print("\n[DEBUG] Package index summary:")
+    for package_name, module_prefixes in packages.items():
+        included_count = sum(
+            1
+            for module_path in module_to_rst.keys()
+            if any(
+                module_path == prefix or module_path.startswith(prefix)
+                for prefix in module_prefixes
+            )
+        )
+        print(f"  - {package_name}: {included_count} modules")
+
     create_main_modules_index(modules_dir)
 
 

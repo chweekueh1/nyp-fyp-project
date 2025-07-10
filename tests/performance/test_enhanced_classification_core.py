@@ -16,7 +16,9 @@ sys.path.insert(0, str(project_root))
 # Now import after path setup
 from llm.chatModel import initialize_llm_and_db
 
-initialize_llm_and_db()
+# Only initialize if not in documentation mode
+if "DOCUMENTATION" not in os.environ:
+    initialize_llm_and_db()
 
 
 def test_enhanced_content_extraction_core():

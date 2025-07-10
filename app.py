@@ -374,7 +374,7 @@ def create_main_app() -> gr.Blocks:
                                 # Removed unused import: chat_interface_ui
                                 from gradio_modules.chatbot import chatbot_ui
 
-                                # Unpack components from chatbot_ui (12 components in correct order)
+                                # Unpack components from chatbot_ui (13 components in correct order)
                                 logger.info("🔍 [APP] Calling chatbot_ui...")
                                 (
                                     chat_selector,
@@ -385,6 +385,7 @@ def create_main_app() -> gr.Blocks:
                                     rename_btn,
                                     rename_status_md,
                                     search_container,
+                                    search_stats_md,  # New search stats component
                                     debug_md,
                                     clear_chat_btn,
                                     clear_chat_status,

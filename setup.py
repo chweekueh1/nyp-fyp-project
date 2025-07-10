@@ -1444,10 +1444,10 @@ def show_help():
     print("Usage: python setup.py <command>")
     print("")
     print("Available commands:")
-    print("  --build              Build Docker image")
-    print("  --build-test         Build test Docker image")
-    print("  --build-prod         Build production Docker image")
-    print("  --build-all          Build all Docker images")
+    print("  --build/--docker-build              Build Docker image")
+    print("  --build-test/--docker-build-test    Build test Docker image")
+    print("  --build-prod/--docker-build-prod    Build production Docker image")
+    print("  --build-all/--docker-build-all      Build all Docker images")
     print("  --test               Run tests in Docker")
     print("  --test-suite <suite> Run specific test suite")
     print("  --test-file <file>   Run specific test file")
@@ -1461,10 +1461,14 @@ def show_help():
     print(
         "  --docs               Build and run Sphinx documentation server (single container)"
     )
+    print(
+        "  --docker-run         Build and run a Docker image of your choice (interactive)"
+    )
     print("  --help               Show this help message")
     print("")
     print("Examples:")
-    print("  python setup.py --build")
+    print("  python setup.py --docker-build")
+    print("  python setup.py --docker-run")
     print("  python setup.py --test")
     print("  python setup.py --docs")
     print("  python setup.py --help")
@@ -1490,13 +1494,13 @@ def main():
     if command == "--help" or command == "help" or command == "-h":
         show_help()
         sys.exit(0)
-    elif command == "--build":
+    elif command == "--build" or command == "--docker-build":
         docker_build()
-    elif command == "--build-test":
+    elif command == "--build-test" or command == "--docker-build-test":
         docker_build_test()
-    elif command == "--build-prod":
+    elif command == "--build-prod" or command == "--docker-build-prod":
         docker_build_prod()
-    elif command == "--build-all":
+    elif command == "--build-all" or command == "--docker-build-all":
         docker_build_all()
     elif command == "--test":
         test_target = sys.argv[2] if len(sys.argv) > 2 else None
@@ -1533,6 +1537,57 @@ def main():
         )
         docker_build_docs()
         docker_docs()
+    elif command == "--docker-run":
+        print("\nWhich Docker image would you like to build and run?")
+        print("  1. dev  (nyp-fyp-chatbot-dev)")
+        print("  2. test (nyp-fyp-chatbot-test)")
+        print("  3. prod (nyp-fyp-chatbot-prod)")
+        print("  4. docs (nyp-fyp-chatbot:docs)")
+        print("  5. all  (build all images)")
+        choice = input("Enter the number of the image to build and run [1-5]: ").strip()
+        if choice == "1":
+            docker_build()
+            print("✅ Development image built successfully!")
+            print("🐳 Starting development container...")
+            # Import docker_run function from scripts/docker_utils.py
+            sys.path.append("scripts")
+            from docker_utils import docker_run
+
+            docker_run(mode="dev", prompt_for_mode=False)
+        elif choice == "2":
+            docker_build_test()
+            print("✅ Test image built successfully!")
+            print("🐳 Starting test container...")
+            # Import docker_run function from scripts/docker_utils.py
+            sys.path.append("scripts")
+            from docker_utils import docker_run
+
+            docker_run(mode="test", prompt_for_mode=False)
+        elif choice == "3":
+            docker_build_prod()
+            print("✅ Production image built successfully!")
+            print("🐳 Starting production container...")
+            # Import docker_run function from scripts/docker_utils.py
+            sys.path.append("scripts")
+            from docker_utils import docker_run
+
+            docker_run(mode="prod", prompt_for_mode=False)
+        elif choice == "4":
+            docker_build_docs()
+            docker_docs()
+        elif choice == "5":
+            docker_build_all()
+            print("All images built. You can run them individually with 'docker run'.")
+        else:
+            print("Defaulting to dev.")
+            docker_build()
+            print("✅ Development image built successfully!")
+            print("🐳 Starting development container...")
+            # Import docker_run function from scripts/docker_utils.py
+            sys.path.append("scripts")
+            from docker_utils import docker_run
+
+            docker_run(mode="dev", prompt_for_mode=False)
     else:
         print(f"❌ Unknown command: {command}")
         print("")

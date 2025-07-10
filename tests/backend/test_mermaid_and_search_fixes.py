@@ -13,11 +13,11 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 from backend.chat import (
-    validate_and_sanitize_mermaid_syntax,
     format_search_results,
     search_chat_history,
     _get_chat_metadata_cache_internal,
 )
+from backend.markdown_formatter import format_markdown
 
 
 def test_mermaid_syntax_validation():
@@ -70,7 +70,7 @@ def test_mermaid_syntax_validation():
         print(f"  📝 Test {i}: {test_case['description']}")
 
         try:
-            result = validate_and_sanitize_mermaid_syntax(test_case["input"])
+            result = format_markdown(test_case["input"])
 
             if test_case["expected_contains"] in result:
                 print("    ✅ PASS: Found expected content")

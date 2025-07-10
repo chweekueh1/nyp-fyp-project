@@ -71,28 +71,55 @@ def search_interface(
     # :param debug_info_state: State for debug information.
     # :type debug_info_state: gr.State
     # :return: A tuple containing the search container (gr.Column), search query textbox,
-    #          search button, and search results markdown.
-    # :rtype: Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown]
+    #          search button, search results markdown, and search stats markdown.
+    # :rtype: Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown, gr.Markdown]
     logger.info(
         "🔍 [SEARCH_UI] search_interface function called - initializing search components"
     )
     logger.info("🔍 [SEARCH_UI] Creating search container and components")
-    with gr.Column(visible=False) as search_container:  # Container for search UI
-        with gr.Row():
+    with gr.Column(
+        visible=False, elem_classes=["search-interface-container"]
+    ) as search_container:  # Container for search UI
+        with gr.Row(elem_classes=["search-header-row"]):
+            gr.Markdown("### 🔍 Search Chat History", elem_classes=["search-title"])
+
+        with gr.Row(elem_classes=["search-input-row"]):
             search_query = gr.Textbox(
-                label="Search chats or send message",
-                placeholder="Enter search query",
+                label="",
+                placeholder="Enter your search query here...",
                 scale=4,
+                elem_classes=["search-input"],
+                show_label=False,
+                container=False,
             )
-            search_btn = gr.Button("🔍 Search", scale=1, variant="secondary")
-            clear_search_btn = gr.Button("Clear", scale=0, variant="secondary")
+            search_btn = gr.Button(
+                "🔍 Search",
+                scale=1,
+                variant="primary",
+                elem_classes=["search-button"],
+                size="sm",
+            )
+            clear_search_btn = gr.Button(
+                "🗑️ Clear",
+                scale=0,
+                variant="secondary",
+                elem_classes=["clear-search-button"],
+                size="sm",
+            )
+
+        with gr.Row(elem_classes=["search-stats-row"]):
+            search_stats = gr.Markdown(
+                "Ready to search...", elem_classes=["search-stats"], visible=False
+            )
 
         search_results_md = gr.Markdown(
-            "Search results will appear here...", elem_classes=["search-results"]
+            "Enter a search query above to find messages in your chat history.",
+            elem_classes=["search-results"],
+            elem_id="search_results",
         )
     logger.info("🔍 [SEARCH_UI] Search container and components created successfully")
 
-    def _handle_search_query(query: str, username: str) -> str:
+    def _handle_search_query(query: str, username: str) -> tuple[str, str]:
         # Handle a search query from the UI and return formatted results.
         #
         # This function calls the backend's `search_chat_history` and formats
@@ -102,15 +129,15 @@ def search_interface(
         # :type query: str
         # :param username: The current username.
         # :type username: str
-        # :return: Formatted markdown string with search results.
-        # :rtype: str
+        # :return: Tuple of (formatted markdown string, stats string).
+        # :rtype: tuple[str, str]
         logger.info(
             f"🔍 [SEARCH_UI] _handle_search_query called with query: '{query}', username: '{username}'"
         )
 
         if not query.strip() or not username:
             logger.info("🔍 [SEARCH_UI] Empty query or username, returning early")
-            return "Please enter a search query."
+            return "Please enter a search query.", ""
 
         try:
             logger.info("🔍 [SEARCH_UI] Calling backend search_chat_history...")
@@ -125,7 +152,9 @@ def search_interface(
                 logger.info(
                     "🔍 [SEARCH_UI] No results found, returning no results message"
                 )
-                return f"**No results found for '{query}'**\n\n{status_message}. Try increasing the length of the query."
+                stats_text = f"❌ No results found for '{query}'"
+                result_text = f"**No results found for '{query}'**\n\n{status_message}. Try increasing the length of the query."
+                return result_text, stats_text
 
             # Use shared utility function for consistent formatting
             logger.info("🔍 [SEARCH_UI] Formatting search results...")
@@ -133,18 +162,23 @@ def search_interface(
                 found_results, query, include_similarity=True
             )
 
+            # Create stats text
+            stats_text = f"✅ Found {len(found_results)} result{'s' if len(found_results) != 1 else ''} for '{query}'"
+
             logger.info(
                 f"🔍 [SEARCH_UI] Search completed for '{query}': {len(found_results)} results found"
             )
-            return format_markdown(result_text)
+            return format_markdown(result_text), stats_text
 
         except Exception as e:
             logger.error(f"Error handling search: {e}")
-            return f"**Error occurred during search:** {str(e)}"
+            error_text = f"**Error occurred during search:** {str(e)}"
+            stats_text = "❌ Error occurred during search"
+            return error_text, stats_text
 
     def _refresh_search_results_on_data_change(
         current_query: str, username: str, all_chats_data: Dict[str, Any]
-    ) -> str:
+    ) -> tuple[str, str]:
         # Refresh search results when chat data changes (e.g., new messages added).
         #
         # This function is called automatically when all_chats_data_state changes,
@@ -156,8 +190,8 @@ def search_interface(
         # :type username: str
         # :param all_chats_data: The updated chat data.
         # :type all_chats_data: Dict[str, Any]
-        # :return: Updated search results or current display.
-        # :rtype: str
+        # :return: Tuple of (updated search results, stats string).
+        # :rtype: tuple[str, str]
         logger.info("🔍 [SEARCH_REFRESH] _refresh_search_results_on_data_change called")
         logger.info(
             f"🔍 [SEARCH_REFRESH] current_query: '{current_query}', username: '{username}'"
@@ -171,7 +205,10 @@ def search_interface(
             logger.info(
                 "🔍 [SEARCH_REFRESH] No active query or username, returning default message"
             )
-            return "Search results will appear here..."
+            return (
+                "Enter a search query above to find messages in your chat history.",
+                "",
+            )
 
         try:
             # Log the refresh attempt for debugging
@@ -199,42 +236,48 @@ def search_interface(
                 current_query.strip(), username
             )
             if not found_results:
-                return f"**No results found for '{current_query}'**\n\n{status_message}. Try increasing the length of the query."
+                stats_text = f"❌ No results found for '{current_query}'"
+                result_text = f"**No results found for '{current_query}'**\n\n{status_message}. Try increasing the length of the query."
+                return result_text, stats_text
+
             result_text = format_search_results(
                 found_results, current_query, include_similarity=True
             )
-            return format_markdown(result_text)
+            stats_text = f"✅ Found {len(found_results)} result{'s' if len(found_results) != 1 else ''} for '{current_query}'"
+            return format_markdown(result_text), stats_text
         except Exception as e:
             logger.error(f"Error refreshing search results: {e}")
-            return f"**Error occurred during search refresh:** {str(e)}"
+            error_text = f"**Error occurred during search refresh:** {str(e)}"
+            stats_text = "❌ Error occurred during search refresh"
+            return error_text, stats_text
 
-    def _clear_search_results() -> str:
+    def _clear_search_results() -> tuple[str, str]:
         """
         Clear search results and reset the markdown.
 
-        :return: Empty string to clear the markdown.
-        :rtype: str
+        :return: Tuple of (cleared message, empty stats).
+        :rtype: tuple[str, str]
         """
-        return "Search results cleared."
+        return "Enter a search query above to find messages in your chat history.", ""
 
     # Bind events
     logger.info("🔍 [SEARCH_UI] Binding search events")
     search_query.submit(
         fn=_handle_search_query,
         inputs=[search_query, username_state],
-        outputs=[search_results_md],
+        outputs=[search_results_md, search_stats],
     )
     search_btn.click(
         fn=_handle_search_query,
         inputs=[search_query, username_state],
-        outputs=[search_results_md],
+        outputs=[search_results_md, search_stats],
     )
     logger.info("🔍 [SEARCH_UI] Search events bound successfully")
 
     # Add clear search functionality
     clear_search_btn.click(
         fn=_clear_search_results,
-        outputs=[search_results_md],
+        outputs=[search_results_md, search_stats],
     )
 
     # Add automatic refresh when chat data changes
@@ -245,7 +288,7 @@ def search_interface(
     all_chats_data_state.change(
         fn=_refresh_search_results_on_data_change,
         inputs=[search_query, username_state, all_chats_data_state],
-        outputs=[search_results_md],
+        outputs=[search_results_md, search_stats],
         queue=False,  # Don't queue this to avoid delays
     )
 
@@ -253,6 +296,6 @@ def search_interface(
     # The search interface focuses only on search functionality
 
     logger.info(
-        "🔍 [SEARCH_UI] Returning search components: container, query, btn, results_md"
+        "🔍 [SEARCH_UI] Returning search components: container, query, btn, results_md, stats"
     )
-    return search_container, search_query, search_btn, search_results_md
+    return search_container, search_query, search_btn, search_results_md, search_stats

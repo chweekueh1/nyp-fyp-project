@@ -14,7 +14,7 @@ import gradio as gr
 
 from backend import transcribe_audio
 from backend.chat import get_chatbot_response
-from backend.markdown_formatter import format_markdown
+
 from infra_utils import setup_logging
 
 logger = setup_logging()
@@ -84,7 +84,7 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                 placeholder="Audio transcription will appear here...",
                 interactive=False,
                 lines=4,
-                max_lines=8,
+                max_lines=20,  # Increased from 8 to show more transcription content
             )
 
             # Edit transcription option
@@ -93,6 +93,7 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                     label="✏️ Edit Transcription (Optional)",
                     placeholder="You can edit the transcription here before sending to chatbot...",
                     lines=2,
+                    max_lines=20,  # Increased from 8 to show more transcription content
                     visible=False,
                 )
                 edit_btn = gr.Button("✏️ Edit", size="sm", visible=False)
@@ -106,7 +107,7 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                 placeholder="Chatbot response will appear here...",
                 interactive=False,
                 lines=6,
-                max_lines=12,
+                max_lines=30,  # Increased from 12 to show more chatbot responses
             )
 
         # Audio history section
@@ -247,8 +248,6 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                         if len(updated_history[-1]) > 1
                         else "No response received"
                     )
-                    # Format markdown content for safe rendering
-                    response = format_markdown(response)
                 else:
                     response = "No response received"
             else:
@@ -367,8 +366,6 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
                         if len(updated_history[-1]) > 1
                         else "No response received"
                     )
-                    # Format markdown content for safe rendering
-                    response = format_markdown(response)
                 else:
                     response = "No response received"
             else:

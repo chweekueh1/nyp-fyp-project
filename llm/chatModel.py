@@ -42,6 +42,7 @@ from system_prompts import (
     get_chat_contextual_sys_prompt,
     get_chat_system_prompt,
 )
+from backend.markdown_formatter import format_markdown
 
 # Set up logging for this specific module
 logging.basicConfig(
@@ -555,15 +556,19 @@ async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]
         logging.error(
             "LangGraph app is not compiled. Cannot get conversational answer."
         )
+        error_answer = (
+            "I'm sorry, the AI assistant is not fully set up. Please try again later."
+        )
         return {
-            "answer": "I'm sorry, the AI assistant is not fully set up. Please try again later.",
+            "answer": format_markdown(error_answer),
             "context": "",
         }
 
     if llm is None or db is None:
         logging.error("LLM or Chroma DB not initialized. Cannot answer question.")
+        error_answer = "I'm sorry, I cannot process your request right now due to an internal system error (AI not ready)."
         return {
-            "answer": "I'm sorry, I cannot process your request right now due to an internal system error (AI not ready).",
+            "answer": format_markdown(error_answer),
             "context": "No context due to initialization error.",
         }
 
@@ -595,7 +600,12 @@ async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]
         answer = result.get("answer", "No answer generated.")
         context = result.get("context", "No context retrieved.")
 
-        print(f"[DEBUG] chatModel.get_convo_hist_answer returning: {result}")
+        # Format markdown content immediately after LLM response
+        answer = format_markdown(answer)
+
+        print(
+            f"[DEBUG] chatModel.get_convo_hist_answer returning formatted answer: {answer}"
+        )
         return {"answer": answer, "context": context}
     except Exception as e:
         print(f"[ERROR] chatModel.get_convo_hist_answer exception: {e}")
@@ -603,7 +613,8 @@ async def get_convo_hist_answer(question: str, thread_id: str) -> Dict[str, str]
             f"Error invoking LangGraph workflow for thread '{thread_id}': {e}",
             exc_info=True,
         )
+        error_answer = "I'm sorry, I encountered an error while processing your request. Please try again."
         return {
-            "answer": "I'm sorry, I encountered an error while processing your request. Please try again.",
+            "answer": format_markdown(error_answer),
             "context": "",
         }

@@ -97,7 +97,16 @@ class EnhancedModuleDocumenter(ModuleDocumenter):
 
     def get_doc(self) -> Optional[List[List[str]]]:
         """Get the docstring of the object, with context and fallback extraction for scripts/tests/roots."""
-        docstring = super().get_doc()
+        try:
+            docstring = super().get_doc()
+        except Exception as e:
+            # If there's an import or parse error, return a warning
+            module_path = (
+                getattr(self, "modname", None) or getattr(self, "fullname", None) or ""
+            )
+            warning_msg = f".. warning:: Module '{module_path}' could not be imported or parsed: {str(e)}"
+            return [[warning_msg]]
+
         module_path = (
             getattr(self, "modname", None) or getattr(self, "fullname", None) or ""
         )
@@ -129,6 +138,8 @@ class EnhancedModuleDocumenter(ModuleDocumenter):
             return "[Test]"
         if "." not in module_path and module_path:
             return "[Root Module]"
+        if module_path.endswith(".__init__"):
+            return "[Package]"
         return ""
 
     def _extract_summary_from_source(self) -> Optional[str]:
@@ -138,29 +149,93 @@ class EnhancedModuleDocumenter(ModuleDocumenter):
                 return None
             with open(self.object.__file__, "r", encoding="utf-8") as f:
                 source = f.read()
+
             # Skip shebang line if present
             lines = source.splitlines()
+            start_line = 0
             if lines and lines[0].startswith("#!"):
+                start_line = 1
                 source = "\n".join(lines[1:])
-            tree = ast.parse(source)
-            # Try module docstring
+
+            # Try to parse the source
+            try:
+                tree = ast.parse(source)
+            except SyntaxError as e:
+                # If parsing fails, try with the original source (including shebang)
+                try:
+                    tree = ast.parse("\n".join(lines))
+                    start_line = 0
+                except SyntaxError:
+                    # If still failing, return a warning about syntax errors
+                    module_path = getattr(self, "modname", "unknown")
+                    print(f"Warning: Syntax error in {module_path}: {e}")
+                    return f".. warning:: Module has syntax errors: {str(e)}"
+
+            # Try module docstring first
             mod_doc = ast.get_docstring(tree)
             if mod_doc:
-                return mod_doc
-            # Try first function/class docstring
-            for node in tree.body:
-                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                return mod_doc.strip()
+
+            # If no module docstring, look for docstrings in the first few nodes
+            # This handles cases where docstrings come after imports
+            for node in tree.body[:5]:  # Check first 5 nodes
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Str):
+                    # This is a string literal at module level (likely a docstring)
+                    doc = node.value.s.strip()
+                    if doc and len(doc) > 20:  # Reasonable length for a docstring
+                        return doc
+                elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                     doc = ast.get_docstring(node)
                     if doc:
-                        return doc
-            # Try top-level comments
-            comments = [
-                line[1:].strip() for line in lines if line.strip().startswith("#")
-            ]
+                        return doc.strip()
+
+            # Try top-level comments (but skip shebang and encoding lines)
+            comments = []
+            for i, line in enumerate(lines[start_line:], start_line):
+                stripped = line.strip()
+                if stripped.startswith("#") and not stripped.startswith("#!"):
+                    comment_content = stripped[1:].strip()
+                    if comment_content and len(comment_content) > 10:
+                        comments.append(comment_content)
+                        if len(comments) >= 3:  # Limit to first 3 meaningful comments
+                            break
+
             if comments:
-                return comments[0]
-        except Exception:
-            return None
+                return " ".join(comments[:2])  # Return first 2 comments as summary
+
+            # Generate a basic description based on the module name and content
+            module_name = getattr(self, "modname", "unknown")
+            if module_name:
+                # Special handling for __init__.py files
+                if module_name.endswith(".__init__"):
+                    package_name = module_name.replace(".__init__", "")
+                    return f"Package initialization module for {package_name.replace('_', ' ')}. Contains package-level imports, exports, and configuration."
+
+                # Analyze the module content to generate a basic description
+                has_functions = any(
+                    isinstance(node, ast.FunctionDef) for node in tree.body
+                )
+                has_classes = any(isinstance(node, ast.ClassDef) for node in tree.body)
+                has_imports = any(
+                    isinstance(node, (ast.Import, ast.ImportFrom)) for node in tree.body
+                )
+
+                description_parts = []
+                if has_functions:
+                    description_parts.append("functions")
+                if has_classes:
+                    description_parts.append("classes")
+                if has_imports:
+                    description_parts.append("imports")
+
+                if description_parts:
+                    return f"Module containing {', '.join(description_parts)} for {module_name.replace('_', ' ')} functionality."
+
+        except Exception as e:
+            # Log the error but don't fail completely
+            module_path = getattr(self, "modname", "unknown")
+            print(f"Warning: Could not extract summary from {module_path}: {e}")
+            return f".. warning:: Could not extract summary: {str(e)}"
         return None
 
     def _process_doc_comments(self, docstring: List[List[str]]) -> List[List[str]]:

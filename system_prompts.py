@@ -52,7 +52,8 @@ def get_classification_system_prompt() -> str:
         "- Do not classify inappropriate or harmful content\n"
         "## Output Format\n"
         "Provide your classification in JSON format with the following structure:\n"
-        '{{"classification": "security_level", "sensitivity": "sensitivity_level", "reasoning": "detailed_explanation"}}\n'
+        '{{"classification": "security_level", "sensitivity": "sensitivity_level", "reasoning": "detailed_explanation", "confidence": 0.85}}\n'
+        "The confidence field should be a number between 0.0 and 1.0 representing your confidence in the classification (e.g., 0.85 for 85% confidence).\n"
         "Keep the classification concise but thorough.\n\n"
         "{context}"  # Retrieved context from RAG chain will be injected here
     )

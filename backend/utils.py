@@ -38,6 +38,21 @@ def sanitize_input(input_text: str) -> str:
     # Remove potentially dangerous characters
     cleaned = re.sub(r'[<>"\']', "", cleaned)
 
+    # Handle arrow characters to prevent them from being interpreted as HTML entities
+    # Use temporary placeholders to avoid conflicts with HTML entity escaping
+    cleaned = cleaned.replace("-->", "ARROWLONGPLACEHOLDER")
+    cleaned = cleaned.replace("-.->", "ARROWDOTTEDPLACEHOLDER")
+    cleaned = cleaned.replace("==>", "ARROWTHICKPLACEHOLDER")
+    cleaned = cleaned.replace("=>", "ARROWFATPLACEHOLDER")
+    cleaned = cleaned.replace("->", "ARROWSHORTPLACEHOLDER")
+
+    # Restore placeholders with proper escaping
+    cleaned = cleaned.replace("ARROWLONGPLACEHOLDER", "\\-\\-\\>")
+    cleaned = cleaned.replace("ARROWDOTTEDPLACEHOLDER", "\\-\\.\\-\\>")
+    cleaned = cleaned.replace("ARROWTHICKPLACEHOLDER", "\\=\\=\\>")
+    cleaned = cleaned.replace("ARROWFATPLACEHOLDER", "\\=\\>")
+    cleaned = cleaned.replace("ARROWSHORTPLACEHOLDER", "\\-\\>")
+
     # Limit length
     if len(cleaned) > 400000:
         cleaned = cleaned[:400000]

@@ -143,7 +143,17 @@ def format_classification_response(
     classification_category = str(parsed_llm_output.get("classification", "Unknown"))
     sensitivity_level = str(parsed_llm_output.get("sensitivity", "Unknown"))
     reasoning = str(parsed_llm_output.get("reasoning", "No reasoning provided."))
-    confidence = str(parsed_llm_output.get("confidence", "N/A"))
+
+    # Format confidence properly
+    confidence_raw = parsed_llm_output.get("confidence", "N/A")
+    if confidence_raw != "N/A" and confidence_raw is not None:
+        try:
+            confidence_float = float(confidence_raw)
+            confidence = f"{confidence_float:.1%}"  # Format as percentage (e.g., 85.0%)
+        except (ValueError, TypeError):
+            confidence = str(confidence_raw)
+    else:
+        confidence = "N/A"
 
     # Extract keywords from the parsed LLM output, if available
     llm_keywords = parsed_llm_output.get("keywords", [])

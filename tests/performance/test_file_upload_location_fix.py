@@ -13,7 +13,9 @@ from infra_utils import get_chatbot_dir
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-initialize_llm_and_db()
+# Only initialize if not in documentation mode
+if "DOCUMENTATION" not in os.environ:
+    initialize_llm_and_db()
 
 
 def test_file_upload_directory_structure():

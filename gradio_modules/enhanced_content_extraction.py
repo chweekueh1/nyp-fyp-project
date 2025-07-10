@@ -65,6 +65,40 @@ CLASSIFICATION_WORD_LIMIT = 10  # New constant for classification input word lim
 MAX_WORKERS = 8
 
 
+def escape_special_characters(text: str) -> str:
+    """
+    Escape special characters that might cause issues in text processing.
+
+    This function removes control characters and extended ASCII characters
+    that could cause problems in text processing while preserving normal
+    text content, punctuation, and symbols.
+
+    :param text: The text to escape special characters from.
+    :type text: str
+    :return: The text with problematic characters removed.
+    :rtype: str
+    """
+    if not text:
+        return text
+
+    # Remove control characters (0x00-0x1F) except newlines and tabs
+    # Remove extended ASCII characters (0x7F-0xFF) that might cause issues
+    cleaned = ""
+    for char in text:
+        char_code = ord(char)
+        # Keep printable ASCII (32-126), newlines (10, 13), and tabs (9)
+        if (32 <= char_code <= 126) or char_code in [9, 10, 13]:
+            cleaned += char
+        # Keep Unicode characters above ASCII range
+        elif char_code > 127:
+            cleaned += char
+        # Remove control characters and extended ASCII
+        else:
+            cleaned += " "
+
+    return cleaned
+
+
 def find_tool(tool_name: str) -> Optional[str]:
     """
     Find the path to a tool executable.

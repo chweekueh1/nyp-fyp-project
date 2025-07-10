@@ -78,7 +78,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # RUN /home/appuser/.nypai-chatbot/venv-docs/bin/pip install -r requirements-docs.txt
 
 # Copy application code
-COPY --chown=appuser:appgroup app.py infra_utils.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
+COPY --chown=appuser:appgroup app.py performance_utils.py hashing.py flexcyon_theme.py system_prompts.py ./
 COPY --chown=appuser:appgroup backend/ ./backend/
 COPY --chown=appuser:appgroup gradio_modules/ ./gradio_modules/
 COPY --chown=appuser:appgroup llm/ ./llm/
@@ -92,20 +92,23 @@ COPY --chown=appuser:appgroup misc/ ./misc/
 # Copy the documentation generation script
 COPY --chown=appuser:appgroup scripts/generate_docs.py ./
 
+# Create Sphinx configuration directories
+RUN mkdir -p /app/docs/_templates /app/docs/_static
+
+# Clean up any files in /app/docs/ before copying Sphinx config (after copying source code)
+RUN rm -rf /app/docs/* && mkdir -p /app/docs/_templates /app/docs/_static
+
 # Copy Sphinx configuration files
 COPY --chown=appuser:appgroup docs/conf.py /app/docs/
 COPY --chown=appuser:appgroup docs/index.rst /app/docs/
 COPY --chown=appuser:appgroup docs/Makefile /app/docs/
 COPY --chown=appuser:appgroup docs/extensions/ /app/docs/extensions/
 
-# Create Sphinx configuration directories
-RUN mkdir -p /app/docs/_templates /app/docs/_static
-
 # Make the script executable
 RUN chmod +x /app/generate_docs.py
 
-# Always auto-generate and update RST files after all code/docs are copied
-RUN /home/appuser/.nypai-chatbot/venv-docs/bin/python /app/generate_docs.py
+# RST files will be generated when the container starts via serve_docs.sh
+# This avoids duplicate generation during build and startup
 
 # Expose port for HTTP server
 EXPOSE 8080
@@ -114,9 +117,8 @@ EXPOSE 8080
 COPY --chown=appuser:appgroup scripts/serve_docs.sh ./
 RUN chmod +x /app/serve_docs.sh
 
-# Set entrypoint and command
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD ["/app/serve_docs.sh"]
+# Set the serve_docs.sh script as the entrypoint
+ENTRYPOINT ["/bin/sh", "/app/serve_docs.sh"]
 
 # Print build information
 RUN echo "[BUILD] Documentation Docker image built successfully" && \

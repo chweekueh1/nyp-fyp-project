@@ -22,17 +22,8 @@ def setup_nltk_data_path() -> str:
     :rtype: str
     """
     try:
-        import importlib.util
-        from pathlib import Path
-
-        # Import get_chatbot_dir directly from the main infra_utils.py file
-        infra_utils_path = Path(__file__).parent.parent / "infra_utils.py"
-        spec = importlib.util.spec_from_file_location(
-            "infra_utils_main", infra_utils_path
-        )
-        infra_utils_main = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(infra_utils_main)
-        get_chatbot_dir = infra_utils_main.get_chatbot_dir
+        # Import get_chatbot_dir from the package
+        from . import get_chatbot_dir
 
         # Set NLTK data path to .nypai-chatbot directory
         nltk_data_path = os.path.join(get_chatbot_dir(), "data", "nltk_data")
