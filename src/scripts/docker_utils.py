@@ -9,7 +9,6 @@ import sys
 import subprocess
 import shutil
 import time
-import json
 import threading
 from infra_utils import setup_logging, get_docker_venv_path
 from .env_utils import check_env_file
@@ -42,20 +41,7 @@ logger = setup_logging()
 
 ENV_FILE_PATH = os.environ.get("DOCKER_ENV_FILE", ".env")
 
-BUILD_TIMES_FILE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "docker_build_times.json")
-)
-
-print(f"[DEBUG] Docker build times will be written to: {BUILD_TIMES_FILE}")
-logger.info(f"Docker build times will be written to: {BUILD_TIMES_FILE}")
-
-if os.name == "nt":
-    LOCAL_VENV_PATH = os.path.expanduser(r"~/.nypai-chatbot/venv")
-    LOCAL_VENV_PATH = os.path.expanduser(os.path.join("~", ".nypai-chatbot", "venv"))
-    VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "Scripts", "python.exe")
-else:
-    LOCAL_VENV_PATH = os.path.expanduser("~/.nypai-chatbot/venv")
-    VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
+# Remove save_build_time and any logic that writes to docker_build_times.json
 
 
 def running_in_docker() -> bool:
@@ -171,34 +157,7 @@ def ensure_docker_running() -> None:
         sys.exit(1)
 
 
-def save_build_time(image_name, build_duration):
-    try:
-        # Use Singapore timezone for timestamp
-        # Always store duration as float
-        build_duration = float(build_duration)
-        print(f"[DEBUG] Attempting to write build metrics to: {BUILD_TIMES_FILE}")
-        # Read existing data
-        if os.path.exists(BUILD_TIMES_FILE):
-            try:
-                with open(BUILD_TIMES_FILE, "r") as f:
-                    data = json.load(f)
-            except Exception:
-                data = {}
-        else:
-            data = {}
-        # Store per-image durations in a list
-        durations = data.get(image_name, [])
-        durations.append(build_duration)
-        data[image_name] = durations
-        # Compute average
-        avg = float(sum(durations) / len(durations)) if durations else 0.0
-        # Write new format: { "avg_duration": float }
-        output = {"avg_duration": avg}
-        with open(BUILD_TIMES_FILE, "w") as f:
-            json.dump(output, f, indent=2)
-        print(f"[DEBUG] Successfully wrote build metrics to: {BUILD_TIMES_FILE}")
-    except Exception as e:
-        print(f"[WARNING] Could not save Docker build time: {e}")
+# Remove save_build_time and any logic that writes to docker_build_times.json
 
 
 def timed_docker_build(build_args, image_name):
@@ -210,7 +169,7 @@ def timed_docker_build(build_args, image_name):
     def timer():
         while build_duration[0] is None:
             time.sleep(0.1)
-        save_build_time(image_name, build_duration[0])
+        # Remove save_build_time and any logic that writes to docker_build_times.json
 
     t = threading.Thread(target=timer, daemon=True)
     t.start()
@@ -251,7 +210,7 @@ def docker_build():
         "build",
         "--progress=plain",
         "-f",
-        "Dockerfile.dev",
+        "docker/Dockerfile.dev",
         "-t",
         "nyp-fyp-chatbot-dev",
         "--build-arg",
@@ -285,7 +244,7 @@ def docker_build_test():
         "build",
         "--progress=plain",
         "-f",
-        "Dockerfile.test",
+        "docker/Dockerfile.test",
         "-t",
         "nyp-fyp-chatbot-test",
         "--build-arg",
@@ -319,7 +278,7 @@ def docker_build_prod():
         "build",
         "--progress=plain",
         "-f",
-        "Dockerfile",
+        "docker/Dockerfile",
         "-t",
         "nyp-fyp-chatbot-prod",
         "--build-arg",

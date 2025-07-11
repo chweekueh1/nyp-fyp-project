@@ -31,11 +31,11 @@ pi_heif==0.15.0
 pillow==11.1.0
 pydantic==2.11.2
 pydantic-settings==2.8.1
+PyMuPDF>=1.23.0
 pypdf>=4.0.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 python-multipart==0.0.20
-pytz==2025.2
 PyYAML==6.0.2
 requests==2.32.3
 # Dev-only packages

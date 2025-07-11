@@ -4,6 +4,7 @@ Script to generate Sphinx documentation for the NYP FYP CNC Chatbot.
 """
 
 import sys
+import subprocess
 from pathlib import Path
 
 
@@ -24,28 +25,20 @@ def generate_docs():
         print(
             "   RST files are only generated within Docker containers to avoid polluting the host filesystem"
         )
+        return
 
     modules_dir = docs_dir / "modules"
 
-    # Only generate RST files if we're in Docker
-    if in_docker:
-        # Clean up old RST files before generating new ones
-        if modules_dir.exists():
-            for f in modules_dir.rglob("*.rst"):
-                f.unlink()
-        else:
-            modules_dir.mkdir(parents=True, exist_ok=True)
+    # Clean up old RST files before generating new ones
+    if modules_dir.exists():
+        for f in modules_dir.rglob("*.rst"):
+            f.unlink()
     else:
-        # On host, just ensure the modules directory exists but don't generate RST files
-        if not modules_dir.exists():
-            modules_dir.mkdir(parents=True, exist_ok=True)
-        print("   Skipping RST file generation on host filesystem")
-        return
+        modules_dir.mkdir(parents=True, exist_ok=True)
 
-    # Auto-generate index.rst in Docker
-    if in_docker:
-        index_rst = docs_dir / "index.rst"
-        index_content = """.. AUTO-GENERATED INDEX.RST -- DO NOT EDIT MANUALLY
+    # Auto-generate index.rst
+    index_rst = docs_dir / "index.rst"
+    index_content = """.. AUTO-GENERATED INDEX.RST -- DO NOT EDIT MANUALLY
 
 Welcome to NYP FYP CNC Chatbot's documentation!
 ==================================================
@@ -64,135 +57,103 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 """
-        with open(index_rst, "w", encoding="utf-8") as f:
-            f.write(index_content)
-        print(f"[generate_docs.py] Auto-generated index.rst at {index_rst}")
+    with open(index_rst, "w", encoding="utf-8") as f:
+        f.write(index_content)
+    print(f"[generate_docs.py] Auto-generated index.rst at {index_rst}")
 
-    # List of source directories to scan (mirror src/ tree)
+    # List of source directories to scan
     source_root = Path("/app/src") if in_docker else Path("src")
     if not source_root.exists():
         print(f"[ERROR] Source root {source_root} does not exist!")
         return
 
-    # Exclude patterns for files we don't want to document
-    exclude_patterns = [
-        "__init__.py",
-        "*.sh",
-        "*.bash",
-        "*.zsh",
-        "*.fish",
-        "*.ps1",
-        "*.bat",
-        "*.cmd",
-        "*.exe",
-        "*.pyc",
-        "*.pyo",
-        "*.pyd",
-        "*.so",
-        "*.dll",
-        "*.dylib",
-    ]
+    # Use sphinx-apidoc to generate RST files
+    try:
+        # Build sphinx-apidoc command
+        cmd = [
+            "sphinx-apidoc",
+            "-o",
+            str(modules_dir),
+            "--separate",
+            "--module-first",
+            "--maxdepth=6",
+            "--private",
+            "--no-headings",
+            str(source_root / "backend"),
+            str(source_root / "gradio_modules"),
+            str(source_root / "llm"),
+            str(source_root / "infra_utils"),
+            str(source_root / "scripts"),
+            str(source_root / "tests"),
+            str(source_root / "misc"),
+            str(source_root),
+        ]
 
-    def should_exclude_file(file_path):
-        filename = file_path.name
-        if filename in exclude_patterns:
-            return True
-        for pattern in exclude_patterns:
-            if pattern.startswith("*.") and filename.endswith(pattern[1:]):
-                return True
+        print(f"[generate_docs.py] Running: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(docs_dir))
+
+        if result.returncode == 0:
+            print("✅ sphinx-apidoc completed successfully")
+            if result.stdout:
+                print(f"Output: {result.stdout}")
+        else:
+            print(f"❌ sphinx-apidoc failed: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Error running sphinx-apidoc: {e}")
         return False
 
-    def file_to_module(file_path, base_dir):
-        rel_path = file_path.relative_to(base_dir)
-        parts = rel_path.with_suffix("").parts
-        return ".".join(parts)
-
-    def get_automodule_path(file_path, base_dir):
-        rel_path = file_path.relative_to(base_dir)
-        parts = rel_path.with_suffix("").parts
-        return ".".join(parts)
-
-    def get_rst_output_path(file_path, base_dir, modules_dir):
-        rel_path = file_path.relative_to(base_dir)
-        return modules_dir / rel_path.with_suffix(".rst")
-
-    generated_rst_files = []
-    module_to_rst = {}
-
-    print(f"[DEBUG] source_root: {source_root}")
-    print(f"[DEBUG] modules_dir: {modules_dir}")
-
-    # Recursively scan all .py files under src/
-    for py_file in source_root.rglob("*.py"):
-        if should_exclude_file(py_file):
-            continue
-        module_path = file_to_module(py_file, source_root)
-        rst_path = get_rst_output_path(py_file, source_root, modules_dir)
-        rst_path.parent.mkdir(parents=True, exist_ok=True)
-        module_to_rst[module_path] = rst_path.relative_to(modules_dir).as_posix()
-        if not rst_path.exists():
-            with open(rst_path, "w", encoding="utf-8") as f:
-                if py_file.name == "__init__.py":
-                    package_name = py_file.parent.name
-                    title = f"{package_name} Package"
-                else:
-                    title = py_file.stem
-                f.write(f"{title}\n")
-                f.write(f"{'=' * len(title)}\n\n")
-                automodule_path = get_automodule_path(py_file, source_root)
-                f.write(f".. automodule:: {automodule_path}\n")
-                f.write("   :members:\n")
-                f.write("   :undoc-members:\n")
-                f.write("   :show-inheritance:\n")
-                f.write("   :special-members:\n")
-                f.write("   :exclude-members: __weakref__\n")
-                if py_file.name == "__init__.py":
-                    f.write("   :show-module-summary:\n")
-                    f.write("   :imported-members:\n")
-            generated_rst_files.append((str(rst_path), automodule_path))
-        # Debug: warn if RST file is empty
-        if rst_path.stat().st_size == 0:
-            print(f"[WARNING] RST file {rst_path} is empty after generation!")
-
-    # Build package indexes and main modules index
-    def create_package_indexes(modules_dir, module_to_rst):
-        packages = {}
-        for module_path, rst_rel_path in module_to_rst.items():
-            parts = Path(rst_rel_path).parts
-            if len(parts) > 1:
-                pkg = parts[0]
-                packages.setdefault(pkg, []).append(rst_rel_path)
-            # else: skip root-level modules entirely
-        # Write index.rst for each package
-        for pkg, rst_list in packages.items():
-            pkg_dir = modules_dir / pkg
-            pkg_dir.mkdir(parents=True, exist_ok=True)
-            index_file = pkg_dir / "index.rst"
-            with open(index_file, "w") as f:
-                f.write(f"{pkg.title()} Package\n")
-                f.write(f"{'=' * (len(pkg) + 8)}\n\n")
-                f.write(".. toctree::\n")
-                f.write("   :maxdepth: 3\n\n")
-                for rst_rel in sorted(rst_list):
-                    if rst_rel.endswith("__init__.rst"):  # skip __init__
-                        continue
-                    rel_path = Path(rst_rel).with_suffix("")
-                    f.write(f"   {rel_path.relative_to(pkg)}\n")
-        # Write main modules.rst (only for packages)
-        index_file = modules_dir / "modules.rst"
-        with open(index_file, "w") as f:
-            f.write("All Modules\n===========\n\n")
-            f.write(".. toctree::\n   :maxdepth: 2\n\n")
-            for pkg in sorted(packages):
-                if (modules_dir / pkg / "index.rst").exists():
-                    f.write(f"   {pkg}/index\n")
-
-    create_package_indexes(modules_dir, module_to_rst)
+    # Add missing docstring message to generated RST files
+    add_missing_docstring_messages(modules_dir)
 
     print("\n✅ RST files generated successfully!")
-    print(f"📁 Generated {len(generated_rst_files)} RST files in {modules_dir}")
+    print(f"📁 Generated RST files in {modules_dir}")
     print("🏗️ HTML documentation will be built by the calling script")
     return True
+
+
+def add_missing_docstring_messages(modules_dir: Path):
+    """Add missing docstring messages to RST files."""
+    missing_docstring_msg = """
+.. note::
+
+   **Missing Documentation Notice**
+
+   If you do not see documentation on this page, check the Sphinx build logic or if the file has an appropriate docstring.
+
+   This could be due to:
+
+   * Missing or incomplete docstrings in the source code
+   * Import errors during documentation generation
+   * Syntax errors in the source files
+   * Missing dependencies during build
+
+   Please ensure all public functions, classes, and modules have proper docstrings following Google or Sphinx style.
+"""
+
+    for rst_file in modules_dir.rglob("*.rst"):
+        try:
+            with open(rst_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Check if the file has any actual content beyond the automodule directive
+            if ".. automodule::" in content and not any(
+                section in content.lower()
+                for section in [
+                    "arguments:",
+                    "parameters:",
+                    "returns:",
+                    "raises:",
+                    "examples:",
+                ]
+            ):
+                # Add missing docstring message
+                with open(rst_file, "w", encoding="utf-8") as f:
+                    f.write(content + missing_docstring_msg)
+
+        except Exception as e:
+            print(f"Warning: Could not process {rst_file}: {e}")
 
 
 if __name__ == "__main__":

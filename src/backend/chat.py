@@ -18,6 +18,7 @@ both synchronous and asynchronous interfaces for chat operations.
 """
 
 import json
+import os
 from typing import List, Dict, Any, Tuple, Optional  # noqa: F401
 from pathlib import Path
 import uuid
@@ -40,8 +41,9 @@ from llm.chatModel import get_convo_hist_answer, initialize_llm_and_db, is_llm_r
 # Set up logging
 logger = setup_logging()
 
-# Ensure chat session directory exists
-Path(CHAT_SESSIONS_PATH).mkdir(parents=True, exist_ok=True)
+# Ensure chat session directory exists (skip during benchmarks)
+if not os.environ.get("BENCHMARK_MODE"):
+    Path(CHAT_SESSIONS_PATH).mkdir(parents=True, exist_ok=True)
 
 # In-memory store for chat names and metadata
 _chat_metadata_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}

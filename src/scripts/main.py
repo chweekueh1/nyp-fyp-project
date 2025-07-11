@@ -1,12 +1,20 @@
-"""
-Main Setup Script for NYP FYP Chatbot
-
-This script provides command-line tools for building, running, testing, and managing the chatbot project in Docker environments.
-It supports building containers, running tests, managing pre-commit hooks, and more.
-"""
-
 #!/usr/bin/env python3
+"""
+Main script for running various NYP FYP Chatbot operations.
+
+This script provides a command-line interface for running tests, benchmarks,
+and other operations in the NYP FYP Chatbot project.
+"""
+
 import sys
+import subprocess
+from pathlib import Path
+
+# Add src to path for imports
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 import argparse
 from docker_utils import (
     docker_build,
@@ -29,7 +37,6 @@ from test_utils import (
 from env_utils import ENV_FILE_PATH, running_in_docker, logger
 from precommit_utils import setup_pre_commit
 from fix_permissions import fix_nypai_chatbot_permissions
-import subprocess
 from infra_utils import get_docker_venv_path
 
 fix_nypai_chatbot_permissions()
@@ -49,6 +56,9 @@ Examples:
 
   # Run Docker container (prompts to choose dev/prod/test)
   python setup.py --docker-run
+
+  # Run performance benchmarks
+  python setup.py --run-benchmarks                                # Run comprehensive benchmarks
 
   # Run specific container without prompt
   python setup.py --docker-run --docker-mode dev     # Development container (port 7680)
@@ -108,6 +118,11 @@ Examples:
         "--docker-run",
         action="store_true",
         help="Run a Docker container (prompts to choose between dev, prod, or test)",
+    )
+    parser.add_argument(
+        "--run-benchmarks",
+        action="store_true",
+        help="Run performance benchmarks in the dev container",
     )
     parser.add_argument(
         "--docker-test",

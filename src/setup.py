@@ -21,8 +21,9 @@ from scripts.docker_utils import (
     docker_build_prod,
     docker_build_all,
     docker_build_docs,
-    save_build_time,
+    # save_build_time,  # Remove this import
 )
+from scripts.docker_build_tracker import DockerBuildTracker
 
 # Global variable to track if shutdown is requested
 shutdown_requested = False
@@ -987,6 +988,26 @@ def update_test_shebangs():
         logger.error(f"Error updating test shebangs: {e}", exc_info=True)
 
 
+def docker_build_bench():
+    """Build the benchmark Docker image."""
+    import subprocess
+
+    print("[DEBUG] Building benchmark image from docker/Dockerfile.bench...")
+    subprocess.run(
+        [
+            "docker",
+            "build",
+            "-f",
+            "docker/Dockerfile.bench",
+            "-t",
+            "nyp-fyp-chatbot-bench",
+            ".",
+        ],
+        check=True,
+    )
+    print("✅ Benchmark image 'nyp-fyp-chatbot-bench' built successfully.")
+
+
 def show_help():
     # Display help information for setup.py commands.
     print("Usage: python setup.py <command>")
@@ -1002,6 +1023,7 @@ def show_help():
     print("  --list-tests         List available tests")
     print("  --shell              Open shell in Docker container")
     print("  --export             Export Docker image")
+    print("  --run-benchmarks     Run performance benchmarks using docker-compose")
     print("  --docker-wipe        Remove all Docker containers, images, and volumes")
     print("  --pre-commit         Setup pre-commit hooks")
     print("  --update-shebangs    Update shebang lines in Python files")
@@ -1018,6 +1040,9 @@ def show_help():
     print("  python setup.py --docker-build")
     print("  python setup.py --docker-run")
     print("  python setup.py --test")
+    print(
+        "  python setup.py --run-benchmarks  # Uses docker-compose with volume mounting"
+    )
     print("  python setup.py --docs")
     print("  python setup.py --help")
 
@@ -1048,9 +1073,9 @@ def main():
         start = time.time()
         docker_build()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-dev", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
         print(
-            f"[DEBUG] Build time for dev image: {duration} seconds (see docker_build_times.json)"
+            f"[DEBUG] Build time for dev image: {duration} seconds (recorded in SQLite)"
         )
     elif command == "--build-test" or command == "--docker-build-test":
         import time
@@ -1058,9 +1083,9 @@ def main():
         start = time.time()
         docker_build_test()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-test", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-test", duration)
         print(
-            f"[DEBUG] Build time for test image: {duration} seconds (see docker_build_times.json)"
+            f"[DEBUG] Build time for test image: {duration} seconds (recorded in SQLite)"
         )
     elif command == "--build-prod" or command == "--docker-build-prod":
         import time
@@ -1068,9 +1093,9 @@ def main():
         start = time.time()
         docker_build_prod()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-prod", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-prod", duration)
         print(
-            f"[DEBUG] Build time for prod image: {duration} seconds (see docker_build_times.json)"
+            f"[DEBUG] Build time for prod image: {duration} seconds (recorded in SQLite)"
         )
     elif command == "--build-all" or command == "--docker-build-all":
         import time
@@ -1078,9 +1103,9 @@ def main():
         start = time.time()
         docker_build_all()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-all", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-all", duration)
         print(
-            f"[DEBUG] Build time for all images: {duration} seconds (see docker_build_times.json)"
+            f"[DEBUG] Build time for all images: {duration} seconds (recorded in SQLite)"
         )
     elif command == "--test":
         test_target = sys.argv[2] if len(sys.argv) > 2 else None
@@ -1105,14 +1130,14 @@ def main():
         start = time.time()
         docker_shell()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-shell", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-shell", duration)
     elif command == "--export":
         import time
 
         start = time.time()
         docker_export()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-export", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-export", duration)
     elif command == "--docker-wipe":
         import time
 
@@ -1126,6 +1151,122 @@ def main():
         update_shebangs()
     elif command == "--update-test-shebangs":
         update_test_shebangs()
+    elif command == "--run-benchmarks":
+        print("🚀 Running performance benchmarks...")
+        print(
+            "📊 This will run comprehensive benchmarks and store results in the database"
+        )
+
+        # Ensure data directory exists
+        data_dir = os.path.join(os.getcwd(), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        os.chmod(data_dir, 0o777)
+        print(f"📁 Data directory ensured: {data_dir}")
+
+        # Run benchmarks using docker-compose
+        try:
+            import time
+
+            start = time.time()
+
+            # Check if docker-compose is available
+            docker_compose_cmd = None
+            try:
+                subprocess.run(
+                    ["docker-compose", "--version"], capture_output=True, check=True
+                )
+                docker_compose_cmd = "docker-compose"
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                try:
+                    subprocess.run(
+                        ["docker", "compose", "version"],
+                        capture_output=True,
+                        check=True,
+                    )
+                    docker_compose_cmd = ["docker", "compose"]
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    print("❌ docker-compose not found. Please install docker-compose.")
+                    print("   On Arch Linux: sudo pacman -S docker-compose")
+                    print("   Or install via pip: pip install docker-compose")
+                    sys.exit(1)
+
+            # Change to docker directory and run docker-compose
+            docker_dir = os.path.join(os.getcwd(), "docker")
+            os.chdir(docker_dir)
+
+            if isinstance(docker_compose_cmd, str):
+                cmd = [
+                    docker_compose_cmd,
+                    "-f",
+                    "docker-compose.benchmark.yml",
+                    "up",
+                    "--build",
+                    "--abort-on-container-exit",
+                ]
+            else:
+                cmd = docker_compose_cmd + [
+                    "-f",
+                    "docker-compose.benchmark.yml",
+                    "up",
+                    "--build",
+                    "--abort-on-container-exit",
+                ]
+
+            print(f"\n🐳 Executing Docker Compose command: {' '.join(cmd)}")
+            # --- MODIFICATION FOR DEBUGGING: Capture and print output ---
+            result = subprocess.run(
+                cmd, capture_output=True, text=True
+            )  # Capture stdout and stderr
+
+            if result.returncode != 0:
+                print(
+                    f"\n❌ Docker Compose command failed with exit code {result.returncode}"
+                )
+                print("\n--- STDOUT from Docker Compose ---")
+                print(result.stdout)
+                print("\n--- STDERR from Docker Compose ---")
+                print(result.stderr)
+                raise Exception("Docker Compose failed. See detailed output above.")
+            else:
+                print("\n✅ Docker Compose command completed successfully.")
+                print("\n--- STDOUT from Docker Compose ---")
+                print(result.stdout)  # Also print successful output for context
+            # --- END MODIFICATION FOR DEBUGGING ---
+
+            # Change back to project root
+            os.chdir(os.path.join(docker_dir, ".."))
+
+            duration = int(time.time() - start)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-bench", duration)
+
+            # Check if results were written
+            if os.path.exists(os.path.join(data_dir, "benchmark_results.md")):
+                print(
+                    f"✅ Benchmark results written to: {os.path.join(data_dir, 'benchmark_results.md')}"
+                )
+            else:
+                print("⚠️ Warning: Benchmark results not found in expected location")
+
+            if os.path.exists(os.path.join(data_dir, "performance.db")):
+                print(
+                    f"✅ Performance database written to: {os.path.join(data_dir, 'performance.db')}"
+                )
+            else:
+                print("⚠️ Warning: Performance database not found in expected location")
+
+            if os.path.exists(os.path.join(data_dir, "benchmark_summary.json")):
+                print(
+                    f"✅ Benchmark summary written to: {os.path.join(data_dir, 'benchmark_summary.json')}"
+                )
+            else:
+                print("⚠️ Warning: Benchmark summary not found in expected location")
+
+            print("✅ Benchmarks completed successfully!")
+            print(f"📊 Results stored in data directory: {data_dir}")
+
+        except Exception as e:
+            print(f"❌ Failed to run benchmarks: {e}")
+            sys.exit(1)
     elif command == "--docs":
         import time
 
@@ -1135,9 +1276,9 @@ def main():
         start = time.time()
         docker_build_docs()
         duration = int(time.time() - start)
-        save_build_time("nyp-fyp-chatbot-docs", duration)
+        DockerBuildTracker().record_build("nyp-fyp-chatbot-docs", duration)
         print(
-            f"[DEBUG] Build time for docs image: {duration} seconds (see docker_build_times.json)"
+            f"[DEBUG] Build time for docs image: {duration} seconds (recorded in SQLite)"
         )
         docker_docs()
     elif command == "--docker-run":
@@ -1147,14 +1288,15 @@ def main():
         print("  3. prod (nyp-fyp-chatbot-prod)")
         print("  4. docs (nyp-fyp-chatbot:docs)")
         print("  5. all  (build all images)")
-        choice = input("Enter the number of the image to build and run [1-5]: ").strip()
+        print("  6. bench (nyp-fyp-chatbot-bench)")
+        choice = input("Enter the number of the image to build and run [1-6]: ").strip()
         import time
 
         if choice == "1":
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-dev", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
             print("✅ Development image built successfully!")
             print("🐳 Starting development container...")
             sys.path.append("scripts")
@@ -1165,7 +1307,7 @@ def main():
             start = time.time()
             docker_build_test()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-test", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-test", duration)
             print("✅ Test image built successfully!")
             print("🐳 Starting test container...")
             sys.path.append("scripts")
@@ -1176,7 +1318,7 @@ def main():
             start = time.time()
             docker_build_prod()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-prod", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-prod", duration)
             print("✅ Production image built successfully!")
             print("🐳 Starting production container...")
             sys.path.append("scripts")
@@ -1187,19 +1329,117 @@ def main():
             start = time.time()
             docker_build_docs()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-docs", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-docs", duration)
             docker_docs()
         elif choice == "5":
             start = time.time()
             docker_build_all()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-all", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-all", duration)
             print("All images built. You can run them individually with 'docker run'.")
+        elif choice == "6":
+            print("🚀 Running performance benchmarks...")
+            print(
+                "📊 This will run comprehensive benchmarks and store results in the database"
+            )
+
+            # Ensure data directory exists
+            data_dir = os.path.join(os.getcwd(), "data")
+            os.makedirs(data_dir, exist_ok=True)
+            print(f"📁 Data directory ensured: {data_dir}")
+
+            # Run benchmarks using docker-compose
+            try:
+                start = time.time()
+
+                # Check if docker-compose is available
+                docker_compose_cmd = None
+                try:
+                    subprocess.run(
+                        ["docker-compose", "--version"], capture_output=True, check=True
+                    )
+                    docker_compose_cmd = "docker-compose"
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    try:
+                        subprocess.run(
+                            ["docker", "compose", "version"],
+                            capture_output=True,
+                            check=True,
+                        )
+                        docker_compose_cmd = ["docker", "compose"]
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        print(
+                            "❌ docker-compose not found. Please install docker-compose."
+                        )
+                        print("   On Arch Linux: sudo pacman -S docker-compose")
+                        print("   Or install via pip: pip install docker-compose")
+                        sys.exit(1)
+
+                # Change to docker directory and run docker-compose
+                docker_dir = os.path.join(os.getcwd(), "docker")
+                os.chdir(docker_dir)
+
+                if isinstance(docker_compose_cmd, str):
+                    cmd = [
+                        docker_compose_cmd,
+                        "-f",
+                        "docker-compose.benchmark.yml",
+                        "up",
+                        "--build",
+                        "--abort-on-container-exit",
+                    ]
+                else:
+                    cmd = docker_compose_cmd + [
+                        "-f",
+                        "docker-compose.benchmark.yml",
+                        "up",
+                        "--build",
+                        "--abort-on-container-exit",
+                    ]
+
+                subprocess.run(cmd, check=True)
+
+                # Change back to project root
+                os.chdir(os.path.join(docker_dir, ".."))
+
+                duration = int(time.time() - start)
+                DockerBuildTracker().record_build("nyp-fyp-chatbot-bench", duration)
+
+                # Check if results were written
+                if os.path.exists(os.path.join(data_dir, "benchmark_results.md")):
+                    print(
+                        f"✅ Benchmark results written to: {os.path.join(data_dir, 'benchmark_results.md')}"
+                    )
+                else:
+                    print("⚠️ Warning: Benchmark results not found in expected location")
+
+                if os.path.exists(os.path.join(data_dir, "performance.db")):
+                    print(
+                        f"✅ Performance database written to: {os.path.join(data_dir, 'performance.db')}"
+                    )
+                else:
+                    print(
+                        "⚠️ Warning: Performance database not found in expected location"
+                    )
+
+                if os.path.exists(os.path.join(data_dir, "benchmark_summary.json")):
+                    print(
+                        f"✅ Benchmark summary written to: {os.path.join(data_dir, 'benchmark_summary.json')}"
+                    )
+                else:
+                    print("⚠️ Warning: Benchmark summary not found in expected location")
+
+                print("✅ Benchmarks completed successfully!")
+                print(f"📊 Results stored in data directory: {data_dir}")
+
+            except Exception as e:
+                print(f"❌ Failed to run benchmarks: {e}")
+                sys.exit(1)
         else:
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            save_build_time("nyp-fyp-chatbot-dev", duration)
+            DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
             print("✅ Development image built successfully!")
             print("🐳 Starting development container...")
             sys.path.append("scripts")

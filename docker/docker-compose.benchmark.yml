@@ -1,0 +1,19 @@
+services:
+  benchmark:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bench
+    container_name: nyp-benchmark
+    environment:
+      - BENCHMARK_MODE=1
+      - IN_DOCKER=1
+      - PYTHONUNBUFFERED=1
+      - BENCHMARK_USER=system
+    volumes:
+      - ..:/app:rw
+      - ../data:/app/data:rw
+      - ../.env:/app/.env:ro
+    working_dir: /app
+    user: "1000:1000" # <--- ADD THIS LINE
+    command: ["src/scripts/run_benchmarks.py"]
+    restart: "no"

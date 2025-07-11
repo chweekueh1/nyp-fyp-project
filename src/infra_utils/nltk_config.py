@@ -27,7 +27,10 @@ def setup_nltk_data_path() -> str:
 
         # Set NLTK data path to .nypai-chatbot directory
         nltk_data_path = os.path.join(get_chatbot_dir(), "data", "nltk_data")
-        os.makedirs(nltk_data_path, exist_ok=True)
+
+        # Skip directory creation during benchmarks
+        if not os.environ.get("BENCHMARK_MODE"):
+            os.makedirs(nltk_data_path, exist_ok=True)
 
         # Configure NLTK to use this path
         import nltk

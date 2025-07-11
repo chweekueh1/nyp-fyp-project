@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Main build - Alpine-friendly PDF generation with pandoc
 FROM python:3.11-alpine
 
 # Set environment variables
@@ -39,14 +40,13 @@ RUN apk add --no-cache \
     libgomp \
     libstdc++ \
     libgcc \
-    pandoc \
+    pandoc-cli \
     poppler-utils \
     tesseract-ocr \
     curl \
     tzdata \
     ca-certificates \
     git \
-    hyperfine \
     imagemagick \
     vim \
     nano \
@@ -56,7 +56,12 @@ RUN apk add --no-cache \
     xz \
     procps \
     sysstat \
-    wkhtmltopdf \
+    fontconfig \
+    libx11 \
+    libxrender \
+    libxext \
+    libssl3 \
+    freetype \
     && update-ca-certificates \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone
@@ -81,17 +86,21 @@ ENV PATH="${VENV_PATH}/bin:$PATH" \
     PYTHONPATH=/app
 
 # Copy requirements first for better caching
-COPY --chown=appuser:appgroup requirements/requirements.txt .
+COPY --chown=appuser:appgroup requirements/requirements-app.txt .
 
 # Install Python dependencies
 RUN ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
-    ${VENV_PATH}/bin/pip install -r requirements.txt
+    ${VENV_PATH}/bin/pip install -r requirements-app.txt
 
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup styles/ ./styles/
 COPY --chown=appuser:appgroup src/scripts/entrypoint.py ./
 COPY --chown=appuser:appgroup src/tests/ ./tests/
+
+# Copy Docker build tracking files (if they exist)
+COPY --chown=appuser:appgroup docker/copy_build_data.sh ./
+RUN chmod +x ./copy_build_data.sh && ./copy_build_data.sh
 
 # Expose port
 EXPOSE 7860

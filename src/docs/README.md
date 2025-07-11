@@ -7,8 +7,6 @@ This directory contains the Sphinx documentation for the NYP FYP CNC Chatbot pro
 - `conf.py` - Sphinx configuration file
 - `index.rst` - Main documentation index
 - `Makefile` - Build commands for documentation
-- `extensions/` - Custom Sphinx extensions
-  - `docstring_parser.py` - Enhanced docstring parsing for Google and Sphinx styles
 - `examples/` - Example files demonstrating docstring styles
   - `docstring_styles.py` - Examples of Google, Sphinx, and NumPy style docstrings
 
@@ -28,31 +26,29 @@ make html
 
 ## Features
 
-- **Multi-style docstring support**: Google, Sphinx, and NumPy styles (only Google and Sphinx styles are enhanced by the custom extension)
-- **Doc comment processing**: Handles `#` comments in docstrings
-- **Enhanced autodoc**: Better parameter and return type documentation
-- **Custom extensions**: Improved parsing and formatting
+- **Multi-style docstring support**: Google, Sphinx, and NumPy styles using built-in Sphinx extensions
+- **Standard autodoc**: Uses sphinx-apidoc for automatic module discovery
+- **Built-in parsing**: Leverages Napoleon extension for Google/NumPy styles and standard autodoc for Sphinx styles
+- **Missing docstring detection**: Automatically adds helpful messages for files without proper docstrings
 
 ## Configuration
 
 The documentation is configured in `conf.py` with the following key features:
 
 - Napoleon extension for Google/NumPy style docstrings
-- Custom docstring parser extension (enhances Google and Sphinx styles)
+- Standard autodoc for Sphinx style docstrings
 - Light theme by default
 - Comprehensive autodoc settings
 - Mock imports for external dependencies
+- Automatic missing docstring detection
 
-## Extensions
+## Built-in Extensions
 
-### docstring_parser.py
+The documentation system uses standard Sphinx extensions:
 
-This custom extension provides:
-
-- Enhanced Google-style docstring parsing
-- Enhanced Sphinx-style docstring parsing
-- Doc comment processing (converts `#` comments to docstring content)
-- Better handling of both docstring styles in the same codebase
+- **sphinx.ext.napoleon**: Handles Google and NumPy style docstrings
+- **sphinx.ext.autodoc**: Handles Sphinx style docstrings and automatic module discovery
+- **sphinx-apidoc**: Generates RST files from Python modules
 
 ## Examples
 

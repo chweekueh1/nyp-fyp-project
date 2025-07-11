@@ -5,9 +5,19 @@ This script sets up the environment, drops privileges, and executes the provided
 """
 
 #!/usr/bin/env python3
-import os
 import sys
-from infra_utils import get_docker_venv_path
+
+# Add src directory to Python path before any other imports
+sys.path.insert(0, "/app/src")
+
+try:
+    from infra_utils import get_docker_venv_path
+except ModuleNotFoundError as e:
+    print(f"[entrypoint.py] ImportError: {e}")
+    print(f"[entrypoint.py] sys.path: {sys.path}")
+    raise
+
+import os
 
 # Set timezone environment variable for Singapore (UTC+8)
 os.environ.setdefault("TZ", "Asia/Singapore")

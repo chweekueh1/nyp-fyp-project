@@ -66,12 +66,57 @@ class StatsInterface:
             try:
                 with open(build_times_path, "r") as f:
                     data = json.load(f)
-                # Expecting { 'avg_duration': float }
-                return data
+
+                # Handle new format: { "history": [...], "averages": {...}, "last_build_time": "..." }
+                if isinstance(data, dict) and "averages" in data:
+                    # New format
+                    averages = data.get("averages", {})
+                    last_build_time = data.get("last_build_time", "")
+                    # Calculate overall average if multiple images
+                    if averages:
+                        overall_avg = sum(averages.values()) / len(averages)
+                    else:
+                        overall_avg = 0.0
+
+                    return {
+                        "avg_duration": overall_avg,
+                        "averages": averages,
+                        "last_build_time": last_build_time,
+                        "history": data.get("history", []),
+                    }
+                # Handle old format: { "avg_duration": float }
+                elif isinstance(data, dict) and "avg_duration" in data:
+                    return data
+                # Handle legacy array format: [{ "timestamp": "...", "image": "...", "duration": ... }]
+                elif isinstance(data, list):
+                    if data:
+                        # Calculate average from history
+                        durations = [
+                            item.get("duration", 0)
+                            for item in data
+                            if isinstance(item, dict)
+                        ]
+                        avg = sum(durations) / len(durations) if durations else 0.0
+                        return {
+                            "avg_duration": avg,
+                            "history": data,
+                            "last_build_time": data[-1].get("timestamp", "")
+                            if data
+                            else "",
+                        }
+                    else:
+                        return {
+                            "avg_duration": 0.0,
+                            "history": [],
+                            "last_build_time": "",
+                        }
+                else:
+                    return {"avg_duration": 0.0, "history": [], "last_build_time": ""}
+
             except Exception as e:
                 print(f"[WARNING] Could not load Docker build times: {e}")
-                return {"avg_duration": 0.0}
-        return {"avg_duration": 0.0}
+                return {"avg_duration": 0.0, "history": [], "last_build_time": ""}
+        return {"avg_duration": 0.0, "history": [], "last_build_time": ""}
 
     def get_user_stats(self, username: str) -> Dict[str, Any]:
         """Get comprehensive statistics for a user.
@@ -105,6 +150,9 @@ class StatsInterface:
             # Get detailed performance metrics
             detailed_metrics = self._get_detailed_metrics(username)
 
+            # Get benchmark statistics
+            benchmark_stats = self._get_benchmark_stats(username)
+
             return {
                 "user_info": user,
                 "performance_summary": perf_summary,
@@ -112,6 +160,7 @@ class StatsInterface:
                 "chat_stats": chat_stats,
                 "classification_stats": classification_stats,
                 "detailed_metrics": detailed_metrics,
+                "benchmark_stats": benchmark_stats,
                 "docker_build_times": self.docker_build_times,
                 "timestamp": get_utc_timestamp(),
             }
@@ -324,6 +373,84 @@ class StatsInterface:
         except Exception as e:
             return {"error": f"Failed to get detailed metrics: {str(e)}"}
 
+    def _get_benchmark_stats(self, username: str) -> Dict[str, Any]:
+        """Get benchmark statistics for a user.
+
+        :param username: Username
+        :type username: str
+        :return: Benchmark statistics
+        :rtype: Dict[str, Any]
+        """
+        try:
+            # Get benchmark metrics
+            query = """
+                SELECT metric_name, AVG(metric_value) as avg_value,
+                       MIN(metric_value) as min_value, MAX(metric_value) as max_value,
+                       COUNT(*) as run_count, metadata
+                FROM performance_metrics
+                WHERE username = ? AND metric_type = 'benchmark'
+                AND timestamp >= datetime('now', '-30 days')
+                GROUP BY metric_name
+                ORDER BY avg_value DESC
+            """
+            benchmarks = self.perf_db.execute_query(query, (username,))
+
+            # Organize benchmarks by category
+            benchmark_stats = {}
+            for bench in benchmarks:
+                metric_name = bench[0]
+                # Extract benchmark name and metric type from metric_name
+                if "_mean" in metric_name:
+                    benchmark_name = metric_name.replace("_mean", "")
+                    metric_type = "mean"
+                elif "_stddev" in metric_name:
+                    benchmark_name = metric_name.replace("_stddev", "")
+                    metric_type = "stddev"
+                elif "_min" in metric_name:
+                    benchmark_name = metric_name.replace("_min", "")
+                    metric_type = "min"
+                elif "_max" in metric_name:
+                    benchmark_name = metric_name.replace("_max", "")
+                    metric_type = "max"
+                elif "_median" in metric_name:
+                    benchmark_name = metric_name.replace("_median", "")
+                    metric_type = "median"
+                else:
+                    continue
+
+                if benchmark_name not in benchmark_stats:
+                    benchmark_stats[benchmark_name] = {
+                        "mean": 0.0,
+                        "stddev": 0.0,
+                        "min": 0.0,
+                        "max": 0.0,
+                        "median": 0.0,
+                        "run_count": 0,
+                        "category": "unknown",
+                        "description": "No description available",
+                    }
+
+                benchmark_stats[benchmark_name][metric_type] = bench[1]
+                benchmark_stats[benchmark_name]["run_count"] = bench[4]
+
+                # Parse metadata for category and description
+                try:
+                    metadata_str = bench[5] if bench[5] else "{}"
+                    metadata = json.loads(metadata_str)
+                    benchmark_stats[benchmark_name]["category"] = metadata.get(
+                        "category", "unknown"
+                    )
+                    benchmark_stats[benchmark_name]["description"] = metadata.get(
+                        "description", "No description available"
+                    )
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+            return benchmark_stats
+
+        except Exception as e:
+            return {"error": f"Failed to get benchmark stats: {str(e)}"}
+
     def generate_mermaid_diagrams(self, stats: Dict[str, Any]) -> List[str]:
         """Generate Mermaid.js diagrams from statistics.
 
@@ -513,6 +640,30 @@ class StatsInterface:
 
                     tables.append(table)
 
+            # Benchmark Statistics Table
+            if "benchmark_stats" in stats:
+                benchmarks = stats["benchmark_stats"]
+                if benchmarks and "error" not in benchmarks:
+                    table = "## Performance Benchmarks\n\n"
+                    table += "| Benchmark | Category | Mean (s) | Std Dev (s) | Min (s) | Max (s) | Runs |\n"
+                    table += "|-----------|----------|----------|-------------|---------|---------|------|\n"
+
+                    for benchmark_name, benchmark_data in benchmarks.items():
+                        if (
+                            isinstance(benchmark_data, dict)
+                            and "mean" in benchmark_data
+                        ):
+                            category = benchmark_data.get("category", "unknown").title()
+                            mean = benchmark_data.get("mean", 0)
+                            stddev = benchmark_data.get("stddev", 0)
+                            min_val = benchmark_data.get("min", 0)
+                            max_val = benchmark_data.get("max", 0)
+                            runs = benchmark_data.get("run_count", 0)
+
+                            table += f"| {benchmark_name} | {category} | {mean:.4f} | {stddev:.4f} | {min_val:.4f} | {max_val:.4f} | {runs} |\n"
+
+                    tables.append(table)
+
             # File Classification Table
             if "classification_stats" in stats:
                 class_stats = stats["classification_stats"]
@@ -549,10 +700,26 @@ class StatsInterface:
             docker_build_times = stats.get("docker_build_times", {})
             if docker_build_times:
                 table = "## Docker Build Times\n\n"
-                table += "| Average Build Time (s) |\n"
-                table += "|-----------------------|\n"
+
+                # Show overall average and last build time
                 avg = docker_build_times.get("avg_duration", 0.0)
-                table += f"| {avg:.2f} |\n"
+                last_build_time = docker_build_times.get("last_build_time", "")
+
+                table += "| Metric | Value |\n"
+                table += "|--------|-------|\n"
+                table += f"| Average Build Time | {avg:.2f} seconds |\n"
+                if last_build_time:
+                    table += f"| Last Build Time | {last_build_time} |\n"
+
+                # Show per-image averages if available
+                averages = docker_build_times.get("averages", {})
+                if averages and len(averages) > 1:
+                    table += "\n### Per-Image Averages\n\n"
+                    table += "| Image | Average Build Time (s) |\n"
+                    table += "|-------|------------------------|\n"
+                    for image, avg_time in averages.items():
+                        table += f"| {image} | {avg_time:.2f} |\n"
+
                 tables.append(table)
 
         except Exception as e:

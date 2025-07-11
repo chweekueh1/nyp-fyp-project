@@ -22,3 +22,4 @@ docs/_templates/
 *.rst
 !docs/index.rst
 !docs/conf.py
+data/
