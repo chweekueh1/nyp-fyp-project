@@ -4,6 +4,7 @@ pypdf>=4.0.0
 
 # Sphinx documentation dependencies
 sphinx>=7.0.0
+sphinx-apidoc
 sphinx-autodoc-typehints>=1.25.0
 sphinxcontrib-applehelp>=1.0.4
 sphinxcontrib-bibtex>=2.5.0

@@ -90,8 +90,8 @@ COPY --chown=appuser:appgroup src/scripts/entrypoint.py ./
 COPY --chown=appuser:appgroup src/tests/ ./tests/
 
 # Copy Docker build tracking files (if they exist)
-COPY --chown=appuser:appgroup docker/copy_build_data.sh ./
-RUN chmod +x ./copy_build_data.sh && ./copy_build_data.sh
+COPY --chown=appuser:appgroup src/docker_build_times.sqlite3 ./docker_build_times.sqlite3
+COPY --chown=appuser:appgroup src/docker_build_times.json ./docker_build_times.json
 
 # Set entrypoint and command for benchmarking
 ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-bench/bin/python"]

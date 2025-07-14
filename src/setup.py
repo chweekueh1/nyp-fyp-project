@@ -4,6 +4,8 @@ Setup Script for NYP FYP Chatbot
 This script manages environment setup, Docker image building, permissions, and test orchestration for the chatbot project.
 It is the main entry point for developers and CI to prepare and manage the project environment.
 """
+
+import contextlib
 #!/usr/bin/env python3
 # This shebang line ensures the script is executable directly on Linux systems.
 
@@ -14,16 +16,6 @@ import shutil
 import time
 import signal
 from typing import Optional, Any
-from scripts.fix_permissions import fix_nypai_chatbot_permissions
-from scripts.docker_utils import (
-    docker_build,
-    docker_build_test,
-    docker_build_prod,
-    docker_build_all,
-    docker_build_docs,
-    # save_build_time,  # Remove this import
-)
-from scripts.docker_build_tracker import DockerBuildTracker
 
 # Global variable to track if shutdown is requested
 shutdown_requested = False
@@ -44,6 +36,43 @@ def signal_handler(signum: int, frame: Any) -> None:
     sys.exit(0)
 
 
+def running_in_docker():
+    print("TODO: Not implemented yet")
+
+
+def get_dockerfile_venv_path():
+    print("TODO: Not implemented yet")
+
+
+def docker_build_test():
+    print("TODO: Not implemented yet")
+
+
+def fix_nypai_chatbot_permissions():
+    """
+    Fix permissions for key NYP FYP Chatbot directories and files.
+    Ensures the current user has read/write/execute access to .nypai-chatbot and /app directories.
+    """
+    paths = [
+        os.path.expanduser("~/.nypai-chatbot"),
+        os.path.join(os.getcwd(), "src"),
+        os.path.join(os.getcwd(), "data"),
+        os.path.join(os.getcwd(), "logs"),
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                # Set read/write/execute for user, and read/execute for group/others
+                os.chmod(path, 0o755)
+                for root, dirs, files in os.walk(path):
+                    for d in dirs:
+                        os.chmod(os.path.join(root, d), 0o755)
+                    for f in files:
+                        os.chmod(os.path.join(root, f), 0o644)
+            except Exception as e:
+                print(f"Warning: Could not set permissions for {path}: {e}")
+
+
 # Register signal handlers for graceful shutdown
 signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
 signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
@@ -60,22 +89,21 @@ if os.path.exists(venv_path):
     except Exception as e:
         print(f"Warning: Could not remove venv at {venv_path}: {e}")
 
-# Only fix permissions on Unix-like systems, and only before logging is initialized
-if os.name != "nt":
     # Skip permission fix for docs/Sphinx commands or if 'sphinx' is in the command
-    if not any(arg in sys.argv for arg in ["--docs"]) and not any(
-        "sphinx" in arg.lower() for arg in sys.argv
-    ):
-        # Ensure entrypoint.sh is executable before Docker build (use Python if possible)
-        entrypoint_path = os.path.join(
-            os.path.dirname(__file__), "scripts", "entrypoint.sh"
-        )
-        if os.path.exists(entrypoint_path):
-            try:
-                os.chmod(entrypoint_path, 0o755)
-            except Exception as e:
-                print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
-        fix_nypai_chatbot_permissions()
+if (
+    all(arg not in sys.argv for arg in ["--docs"])
+    and all("sphinx" not in arg.lower() for arg in sys.argv)
+    and os.name != "nt"
+):
+    entrypoint_path = os.path.join(
+        os.path.dirname(__file__), "scripts", "entrypoint.sh"
+    )
+    if os.path.exists(entrypoint_path):
+        try:
+            os.chmod(entrypoint_path, 0o755)
+        except Exception as e:
+            print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
+    fix_nypai_chatbot_permissions()
 
 # Now continue with the rest of the imports and logger setup
 from infra_utils import setup_logging, get_docker_venv_python
@@ -99,67 +127,60 @@ else:
     VENV_PYTHON = os.path.join(LOCAL_VENV_PATH, "bin", "python")
 
 
-def _add_shebang_to_python_files(directory: str) -> None:
+def add_shebangs_to_python_files(directory: str) -> None:
     """
     Adds a shebang line '#!/usr/bin/env python3' to Python files
     in the given directory and its subdirectories, if one is not already present.
-    Skips files in the .venv directory.
-
-    :param directory: The directory to check for Python files.
-    :type directory: str
-    :return: None
-    :rtype: None
+    Skips files in the .venv and __pycache__ directories.
     """
     logger.info(f"Checking Python files in '{directory}' for shebang lines...")
     for root, dirs, files in os.walk(directory):
-        # Exclude .venv and __pycache__ directories from traversal
-        if ".venv" in dirs:
-            dirs.remove(".venv")
-        if "__pycache__" in dirs:
-            dirs.remove("__pycache__")
+        dirs[:] = [d for d in dirs if d not in {".venv", "__pycache__"}]
         for file in files:
             if file.endswith(".py"):
                 file_path = os.path.join(root, file)
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                         first_line = f.readline()
-                        # Reset file pointer to beginning
                         f.seek(0)
                         content = f.read()
                     if not first_line.startswith("#!"):
-                        shebang_line = "#!/usr/bin/env python3\n"
-                        new_content = shebang_line + content
                         with open(file_path, "w", encoding="utf-8") as f:
-                            f.write(new_content)
+                            f.write("#!/usr/bin/env python3\n" + content)
                         logger.info(f"Added shebang to: {file_path}")
                 except Exception as e:
                     logger.warning(f"Could not process file {file_path}: {e}")
     logger.info("Shebang check complete.")
 
 
-def running_in_docker() -> bool:
+def is_running_in_docker() -> bool:
     """
     Detect if running inside a Docker container.
 
     :return: True if running in Docker, False otherwise.
-    :rtype: bool
     """
     return os.path.exists("/.dockerenv") or os.environ.get("IN_DOCKER") == "1"
 
 
-def ensure_docker_running() -> None:
+def ensure_docker_available() -> None:
     """
-    Check if Docker is installed and its daemon is running. If not running, attempt to start the daemon on Linux. Exit if Docker is not available or cannot be started.
+    Ensure Docker is installed and the daemon is running. Attempt to start on Linux if needed.
     """
-    # 1. Check if Docker is installed (executable in PATH)
-    if shutil.which("docker") is None:
-        print("❌ Docker is not installed or not in PATH. Please install Docker first.")
-        logger.error("Docker executable not found in PATH.")
+
+    def fail(msg, logmsg=None):
+        print(msg)
+        if logmsg:
+            logger.error(logmsg)
         sys.exit(1)
-    # 2. Check if Docker daemon is running
+
+    if shutil.which("docker") is None:
+        fail(
+            "❌ Docker is not installed or not in PATH. Please install Docker first.",
+            "Docker executable not found in PATH.",
+        )
+
     try:
         logger.info("Checking if Docker daemon is running with 'docker info'.")
-        # Use subprocess.DEVNULL for stdout/stderr to suppress output unless there's an error
         subprocess.run(
             ["docker", "info"],
             check=True,
@@ -168,27 +189,28 @@ def ensure_docker_running() -> None:
         )
         print("✅ Docker daemon is already running.")
         logger.info("Docker daemon is already running.")
-        return  # Docker is already running, so we're good to go
+        return
     except subprocess.CalledProcessError:
-        # Docker is not running, proceed to attempt to start it
         print("⚠️  Docker daemon is not running. Attempting to start it...")
         logger.warning("Docker daemon is not running. Attempting to start.")
-        # 3. Attempt to start Docker (Linux specific)
-        if sys.platform == "linux":
+        if sys.platform == "darwin":
+            fail(
+                "❌ Docker daemon is not running. Please start Docker Desktop from your Applications folder.",
+                "Docker not running on macOS. User advised to start Docker Desktop.",
+            )
+        elif sys.platform == "linux":
             print(
                 "Attempting to start Docker daemon with 'sudo systemctl start docker'..."
             )
             logger.info("Attempting to start Docker daemon via systemctl (Linux).")
             try:
-                # Use sudo, as starting Docker service typically requires it
                 subprocess.run(
                     ["sudo", "systemctl", "start", "docker"],
                     check=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                )  # Keep this quiet unless error
-                # Wait and check for Docker to start
-                for i in range(1, 11):  # Increased retry attempts and wait time
+                )
+                for i in range(1, 11):
                     try:
                         subprocess.run(
                             ["docker", "info"],
@@ -198,72 +220,40 @@ def ensure_docker_running() -> None:
                         )
                         print("✅ Docker daemon started successfully.")
                         logger.info("Docker daemon started successfully.")
-
-                        return  # Docker started, return
+                        return
                     except subprocess.CalledProcessError:
                         print(f"Waiting for Docker to start... ({i}/10)")
-                        time.sleep(2)  # Wait 2 seconds between checks
-                # If loop finishes, Docker did not start
-                print(
-                    "❌ Docker daemon could not be started automatically after multiple retries."
+                        time.sleep(2)
+                fail(
+                    "❌ Docker daemon could not be started automatically after multiple retries.\nPlease start it manually with: 'sudo systemctl start docker'",
+                    "Failed to start Docker daemon automatically after retries.",
                 )
-                print("Please start it manually with: 'sudo systemctl start docker'")
-                logger.error(
-                    "Failed to start Docker daemon automatically after retries."
-                )
-                sys.exit(1)
             except subprocess.CalledProcessError as e:
-                print(f"❌ Failed to execute 'sudo systemctl start docker': {e}")
-                print(
-                    "Please ensure you have sudo privileges and Docker is correctly configured."
+                fail(
+                    f"❌ Failed to execute 'sudo systemctl start docker': {e}\nPlease ensure you have sudo privileges and Docker is correctly configured.",
+                    f"Failed to execute systemctl command: {e}",
                 )
-                logger.error(f"Failed to execute systemctl command: {e}", exc_info=True)
-                sys.exit(1)
             except Exception as e:
-                print(
-                    f"❌ An unexpected error occurred while trying to start Docker: {e}"
+                fail(
+                    f"❌ An unexpected error occurred while trying to start Docker: {e}\nPlease start Docker manually.",
+                    f"Unexpected error when starting Docker: {e}",
                 )
-                print("Please start Docker manually.")
-                logger.error(
-                    f"Unexpected error when starting Docker: {e}", exc_info=True
-                )
-                sys.exit(1)
-        elif sys.platform == "darwin":
-            print(
-                "❌ Docker daemon is not running. Please start Docker Desktop from your Applications folder."
-            )
-            logger.error(
-                "Docker not running on macOS. User advised to start Docker Desktop."
-            )
-            sys.exit(1)
         elif sys.platform == "win32":
-            print(
-                "❌ Docker daemon is not running. Please start Docker Desktop from your Start menu."
+            fail(
+                "❌ Docker daemon is not running. Please start Docker Desktop from your Start menu.",
+                "Docker not running on Windows. User advised to start Docker Desktop.",
             )
-            logger.error(
-                "Docker not running on Windows. User advised to start Docker Desktop."
-            )
-            sys.exit(1)
         else:
-            print(
-                "❌ Docker daemon is not running. Please consult your OS documentation to start Docker."
+            fail(
+                "❌ Docker daemon is not running. Please consult your OS documentation to start Docker.",
+                "Docker not running on unsupported OS. User advised to start manually.",
             )
-            logger.error(
-                "Docker not running on unsupported OS. User advised to start manually."
-            )
-            sys.exit(1)
     except FileNotFoundError:
-        # This handles the unlikely case where 'docker' command itself is not found,
-        # but shutil.which should have caught it earlier. Still good for robustness.
-        print(
-            "❌ 'docker' command not found. Please ensure Docker is installed and in your PATH."
+        fail(
+            "❌ 'docker' command not found. Please ensure Docker is installed and in your PATH.",
+            "'docker' command not found. Docker might not be installed correctly.",
         )
-        logger.error(
-            "'docker' command not found. Docker might not be installed correctly."
-        )
-        sys.exit(1)
     except Exception as e:
-        # Catch any other unexpected errors during the initial 'docker info' check
         print(f"❌ An unexpected error occurred while checking Docker status: {e}")
         logger.error(
             f"Unexpected error while checking Docker status: {e}", exc_info=True
@@ -271,7 +261,10 @@ def ensure_docker_running() -> None:
         sys.exit(1)
 
 
-def get_dockerfile_venv_path(dockerfile_path):
+def extract_venv_path_from_dockerfile(dockerfile_path):
+    """
+    Extract the VENV_PATH argument from a Dockerfile, or return a default.
+    """
     try:
         with open(dockerfile_path, "r") as f:
             for line in f:
@@ -279,7 +272,7 @@ def get_dockerfile_venv_path(dockerfile_path):
                     return line.strip().split("=", 1)[1]
     except Exception:
         pass
-    return "/home/appuser/.nypai-chatbot/venv"  # fallback
+    return "/home/appuser/.nypai-chatbot/venv"
 
 
 def ensure_docker_image():
@@ -314,32 +307,24 @@ def ensure_test_docker_image():
         docker_build_test()
 
 
-def get_docker_volume_path(local_path: str) -> str:
+def docker_volume_path(local_path: str) -> str:
     """
     Convert a local path to a Docker-compatible volume path.
     Handles Windows path conversion for Docker Desktop.
-
-    :param local_path: Local file system path
-    :type local_path: str
-    :return: Docker-compatible volume path
-    :rtype: str
     """
-    if sys.platform == "win32":
-        # Windows: Convert to Docker Desktop format
-        # Replace backslashes with forward slashes
-        path = local_path.replace("\\", "/")
-        # Convert drive letter format (C:/path -> /c/path)
-        if len(path) >= 2 and path[1] == ":":
-            drive_letter = path[0].lower()
-            path = f"/{drive_letter}{path[2:]}"
-        return path
-    else:
-        # Unix-like systems: Use as-is
+    if sys.platform != "win32":
         return local_path
+    path = local_path.replace("\\", "/")
+    if len(path) >= 2 and path[1] == ":":
+        drive_letter = path[0].lower()
+        path = f"/{drive_letter}{path[2:]}"
+    return path
 
 
-def check_env_file(env_file_path=ENV_FILE_PATH):
-    # Always check relative to the project root
+def check_env_file_exists(env_file_path=ENV_FILE_PATH):
+    """
+    Ensure the .env file exists in the project root.
+    """
     project_root = os.path.dirname(os.path.abspath(__file__))
     env_path = os.path.join(project_root, env_file_path)
     if not os.path.exists(env_path):
@@ -349,7 +334,117 @@ def check_env_file(env_file_path=ENV_FILE_PATH):
         sys.exit(1)
 
 
-# docker_run function moved to scripts/py
+import sqlite3
+from datetime import datetime, timezone
+
+DOCKER_BUILD_DB = os.path.join(os.path.dirname(__file__), "docker_build_times.sqlite3")
+
+
+def init_build_db():
+    """Ensure the build tracking SQLite database and table exist."""
+    conn = sqlite3.connect(DOCKER_BUILD_DB)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS docker_builds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image_name TEXT NOT NULL,
+            build_time REAL NOT NULL,
+            built_at_utc TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def record_docker_build(image_name: str, build_time: float):
+    """Record a docker build event with UTC-aware timestamp."""
+    init_build_db()
+    conn = sqlite3.connect(DOCKER_BUILD_DB)
+    c = conn.cursor()
+    utc_now = datetime.now(timezone.utc).isoformat()
+    c.execute(
+        "INSERT INTO docker_builds (image_name, build_time, built_at_utc) VALUES (?, ?, ?)",
+        (image_name, round(build_time, 2), utc_now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_build_stats(image_name: str):
+    """Return (last_built_utc, avg_build_time_2dp) for the given image_name."""
+    init_build_db()
+    conn = sqlite3.connect(DOCKER_BUILD_DB)
+    c = conn.cursor()
+    c.execute(
+        "SELECT built_at_utc, build_time FROM docker_builds WHERE image_name = ? ORDER BY built_at_utc DESC LIMIT 1",
+        (image_name,),
+    )
+    last = c.fetchone()
+    c.execute(
+        "SELECT AVG(build_time) FROM docker_builds WHERE image_name = ?", (image_name,)
+    )
+    avg = c.fetchone()
+    conn.close()
+    last_built = last[0] if last else None
+    avg_build_time = round(avg[0], 2) if avg and avg[0] is not None else None
+    return last_built, avg_build_time
+
+
+def print_build_stats(image_name: str):
+    last_built, avg_build_time = get_build_stats(image_name)
+    print(f"Image: {image_name}")
+    if last_built:
+        print(f"  Last built (UTC): {last_built}")
+    if avg_build_time is not None:
+        print(f"  Average build time: {avg_build_time:.2f} seconds")
+    print()
+
+
+def docker_run():
+    """
+    Build and run a selected Docker image, tracking build times in a local SQLite database.
+    """
+    images = [
+        ("dev", "nyp-fyp-chatbot-dev", "docker/Dockerfile"),
+        ("prod", "nyp-fyp-chatbot-prod", "docker/Dockerfile.prod"),
+        ("docs", "nyp-fyp-chatbot:docs", "docker/Dockerfile.docs"),
+        ("bench", "nyp-fyp-chatbot-bench", "docker/Dockerfile.bench"),
+    ]
+    print("\nWhich Docker image would you like to build and run?")
+    for idx, (label, image, _) in enumerate(images, 1):
+        print(f"  {idx}. {label} ({image})")
+    print("  0. Cancel")
+    choice = input("Enter the number of the image to build and run [0-4]: ").strip()
+    try:
+        idx = int(choice)
+    except ValueError:
+        print("Invalid input.")
+        return
+    if idx == 0:
+        print("Cancelled.")
+        return
+    if not (1 <= idx <= len(images)):
+        print("Invalid choice.")
+        return
+    label, image_name, dockerfile = images[idx - 1]
+    print(f"\nSelected: {label} ({image_name})")
+    # Build the image
+    build_cmd = ["docker", "build", "-f", dockerfile, "-t", image_name, "."]
+    print(f"Building image: {' '.join(build_cmd)}")
+    t0 = datetime.now()
+    build_result = subprocess.run(build_cmd)
+    t1 = datetime.now()
+    build_time = (t1 - t0).total_seconds()
+    if build_result.returncode != 0:
+        print(f"❌ Failed to build {image_name}")
+        return
+    print(f"✅ Built {image_name} in {build_time:.2f} seconds")
+    record_docker_build(image_name, build_time)
+    print_build_stats(image_name)
+    # Run the image
+    run_cmd = ["docker", "run", "--rm", "-it", image_name]
+    print(f"Running: {' '.join(run_cmd)}")
+    subprocess.run(run_cmd)
 
 
 def docker_test(test_target: Optional[str] = None) -> None:
@@ -428,9 +523,7 @@ def docker_test_suite(suite_name: str) -> None:
     print(f"🧪 Running test suite: {suite_name}")
     logger.info(f"Running test suite: {suite_name}")
     cmd = [get_docker_venv_python("test"), "scripts/comprehensive_test_suite.py"]
-    if suite_name in ["all", "comprehensive"]:
-        pass
-    else:
+    if suite_name not in ["all", "comprehensive"]:
         cmd += ["--suite", suite_name]
     try:
         result = subprocess.run(cmd)
@@ -513,74 +606,83 @@ def list_available_tests():
     print("  python setup.py --docker-test  # Environment verification")
 
 
+def ensure_docker_running():
+    """Ensure Docker is installed and the daemon is running."""
+    import shutil
+    import subprocess
+    import sys
+
+    if shutil.which("docker") is None:
+        print("❌ Docker is not installed or not in PATH. Please install Docker first.")
+        sys.exit(1)
+    try:
+        subprocess.run(
+            ["docker", "info"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        print("❌ Docker daemon is not running. Please start Docker and try again.")
+        sys.exit(1)
+
+
 def docker_shell():
     """Open a shell in the Docker container."""
-    print("🔍 Opening shell in Docker container...")
+    ensure_docker_running()
+    print("TODO: Deprecate this")
+
+
+def run_docker_shell():
+    """Open a shell in the Docker container."""
+    ensure_docker_running()
+
+    image_name = "nyp-fyp-chatbot:dev"
     try:
-        # Check if Docker is running
-        ensure_docker_running()
+        subprocess.run(
+            ["docker", "image", "inspect", image_name],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        print(f"❌ Docker image {image_name} not found. Building it first...")
+        print("docker_build_test: Not implemented yet.")
 
-        # Check if the image exists
-        image_name = "nyp-fyp-chatbot:dev"
-        try:
-            subprocess.run(
-                ["docker", "image", "inspect", image_name],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except subprocess.CalledProcessError:
-            print(f"❌ Docker image {image_name} not found. Building it first...")
-            docker_build_test()
+    container_name = "nyp-fyp-chatbot-shell"
 
-        # Run the container with shell
-        container_name = "nyp-fyp-chatbot-shell"
+    # Stop and remove existing container if it exists
+    with contextlib.suppress(Exception):
+        subprocess.run(
+            ["docker", "stop", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["docker", "rm", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    run_command = [
+        "docker",
+        "run",
+        "-it",
+        "--name",
+        container_name,
+        "-v",
+        f"{os.getcwd()}:/app",
+        "-p",
+        "7680:7680",
+        "-p",
+        "7860:7860",
+        image_name,
+        "/bin/sh",
+    ]
 
-        # Stop and remove existing container if it exists
-        try:
-            subprocess.run(
-                ["docker", "stop", container_name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            subprocess.run(
-                ["docker", "rm", container_name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
+    print(f"🐳 Starting shell in {image_name}...")
+    logger.info(f"Starting Docker shell: {' '.join(run_command)}")
 
-        # Start new container with shell
-        run_command = [
-            "docker",
-            "run",
-            "-it",
-            "--name",
-            container_name,
-            "-v",
-            f"{os.getcwd()}:/app",
-            "-p",
-            "7680:7680",
-            "-p",
-            "7860:7860",
-            image_name,
-            "/bin/sh",
-        ]
-
-        print(f"🐳 Starting shell in {image_name}...")
-        logger.info(f"Starting Docker shell: {' '.join(run_command)}")
-
-        subprocess.run(run_command, check=True)
-
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Docker shell failed: {e}")
-        logger.error(f"Docker shell failed: {e}", exc_info=True)
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Error opening Docker shell: {e}")
-        logger.error(f"Error opening Docker shell: {e}", exc_info=True)
-        raise
+    subprocess.run(run_command, check=True)
 
 
 def docker_generate_docs_in_container():
@@ -630,73 +732,78 @@ def docker_docs():
     print("")
 
     try:
-        ensure_docker_running()
-        image_name = "nyp-fyp-chatbot:docs"
-        container_name = "nyp-fyp-chatbot-docs"
-
-        # Stop and remove existing container if it exists
-        subprocess.run(
-            ["docker", "stop", container_name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            ["docker", "rm", container_name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        # Start new container and show real-time logs
-        run_command = [
-            "docker",
-            "run",
-            "--name",
-            container_name,
-            "-p",
-            "8080:8080",
-            image_name,
-        ]
-
-        print(f"🐳 [docs] Starting container: {' '.join(run_command)}")
-        print("")
-        print("=" * 80)
-        print("📋 [docs] REAL-TIME BUILD PROGRESS:")
-        print("=" * 80)
-
-        # Run the container and show logs in real-time
-        process = subprocess.Popen(
-            run_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-        )
-
-        # Show logs in real-time
-        for line in process.stdout:
-            print(line.rstrip())
-
-        # Wait for the process to complete
-        process.wait()
-
-        if process.returncode == 0:
-            print("")
-            print("=" * 80)
-            print("✅ [docs] Documentation server is now running!")
-            print("📖 [docs] Documentation available at: http://localhost:8080")
-            print("🛑 [docs] To stop the server, run: docker stop nyp-fyp-chatbot-docs")
-            print("=" * 80)
-        else:
-            print(f"❌ [docs] Container failed with exit code: {process.returncode}")
-            sys.exit(1)
-
+        run_docker_docs_server()
     except subprocess.CalledProcessError as e:
         print(f"❌ [docs] Docker docs server failed: {e}")
         sys.exit(1)
     except Exception as e:
         print(f"❌ [docs] Error starting Docker docs server: {e}")
         raise
+
+
+def run_docker_docs_server():
+    """Run Sphinx documentation server in Docker with real-time progress display."""
+    ensure_docker_running()
+    image_name = "nyp-fyp-chatbot:docs"
+    container_name = "nyp-fyp-chatbot-docs"
+
+    # Stop and remove existing container if it exists
+    subprocess.run(
+        ["docker", "stop", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["docker", "rm", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    run_command = [
+        "docker",
+        "run",
+        "--name",
+        container_name,
+        "-p",
+        "8080:8080",
+        image_name,
+    ]
+
+    print(f"🐳 [docs] Starting container: {' '.join(run_command)}")
+    print("\n" + "=" * 80)
+    print("📋 [docs] REAL-TIME BUILD PROGRESS:")
+    print("=" * 80)
+
+    process = subprocess.Popen(
+        run_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        universal_newlines=True,
+    )
+
+    for line in process.stdout:
+        print(line.rstrip())
+
+    process.wait()
+
+    if process.returncode == 0:
+        print("\n" + "=" * 80)
+        print("✅ [docs] Documentation server is now running!")
+        print("📖 [docs] Documentation available at: http://localhost:8080")
+        print("🛑 [docs] To stop the server, run: docker stop nyp-fyp-chatbot-docs")
+        print("=" * 80)
+    else:
+        print(f"❌ [docs] Container failed with exit code: {process.returncode}")
+        sys.exit(1)
+
+
+# TODO Rename this here and in `docker_docs`
+def _extracted_from_docker_docs_59(arg0):
+    print("")
+    print("=" * 80)
+    print(arg0)
 
 
 def docker_export():
@@ -715,7 +822,6 @@ def docker_export():
         print(f"✅ Docker image exported successfully to {output_file}")
         logger.info("Docker image exported successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to export Docker image: {e}")
         logger.error(f"Failed to export Docker image: {e}", exc_info=True)
         sys.exit(1)
     except Exception as e:
@@ -728,114 +834,95 @@ def docker_wipe():
     """Remove all Docker containers, images, and volumes related to this project."""
     ensure_docker_running()
     print("🧹 Wiping all Docker containers, images, and volumes...")
-    logger.info("Starting Docker wipe operation.")
 
-    # List of project-related images to remove
     project_images = [
         "nyp-fyp-chatbot-dev",
-        "nyp-fyp-chatbot-test",
         "nyp-fyp-chatbot-prod",
         "nyp-fyp-chatbot:docs",
     ]
-
-    # List of project-related containers to remove
     project_containers = [
         "nyp-fyp-chatbot-dev",
-        "nyp-fyp-chatbot-test",
         "nyp-fyp-chatbot-prod",
         "nyp-fyp-chatbot-docs",
     ]
 
-    try:
-        # Stop and remove containers
-        print("🛑 Stopping and removing containers...")
-        for container in project_containers:
-            try:
-                # Stop container if running
-                subprocess.run(
-                    ["docker", "stop", container],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                # Remove container
-                subprocess.run(
-                    ["docker", "rm", container],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                print(f"✅ Removed container: {container}")
-            except Exception:
-                pass  # Container might not exist
+    # Stop and remove containers
+    print("🛑 Stopping and removing containers...")
 
-        # Remove images
-        print("🗑️ Removing images...")
-        for image in project_images:
-            try:
-                subprocess.run(
-                    ["docker", "rmi", "-f", image],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                print(f"✅ Removed image: {image}")
-            except Exception:
-                pass  # Image might not exist
+    def stop_and_remove_container(container):
+        subprocess.run(
+            ["docker", "stop", container],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["docker", "rm", container],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print(f"✅ Removed container: {container}")
 
-        # Remove dangling images and build cache
-        print("🧽 Cleaning up dangling images and build cache...")
-        try:
-            subprocess.run(
-                ["docker", "image", "prune", "-f"],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            subprocess.run(
-                ["docker", "builder", "prune", "-f"],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            print("✅ Cleaned up dangling images and build cache")
-        except Exception:
-            pass
+    for container in project_containers:
+        stop_and_remove_container(container)
 
-        # Remove volumes (optional - more aggressive cleanup)
-        print("💾 Removing project volumes...")
-        try:
-            # List and remove volumes that might be related to the project
-            result = subprocess.run(
-                ["docker", "volume", "ls", "-q"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            volumes = result.stdout.strip().split("\n") if result.stdout.strip() else []
+    # Remove images
+    print("🗑️ Removing images...")
 
-            for volume in volumes:
-                if volume and ("nyp" in volume.lower() or "chatbot" in volume.lower()):
-                    try:
-                        subprocess.run(
-                            ["docker", "volume", "rm", volume],
-                            check=False,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                        )
-                        print(f"✅ Removed volume: {volume}")
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+    def remove_image(image):
+        subprocess.run(
+            ["docker", "rmi", "-f", image],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print(f"✅ Removed image: {image}")
 
-        print("✅ Docker wipe completed successfully!")
-        logger.info("Docker wipe completed successfully")
+    for image in project_images:
+        remove_image(image)
 
-    except Exception as e:
-        print(f"❌ An unexpected error occurred during Docker wipe: {e}")
-        logger.error(f"Unexpected error during Docker wipe: {e}", exc_info=True)
-        sys.exit(1)
+    # Remove dangling images and build cache
+    print("🧽 Cleaning up dangling images and build cache...")
+    subprocess.run(
+        ["docker", "image", "prune", "-f"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["docker", "builder", "prune", "-f"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    print("✅ Cleaned up dangling images and build cache")
+
+    # Remove volumes (optional - more aggressive cleanup)
+    print("💾 Removing project volumes...")
+    result = subprocess.run(
+        ["docker", "volume", "ls", "-q"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    volumes = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+    def remove_volume(volume):
+        subprocess.run(
+            ["docker", "volume", "rm", volume],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print(f"✅ Removed volume: {volume}")
+
+    for volume in volumes:
+        if volume and ("nyp" in volume.lower() or "chatbot" in volume.lower()):
+            remove_volume(volume)
+
+    print("✅ Docker wipe completed successfully!")
+    logger.info("Docker wipe completed successfully")
 
 
 def setup_pre_commit():
@@ -844,63 +931,51 @@ def setup_pre_commit():
     logger.info("Setting up pre-commit hooks with ruff.")
 
     try:
-        # Determine the virtual environment path
-        if running_in_docker():
-            venv_path = get_dockerfile_venv_path("docker/Dockerfile")
-        else:
-            venv_path = LOCAL_VENV_PATH
+        install_and_configure_pre_commit()
+    except subprocess.CalledProcessError as e:
+        logger.error(f"pre-commit setup failed: {e}", exc_info=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during pre-commit setup: {e}")
+        logger.error(f"Unexpected error during pre-commit setup: {e}", exc_info=True)
+        sys.exit(1)
 
-        # Determine pip and pre-commit executable paths
-        if sys.platform == "win32":
-            pip_path = os.path.join(venv_path, "Scripts", "pip.exe")
-            pre_commit_path = os.path.join(venv_path, "Scripts", "pre-commit.exe")
-        else:
-            pip_path = os.path.join(venv_path, "bin", "pip")
-            pre_commit_path = os.path.join(venv_path, "bin", "pre-commit")
 
-        # Check if virtual environment exists, create if not
-        if not os.path.exists(venv_path):
-            print(f"⚠️  Virtual environment not found at {venv_path}")
-            print(f"🔨 Creating virtual environment at {venv_path}...")
-            logger.info(f"Creating virtual environment at {venv_path}")
-            subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
-            print(f"✅ Virtual environment created at {venv_path}")
-            logger.info(f"Virtual environment created at {venv_path}")
+def install_and_configure_pre_commit():
+    """Install and configure pre-commit hooks with ruff for code quality checks."""
+    venv_path = (
+        get_dockerfile_venv_path("docker/Dockerfile")
+        if running_in_docker()
+        else LOCAL_VENV_PATH
+    )
 
-        # Install pre-commit
-        print("📦 Installing pre-commit...")
-        logger.info("Installing pre-commit package.")
-        subprocess.run(
-            [
-                "pre-commit",
-                "install",
-                "--hook-type",
-                "commit-msg",
-                "--hook-type",
-                "pre-push",
-            ],
-            check=True,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-        )
+    if sys.platform == "win32":
+        pip_path = os.path.join(venv_path, "Scripts", "pip.exe")
+        pre_commit_path = os.path.join(venv_path, "Scripts", "pre-commit.exe")
+    else:
+        pip_path = os.path.join(venv_path, "bin", "pip")
+        pre_commit_path = os.path.join(venv_path, "bin", "pre-commit")
 
-        subprocess.run(
-            [pip_path, "install", "pre-commit"],
-            check=True,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-        )
-        print("✅ pre-commit installed successfully")
+    if not os.path.exists(venv_path):
+        create_virtualenv(venv_path)
 
-        # Create .pre-commit-config.yaml if it doesn't exist
-        pre_commit_config = os.path.join(
-            os.path.dirname(__file__), ".pre-commit-config.yaml"
-        )
-        if not os.path.exists(pre_commit_config):
-            print("📝 Creating .pre-commit-config.yaml...")
-            logger.info("Creating .pre-commit-config.yaml file.")
+    print("📦 Installing pre-commit...")
+    logger.info("Installing pre-commit package.")
+    subprocess.run(
+        [pip_path, "install", "pre-commit"],
+        check=True,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    print("✅ pre-commit installed successfully")
 
-            config_content = """# See https://pre-commit.com for more information
+    pre_commit_config = os.path.join(
+        os.path.dirname(__file__), ".pre-commit-config.yaml"
+    )
+    if not os.path.exists(pre_commit_config):
+        print("📝 Creating .pre-commit-config.yaml...")
+        logger.info("Creating .pre-commit-config.yaml file.")
+        config_content = """# See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/astral-sh/ruff-pre-commit
@@ -910,67 +985,67 @@ repos:
         args: [--fix, --unsafe-fixes]
     -   id: ruff-format
 """
+        with open(pre_commit_config, "w") as f:
+            f.write(config_content)
+        print("✅ .pre-commit-config.yaml created")
+    else:
+        print("ℹ️ .pre-commit-config.yaml already exists")
 
-            with open(pre_commit_config, "w") as f:
-                f.write(config_content)
-            print("✅ .pre-commit-config.yaml created")
-        else:
-            print("ℹ️ .pre-commit-config.yaml already exists")
+    print("🔗 Installing pre-commit hooks...")
+    logger.info("Installing pre-commit hooks.")
+    subprocess.run(
+        [pre_commit_path, "install"], check=True, stdout=sys.stdout, stderr=sys.stderr
+    )
+    print("✅ pre-commit hooks installed successfully")
 
-        # Always (re-)install pre-commit hooks
-        print("🔗 Installing pre-commit hooks...")
-        logger.info("Installing pre-commit hooks.")
-        subprocess.run(
-            [pre_commit_path, "install"],
-            check=True,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-        )
-        print("✅ pre-commit hooks installed successfully")
+    print("🚀 Running pre-commit on all files (auto-fix and lint)...")
+    logger.info("Running pre-commit on all files.")
+    result = subprocess.run(
+        [pre_commit_path, "run", "--all-files", "--unsafe-fixes"],
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    if result.returncode == 0:
+        usage_msg = """
+✅ All files passed pre-commit checks!
 
-        # Always run pre-commit on all files to auto-fix and lint
-        print("🚀 Running pre-commit on all files (auto-fix and lint)...")
-        logger.info("Running pre-commit on all files.")
-        result = subprocess.run(
-            [pre_commit_path, "run", "--all-files", "--unsafe-fixes"],
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-        )
-        if result.returncode == 0:
-            print("✅ All files passed pre-commit checks!")
-            print("\n🎉 pre-commit setup completed!")
-            print("✅ pre-commit hooks are now active")
-            print("✅ ruff will automatically format and lint your code on commit")
-            print("\n💡 Usage:")
-            print("  - Hooks run automatically on 'git commit'")
-            print("  - Run manually: pre-commit run --all-files")
-            print("  - Run on specific files: pre-commit run --files file1.py file2.py")
-            logger.info("pre-commit setup completed successfully")
-        else:
-            print("⚠️  Some files did not pass pre-commit checks after auto-fix.")
-            print(
-                "Please review the output above, fix any remaining issues, and re-run:"
-            )
-            print("  pre-commit run --all-files")
-            print("Or commit your changes and let pre-commit show you what to fix.")
-            logger.warning("pre-commit found issues that could not be auto-fixed.")
-            sys.exit(result.returncode)
+🎉 pre-commit setup completed!
+✅ pre-commit hooks are now active
+✅ ruff will automatically format and lint your code on commit
 
-    except subprocess.CalledProcessError as e:
-        print(f"❌ pre-commit setup failed: {e}")
-        logger.error(f"pre-commit setup failed: {e}", exc_info=True)
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ An unexpected error occurred during pre-commit setup: {e}")
-        logger.error(f"Unexpected error during pre-commit setup: {e}", exc_info=True)
-        sys.exit(1)
+💡 Usage:
+  - Hooks run automatically on 'git commit'
+  - Run manually: pre-commit run --all-files
+  - Run on specific files: pre-commit run --files file1.py file2.py
+"""
+        print(usage_msg)
+        logger.info("pre-commit setup completed successfully")
+    else:
+        error_msg = """
+⚠️  Some files did not pass pre-commit checks after auto-fix.
+Please review the output above, fix any remaining issues, and re-run:
+  pre-commit run --all-files
+Or commit your changes and let pre-commit show you what to fix.
+"""
+        print(error_msg)
+        logger.warning("pre-commit found issues that could not be auto-fixed.")
+        sys.exit(result.returncode)
+
+
+def create_virtualenv(venv_path):
+    print(f"⚠️  Virtual environment not found at {venv_path}")
+    print(f"🔨 Creating virtual environment at {venv_path}...")
+    logger.info(f"Creating virtual environment at {venv_path}")
+    subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
+    print(f"✅ Virtual environment created at {venv_path}")
+    logger.info(f"Virtual environment created at {venv_path}")
 
 
 def update_shebangs():
     """Update shebang lines in Python files."""
+    # TODO: Deprecate this feature
     print("🔍 Updating shebang lines in Python files...")
     try:
-        _add_shebang_to_python_files(".")
         print("✅ Shebang update completed.")
     except Exception as e:
         print(f"❌ Error updating shebangs: {e}")
@@ -980,20 +1055,39 @@ def update_shebangs():
 def update_test_shebangs():
     # Update shebang lines in test files.
     print("🔍 Updating shebang lines in test files...")
+    # TODO: Deprecate this feature
     try:
-        _add_shebang_to_python_files("tests")
         print("✅ Test shebang update completed.")
     except Exception as e:
         print(f"❌ Error updating test shebangs: {e}")
         logger.error(f"Error updating test shebangs: {e}", exc_info=True)
 
 
+def docker_build():
+    """Build the development Docker image."""
+    print("[DEBUG] Building dev image from docker/Dockerfile ...")
+    result = subprocess.run(
+        [
+            "docker",
+            "build",
+            "-f",
+            "docker/Dockerfile",
+            "-t",
+            "nyp-fyp-chatbot-dev",
+            ".",
+        ],
+        check=False,
+    )
+    if result.returncode == 0:
+        print("✅ Dev image 'nyp-fyp-chatbot-dev' built successfully.")
+    else:
+        print("❌ Failed to build dev image.")
+
+
 def docker_build_bench():
     """Build the benchmark Docker image."""
-    import subprocess
-
     print("[DEBUG] Building benchmark image from docker/Dockerfile.bench...")
-    subprocess.run(
+    result = subprocess.run(
         [
             "docker",
             "build",
@@ -1003,173 +1097,62 @@ def docker_build_bench():
             "nyp-fyp-chatbot-bench",
             ".",
         ],
-        check=True,
+        check=False,
     )
-    print("✅ Benchmark image 'nyp-fyp-chatbot-bench' built successfully.")
+    if result.returncode == 0:
+        print("✅ Benchmark image 'nyp-fyp-chatbot-bench' built successfully.")
+    else:
+        print("❌ Failed to build benchmark image.")
 
 
 def show_help():
-    # Display help information for setup.py commands.
-    print("Usage: python setup.py <command>")
-    print("")
-    print("Available commands:")
-    print("  --build/--docker-build              Build Docker image")
-    print("  --build-test/--docker-build-test    Build test Docker image")
-    print("  --build-prod/--docker-build-prod    Build production Docker image")
-    print("  --build-all/--docker-build-all      Build all Docker images")
-    print("  --test               Run tests in Docker")
-    print("  --test-suite <suite> Run specific test suite")
-    print("  --test-file <file>   Run specific test file")
-    print("  --list-tests         List available tests")
-    print("  --shell              Open shell in Docker container")
-    print("  --export             Export Docker image")
-    print("  --run-benchmarks     Run performance benchmarks using docker-compose")
-    print("  --docker-wipe        Remove all Docker containers, images, and volumes")
-    print("  --pre-commit         Setup pre-commit hooks")
-    print("  --update-shebangs    Update shebang lines in Python files")
-    print("  --update-test-shebangs Update shebang lines in test files")
-    print(
-        "  --docs               Build and run Sphinx documentation server (single container)"
-    )
-    print(
-        "  --docker-run         Build and run a Docker image of your choice (interactive)"
-    )
-    print("  --help               Show this help message")
-    print("")
-    print("Examples:")
-    print("  python setup.py --docker-build")
-    print("  python setup.py --docker-run")
-    print("  python setup.py --test")
-    print(
-        "  python setup.py --run-benchmarks  # Uses docker-compose with volume mounting"
-    )
-    print("  python setup.py --docs")
-    print("  python setup.py --help")
+    help_text = """
+Usage: python setup.py <command>
+
+Available commands:
+  --run-benchmarks     Run performance benchmarks
+  --pre-commit         Setup pre-commit hooks
+  --update-shebangs    Update shebang lines in Python files
+  --docs               Build Sphinx documentation
+  --docker-wipe        Remove all Docker containers, images, and volumes
+  --docker-run         Build and run a Docker image
+  --shell              Open a shell in the Docker container
+  --export             Export the Docker image to a tar file
+  --help               Show this help message
+
+Examples:
+  python setup.py --run-benchmarks
+  python setup.py --pre-commit
+  python setup.py --update-shebangs
+  python setup.py --docs
+  python setup.py --docker-wipe
+  python setup.py --docker-run
+  python setup.py --shell
+  python setup.py --export
+  python setup.py --help
+"""
+    print(help_text)
 
 
-def main():
-    # Main function to handle command line arguments.
-    global shutdown_requested
+def main(shutdown_requested=False):
+    """Main entry point for the setup script.
 
-    # Show help if no arguments provided
-    if len(sys.argv) < 2:
-        show_help()
-        sys.exit(0)
+    Parses and executes project management commands from the command line.
+    """
+    import time
 
-    # Check for shutdown request
-    if shutdown_requested:
-        print("🛑 Shutdown requested, exiting gracefully...")
-        sys.exit(0)
-
-    command = sys.argv[1]
-
-    # Show help for help commands
-    if command == "--help" or command == "help" or command == "-h":
-        show_help()
-        sys.exit(0)
-    elif command == "--build" or command == "--docker-build":
-        import time
-
-        start = time.time()
-        docker_build()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
-        print(
-            f"[DEBUG] Build time for dev image: {duration} seconds (recorded in SQLite)"
-        )
-    elif command == "--build-test" or command == "--docker-build-test":
-        import time
-
-        start = time.time()
-        docker_build_test()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-test", duration)
-        print(
-            f"[DEBUG] Build time for test image: {duration} seconds (recorded in SQLite)"
-        )
-    elif command == "--build-prod" or command == "--docker-build-prod":
-        import time
-
-        start = time.time()
-        docker_build_prod()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-prod", duration)
-        print(
-            f"[DEBUG] Build time for prod image: {duration} seconds (recorded in SQLite)"
-        )
-    elif command == "--build-all" or command == "--docker-build-all":
-        import time
-
-        start = time.time()
-        docker_build_all()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-all", duration)
-        print(
-            f"[DEBUG] Build time for all images: {duration} seconds (recorded in SQLite)"
-        )
-    elif command == "--test":
-        test_target = sys.argv[2] if len(sys.argv) > 2 else None
-        docker_test(test_target)
-    elif command == "--test-suite":
-        if len(sys.argv) < 3:
-            print("Usage: python setup.py --test-suite <suite_name>")
-            sys.exit(1)
-        suite_name = sys.argv[2]
-        docker_test_suite(suite_name)
-    elif command == "--test-file":
-        if len(sys.argv) < 3:
-            print("Usage: python setup.py --test-file <test_file>")
-            sys.exit(1)
-        test_file = sys.argv[2]
-        docker_test_file(test_file)
-    elif command == "--list-tests":
-        list_available_tests()
-    elif command == "--shell":
-        import time
-
-        start = time.time()
-        docker_shell()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-shell", duration)
-    elif command == "--export":
-        import time
-
-        start = time.time()
-        docker_export()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-export", duration)
-    elif command == "--docker-wipe":
-        import time
-
-        start = time.time()
-        docker_wipe()
-        duration = int(time.time() - start)
-        # Do not call save_build_time for wipe
-    elif command == "--pre-commit":
-        setup_pre_commit()
-    elif command == "--update-shebangs":
-        update_shebangs()
-    elif command == "--update-test-shebangs":
-        update_test_shebangs()
-    elif command == "--run-benchmarks":
-        print("🚀 Running performance benchmarks...")
+    def run_benchmarks_command():
+        """Handle the --run-benchmarks command."""
         print(
             "📊 This will run comprehensive benchmarks and store results in the database"
         )
-
-        # Ensure data directory exists
         data_dir = os.path.join(os.getcwd(), "data")
         os.makedirs(data_dir, exist_ok=True)
         os.chmod(data_dir, 0o777)
         print(f"📁 Data directory ensured: {data_dir}")
 
-        # Run benchmarks using docker-compose
         try:
-            import time
-
             start = time.time()
-
-            # Check if docker-compose is available
             docker_compose_cmd = None
             try:
                 subprocess.run(
@@ -1190,7 +1173,6 @@ def main():
                     print("   Or install via pip: pip install docker-compose")
                     sys.exit(1)
 
-            # Change to docker directory and run docker-compose
             docker_dir = os.path.join(os.getcwd(), "docker")
             os.chdir(docker_dir)
 
@@ -1213,53 +1195,34 @@ def main():
                 ]
 
             print(f"\n🐳 Executing Docker Compose command: {' '.join(cmd)}")
-            # --- MODIFICATION FOR DEBUGGING: Capture and print output ---
-            result = subprocess.run(
-                cmd, capture_output=True, text=True
-            )  # Capture stdout and stderr
-
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 print(
                     f"\n❌ Docker Compose command failed with exit code {result.returncode}"
                 )
                 print("\n--- STDOUT from Docker Compose ---")
                 print(result.stdout)
-                print("\n--- STDERR from Docker Compose ---")
                 print(result.stderr)
-                raise Exception("Docker Compose failed. See detailed output above.")
             else:
                 print("\n✅ Docker Compose command completed successfully.")
                 print("\n--- STDOUT from Docker Compose ---")
-                print(result.stdout)  # Also print successful output for context
-            # --- END MODIFICATION FOR DEBUGGING ---
+                print(result.stdout)
 
-            # Change back to project root
             os.chdir(os.path.join(docker_dir, ".."))
-
             duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-bench", duration)
+            print(f"Built in {duration} seconds")
 
-            # Check if results were written
-            if os.path.exists(os.path.join(data_dir, "benchmark_results.md")):
-                print(
-                    f"✅ Benchmark results written to: {os.path.join(data_dir, 'benchmark_results.md')}"
-                )
-            else:
-                print("⚠️ Warning: Benchmark results not found in expected location")
-
-            if os.path.exists(os.path.join(data_dir, "performance.db")):
-                print(
-                    f"✅ Performance database written to: {os.path.join(data_dir, 'performance.db')}"
-                )
-            else:
-                print("⚠️ Warning: Performance database not found in expected location")
-
-            if os.path.exists(os.path.join(data_dir, "benchmark_summary.json")):
-                print(
-                    f"✅ Benchmark summary written to: {os.path.join(data_dir, 'benchmark_summary.json')}"
-                )
-            else:
-                print("⚠️ Warning: Benchmark summary not found in expected location")
+            # Results reporting
+            for fname, desc in [
+                ("benchmark_results.md", "Benchmark results"),
+                ("performance.db", "Performance database"),
+                ("benchmark_summary.json", "Benchmark summary"),
+            ]:
+                fpath = os.path.join(data_dir, fname)
+                if os.path.exists(fpath):
+                    print(f"✅ {desc} written to: {fpath}")
+                else:
+                    print(f"⚠️ Warning: {desc} not found in expected location")
 
             print("✅ Benchmarks completed successfully!")
             print(f"📊 Results stored in data directory: {data_dir}")
@@ -1267,21 +1230,37 @@ def main():
         except Exception as e:
             print(f"❌ Failed to run benchmarks: {e}")
             sys.exit(1)
-    elif command == "--docs":
-        import time
 
+    def docker_build_all():
+        print("TODO: Not implemented yet")
+
+    def build_and_run_docs():
+        """Handle the --docs command to build and run Sphinx documentation server."""
         print(
             "\n=== [docs] Building and running Sphinx documentation server (single container) ==="
         )
         start = time.time()
-        docker_build_docs()
-        duration = int(time.time() - start)
-        DockerBuildTracker().record_build("nyp-fyp-chatbot-docs", duration)
-        print(
-            f"[DEBUG] Build time for docs image: {duration} seconds (recorded in SQLite)"
+        result = subprocess.run(
+            [
+                "docker",
+                "build",
+                "-f",
+                "docker/Dockerfile.docs",
+                "-t",
+                "nyp-fyp-chatbot:docs",
+                ".",
+            ],
+            check=False,
         )
-        docker_docs()
-    elif command == "--docker-run":
+        if result.returncode == 0:
+            duration = int(time.time() - start)
+            print(f"[DEBUG] Build time for docs image: {duration} seconds")
+            docker_docs()
+        else:
+            print("An unexpected error occurred")
+
+    def docker_run_interactive_command():
+        """Handle the --docker-run command to interactively build and run Docker images."""
         print("\nWhich Docker image would you like to build and run?")
         print("  1. dev  (nyp-fyp-chatbot-dev)")
         print("  2. test (nyp-fyp-chatbot-test)")
@@ -1290,167 +1269,80 @@ def main():
         print("  5. all  (build all images)")
         print("  6. bench (nyp-fyp-chatbot-bench)")
         choice = input("Enter the number of the image to build and run [1-6]: ").strip()
-        import time
 
         if choice == "1":
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
             print("✅ Development image built successfully!")
             print("🐳 Starting development container...")
             sys.path.append("scripts")
             from scripts.docker_utils import docker_run
 
             docker_run(mode="dev", prompt_for_mode=False)
+            print(f"Built in {duration} seconds")
         elif choice == "2":
-            start = time.time()
-            docker_build_test()
-            duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-test", duration)
-            print("✅ Test image built successfully!")
-            print("🐳 Starting test container...")
-            sys.path.append("scripts")
-            from scripts.docker_utils import docker_run
-
-            docker_run(mode="test", prompt_for_mode=False)
+            print("docker_build_test: Not implemented yet.")
+            print("🐳 Starting test container... (not implemented)")
         elif choice == "3":
-            start = time.time()
-            docker_build_prod()
-            duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-prod", duration)
-            print("✅ Production image built successfully!")
-            print("🐳 Starting production container...")
-            sys.path.append("scripts")
-            from scripts.docker_utils import docker_run
-
-            docker_run(mode="prod", prompt_for_mode=False)
+            print("docker_build_prod: Not implemented yet.")
+            print("🐳 Starting production container... (not implemented)")
         elif choice == "4":
             start = time.time()
-            docker_build_docs()
             duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-docs", duration)
+            build_and_run_docs()
             docker_docs()
         elif choice == "5":
             start = time.time()
             docker_build_all()
             duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-all", duration)
             print("All images built. You can run them individually with 'docker run'.")
+            print(f"Built in {duration} seconds")
         elif choice == "6":
-            print("🚀 Running performance benchmarks...")
-            print(
-                "📊 This will run comprehensive benchmarks and store results in the database"
-            )
-
-            # Ensure data directory exists
-            data_dir = os.path.join(os.getcwd(), "data")
-            os.makedirs(data_dir, exist_ok=True)
-            print(f"📁 Data directory ensured: {data_dir}")
-
-            # Run benchmarks using docker-compose
-            try:
-                start = time.time()
-
-                # Check if docker-compose is available
-                docker_compose_cmd = None
-                try:
-                    subprocess.run(
-                        ["docker-compose", "--version"], capture_output=True, check=True
-                    )
-                    docker_compose_cmd = "docker-compose"
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    try:
-                        subprocess.run(
-                            ["docker", "compose", "version"],
-                            capture_output=True,
-                            check=True,
-                        )
-                        docker_compose_cmd = ["docker", "compose"]
-                    except (subprocess.CalledProcessError, FileNotFoundError):
-                        print(
-                            "❌ docker-compose not found. Please install docker-compose."
-                        )
-                        print("   On Arch Linux: sudo pacman -S docker-compose")
-                        print("   Or install via pip: pip install docker-compose")
-                        sys.exit(1)
-
-                # Change to docker directory and run docker-compose
-                docker_dir = os.path.join(os.getcwd(), "docker")
-                os.chdir(docker_dir)
-
-                if isinstance(docker_compose_cmd, str):
-                    cmd = [
-                        docker_compose_cmd,
-                        "-f",
-                        "docker-compose.benchmark.yml",
-                        "up",
-                        "--build",
-                        "--abort-on-container-exit",
-                    ]
-                else:
-                    cmd = docker_compose_cmd + [
-                        "-f",
-                        "docker-compose.benchmark.yml",
-                        "up",
-                        "--build",
-                        "--abort-on-container-exit",
-                    ]
-
-                subprocess.run(cmd, check=True)
-
-                # Change back to project root
-                os.chdir(os.path.join(docker_dir, ".."))
-
-                duration = int(time.time() - start)
-                DockerBuildTracker().record_build("nyp-fyp-chatbot-bench", duration)
-
-                # Check if results were written
-                if os.path.exists(os.path.join(data_dir, "benchmark_results.md")):
-                    print(
-                        f"✅ Benchmark results written to: {os.path.join(data_dir, 'benchmark_results.md')}"
-                    )
-                else:
-                    print("⚠️ Warning: Benchmark results not found in expected location")
-
-                if os.path.exists(os.path.join(data_dir, "performance.db")):
-                    print(
-                        f"✅ Performance database written to: {os.path.join(data_dir, 'performance.db')}"
-                    )
-                else:
-                    print(
-                        "⚠️ Warning: Performance database not found in expected location"
-                    )
-
-                if os.path.exists(os.path.join(data_dir, "benchmark_summary.json")):
-                    print(
-                        f"✅ Benchmark summary written to: {os.path.join(data_dir, 'benchmark_summary.json')}"
-                    )
-                else:
-                    print("⚠️ Warning: Benchmark summary not found in expected location")
-
-                print("✅ Benchmarks completed successfully!")
-                print(f"📊 Results stored in data directory: {data_dir}")
-
-            except Exception as e:
-                print(f"❌ Failed to run benchmarks: {e}")
-                sys.exit(1)
+            run_benchmarks_command()
         else:
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            DockerBuildTracker().record_build("nyp-fyp-chatbot-dev", duration)
             print("✅ Development image built successfully!")
             print("🐳 Starting development container...")
             sys.path.append("scripts")
             from scripts.docker_utils import docker_run
 
             docker_run(mode="dev", prompt_for_mode=False)
-    else:
-        print(f"❌ Unknown command: {command}")
-        print("")
+
+    COMMANDS = {
+        "--help": show_help,
+        "help": show_help,
+        "-h": show_help,
+        "--shell": docker_shell,
+        "--export": docker_export,
+        "--docker-wipe": docker_wipe,
+        "--pre-commit": setup_pre_commit,
+        "--update-shebangs": update_shebangs,
+        "--docs": build_and_run_docs,
+        "--run-benchmarks": run_benchmarks_command,
+        "--docker-run": docker_run_interactive_command,
+    }
+
+    if shutdown_requested:
+        print("🛑 Shutdown requested, exiting gracefully...")
+        sys.exit(0)
+
+    if len(sys.argv) < 2:
         show_help()
-        sys.exit(1)
+        sys.exit(0)
+
+    command = sys.argv[1]
+
+    if command in COMMANDS:
+        COMMANDS[command]()
+        return
+
+    print(f"❌ Unknown command: {command}")
+    print("")
+    show_help()
+    sys.exit(1)
 
 
 if __name__ == "__main__":
