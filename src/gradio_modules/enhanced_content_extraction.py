@@ -41,7 +41,7 @@ except ImportError:
         markdown, and numerical prefixes, making it suitable for classification.
         """
         if not isinstance(text, str):
-            text = str(text)  # Ensure it's a string
+            text = text
 
         # Remove common Markdown headings: e.g., "## Header", "# Title"
         text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
@@ -87,12 +87,10 @@ def escape_special_characters(text: str) -> str:
     for char in text:
         char_code = ord(char)
         # Keep printable ASCII (32-126), newlines (10, 13), and tabs (9)
-        if (32 <= char_code <= 126) or char_code in [9, 10, 13]:
+        if 32 <= char_code <= 126 or char_code in {9, 10, 13}:
             cleaned += char
-        # Keep Unicode characters above ASCII range
         elif char_code > 127:
             cleaned += char
-        # Remove control characters and extended ASCII
         else:
             cleaned += " "
 
@@ -110,16 +108,12 @@ def find_tool(tool_name: str) -> Optional[str]:
     """
     if os.getenv("IN_DOCKER", "false").lower() in ("1", "true"):
         path = shutil.which(tool_name)
-        if path:
-            return path
-        return None
+        return path or None
     home = os.path.expanduser("~")
     local_path = os.path.join(
         home, ".nypai-chatbot", "data", "dependencies", tool_name, "bin", tool_name
     )
-    if os.path.exists(local_path):
-        return local_path
-    return shutil.which(tool_name)
+    return local_path if os.path.exists(local_path) else shutil.which(tool_name)
 
 
 def apply_text_processing(content: str, file_ext: str) -> str:
@@ -207,9 +201,8 @@ def parallel_pandoc_chunks(md_path: str, input_format: str) -> str:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 return (idx, result.stdout.strip())
-            else:
-                logger.warning(f"Pandoc chunk extraction failed: {result.stderr}")
-                return (idx, "")
+            logger.warning(f"Pandoc chunk extraction failed: {result.stderr}")
+            return (idx, "")
         finally:
             os.unlink(tmp_path)
 

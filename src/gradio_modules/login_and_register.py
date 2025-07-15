@@ -240,9 +240,7 @@ def login_interface(setup_events: bool = True) -> tuple:
                     return True, actual_username, gr.update(visible=False)
                 else:
                     # Use the backend message directly without adding "Login failed:" prefix
-                    error_msg = (
-                        message_value if message_value else "Authentication failed"
-                    )
+                    error_msg = message_value or "Authentication failed"
                     logger.warning(f"❌ ERROR PATH: Login failed for user {username}")
                     logger.warning(
                         f"❌ ERROR PATH: Status: '{status_value}', Message: '{error_msg}'"
@@ -385,9 +383,7 @@ def login_interface(setup_events: bool = True) -> tuple:
                     )
                 else:
                     # Use the backend message directly without adding "Registration failed:" prefix
-                    error_msg = (
-                        message_value if message_value else "Registration failed"
-                    )
+                    error_msg = message_value or "Registration failed"
                     logger.warning(
                         f"❌ Registration failed for user {username}: {error_msg}"
                     )
@@ -519,12 +515,7 @@ def login_interface(setup_events: bool = True) -> tuple:
             :return: Tuple of updates for all form components
             :rtype: tuple
             """
-            if is_register_mode:
-                # Currently in register mode, switch to login
-                return switch_to_login()
-            else:
-                # Currently in login mode, switch to register
-                return switch_to_register()
+            return switch_to_login() if is_register_mode else switch_to_register()
 
         secondary_btn.click(
             fn=handle_secondary_btn_click,

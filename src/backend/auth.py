@@ -52,10 +52,7 @@ def _validate_username(username: str) -> bool:
         return False
 
     # Allow alphanumeric characters, hyphens, and underscores
-    if not re.match(r"^[a-zA-Z0-9_-]+$", username):
-        return False
-
-    return True
+    return bool(re.match(r"^[a-zA-Z0-9_-]+$", username))
 
 
 def _validate_password(password: str) -> bool:
@@ -75,10 +72,7 @@ def _validate_password(password: str) -> bool:
         return False
     if not re.search(r"[a-z]", password):
         return False
-    if not re.search(r"\d", password):
-        return False
-
-    return True
+    return bool(re.search(r"\d", password))
 
 
 async def do_login(username: str, password: str) -> Dict[str, Any]:
@@ -209,12 +203,11 @@ async def do_register(username: str, email: str, password: str) -> Dict[str, Any
 
         # Hash password and create user
         password_hash = hash_password(password)
-        if db.create_user(username, email, password_hash):
-            logger.info(f"New user registered: {username}")
-            return {"success": True, "message": "Registration successful."}
-        else:
+        if not db.create_user(username, email, password_hash):
             return {"success": False, "message": "Failed to create user account."}
 
+        logger.info(f"New user registered: {username}")
+        return {"success": True, "message": "Registration successful."}
     except Exception as e:
         logger.error(f"Registration error for user {username}: {e}")
         return {"success": False, "message": "An error occurred during registration."}
@@ -279,12 +272,11 @@ async def change_password(
 
         # Hash new password and update
         new_password_hash = hash_password(user_new_password_input)
-        if db.update_user(username, password_hash=new_password_hash):
-            logger.info(f"Password changed for user: {username}")
-            return {"success": True, "message": "Password changed successfully."}
-        else:
+        if not db.update_user(username, password_hash=new_password_hash):
             return {"success": False, "message": "Failed to update password."}
 
+        logger.info(f"Password changed for user: {username}")
+        return {"success": True, "message": "Password changed successfully."}
     except Exception as e:
         logger.error(f"Password change error for user {username}: {e}")
         return {
@@ -425,12 +417,11 @@ async def do_register_test(username: str, email: str, password: str) -> Dict[str
 
         # Hash password and create test user
         password_hash = hash_password(password)
-        if db.create_user(username, email, password_hash, is_test_user=True):
-            logger.info(f"New test user registered: {username}")
-            return {"success": True, "message": "Test registration successful."}
-        else:
+        if not db.create_user(username, email, password_hash, is_test_user=True):
             return {"success": False, "message": "Failed to create test user account."}
 
+        logger.info(f"New test user registered: {username}")
+        return {"success": True, "message": "Test registration successful."}
     except Exception as e:
         logger.error(f"Test registration error for user {username}: {e}")
         return {
@@ -500,12 +491,11 @@ async def change_password_test(
 
         # Hash new password and update
         new_password_hash = hash_password(user_new_password_input)
-        if db.update_user(username, password_hash=new_password_hash):
-            logger.info(f"Password changed for test user: {username}")
-            return {"success": True, "message": "Test password changed successfully."}
-        else:
+        if not db.update_user(username, password_hash=new_password_hash):
             return {"success": False, "message": "Failed to update test password."}
 
+        logger.info(f"Password changed for test user: {username}")
+        return {"success": True, "message": "Test password changed successfully."}
     except Exception as e:
         logger.error(f"Test password change error for user {username}: {e}")
         return {
@@ -539,15 +529,14 @@ async def cleanup_test_user(username: str) -> Dict[str, Any]:
         if not user["is_test_user"]:
             return {"success": False, "message": "This account is not a test account."}
 
-        if db.delete_user(username):
-            logger.info(f"Test user cleaned up: {username}")
-            return {
-                "success": True,
-                "message": f"Test user '{username}' cleaned up successfully.",
-            }
-        else:
+        if not db.delete_user(username):
             return {"success": False, "message": "Failed to clean up test user."}
 
+        logger.info(f"Test user cleaned up: {username}")
+        return {
+            "success": True,
+            "message": f"Test user '{username}' cleaned up successfully.",
+        }
     except Exception as e:
         logger.error(f"Test user cleanup error for {username}: {e}")
         return {
@@ -573,12 +562,9 @@ async def cleanup_all_test_users() -> Dict[str, Any]:
         if not test_users:
             return {"success": True, "message": "No test users found to clean up."}
 
-        # Delete all test users
-        deleted_count = 0
-        for (username,) in test_users:
-            if db.delete_user(username):
-                deleted_count += 1
-
+        deleted_count = sum(
+            bool(db.delete_user(username)) for (username,) in test_users
+        )
         logger.info(f"Cleaned up {deleted_count} test users")
         return {
             "success": True,

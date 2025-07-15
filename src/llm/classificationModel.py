@@ -46,7 +46,7 @@ def clean_text_for_classification(text: str) -> str:
     markdown, and numerical prefixes, making it suitable for classification.
     """
     if not isinstance(text, str):
-        text = str(text)
+        text = text
 
     # Remove common Markdown headings: e.g., "## Header", "# Title"
     text = re.sub(r"^\s*#+\s*.*$", "", text, flags=re.MULTILINE)
@@ -233,7 +233,7 @@ def classify_text(
     keywords_str_for_llm = keywords if keywords is not None else ""
 
     # Ensure even the input to the state is a string
-    rag_input_content = str(rag_input_content)
+    rag_input_content = rag_input_content
     keywords_str_for_llm = str(keywords_str_for_llm)
 
     state = {
@@ -242,5 +242,4 @@ def classify_text(
         "context": "",
         "answer": "",
     }
-    response = classify.invoke(state, config=config)
-    return response
+    return classify.invoke(state, config=config)

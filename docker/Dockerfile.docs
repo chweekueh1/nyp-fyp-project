@@ -23,7 +23,7 @@ ARG VENV_PATH=/home/appuser/.nypai-chatbot/venv-docs
 ENV PIP_JOBS=${PARALLEL_JOBS} \
     VENV_PATH=${VENV_PATH}
 
-WORKDIR /app/docs
+WORKDIR /app
 
 # Install system dependencies for documentation
 RUN apk add --no-cache \
@@ -66,32 +66,33 @@ RUN python3 -m venv ${VENV_PATH}
 ENV PATH="${VENV_PATH}/bin:$PATH" \
     PYTHONPATH=/app
 
-# Install uv inside the venv
-RUN . ${VENV_PATH}/bin/activate && pip install uv
-
 # Copy requirements first for better caching
 COPY --chown=appuser:appgroup requirements/requirements-docs.txt .
 
-# Install Python dependencies using uv inside the venv
-RUN ${VENV_PATH}/bin/uv pip install --upgrade pip wheel setuptools && \
-    ${VENV_PATH}/bin/uv pip install -r requirements-docs.txt
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    chmod +x $HOME/.local/bin/uv && \
+    export PATH="$HOME/.local/bin:$PATH" && \
+    ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
+    ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements-docs.txt
 
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
-COPY --chown=appuser:appgroup styles/ ./styles/
-
-# Copy Docker build tracking files (if they exist)
 
 # Copy the Sphinx docs and generate_docs script
 COPY --chown=appuser:appgroup src/docs/ ./docs/
 
+WORKDIR /app
+
 EXPOSE 8080
 
 # Set entrypoint and command for documentation
-ENTRYPOINT ["uv", "pip", "run", "/home/appuser/.nypai-chatbot/venv-docs/bin/python", "./docs/generate_docs.py"]
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-docs/bin/python", "docs/generate_docs.py"]
 
 # Print build information
-RUN echo "[BUILD] Using ENTRYPOINT: uv pip run ${VENV_PATH}/bin/python ./docs/generate_docs.py" && \
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python docs/generate_docs.py" && \
     echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
     echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
     echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)"

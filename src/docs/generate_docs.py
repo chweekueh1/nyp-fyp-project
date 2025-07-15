@@ -50,14 +50,14 @@ def serve_docs(build_dir, port=8080):
 def main():
     """Generate and serve the Sphinx documentation for the project.
 
-    This function checks for required documentation files, generates API documentation from the source code, builds the HTML documentation, and serves it via a local HTTP server.
+    This function checks for required documentation files, generates API .rst files, builds the HTML documentation, and serves it via a local HTTP server.
     """
     docs_dir = os.path.dirname(os.path.abspath(__file__))  # /app/docs
     build_dir = os.path.join(docs_dir, "_build")
-    src_dir = os.path.abspath(os.path.join(docs_dir, "../src"))
 
     conf_py = os.path.join(docs_dir, "conf.py")
     index_rst = os.path.join(docs_dir, "index.rst")
+    makefile = os.path.join(docs_dir, "Makefile")
     if not os.path.exists(conf_py):
         print(f"❌ conf.py not found in {docs_dir}. Cannot build docs.")
         sys.exit(1)
@@ -66,13 +66,17 @@ def main():
             f"❌ index.rst not found in {docs_dir}. Sphinx needs an index.rst as the master document."
         )
         sys.exit(1)
+    if not os.path.exists(makefile):
+        print(
+            f"❌ Makefile not found in {docs_dir}. Sphinx needs a Makefile to build docs."
+        )
+        sys.exit(1)
 
-    # Generate .rst files for your modules using sphinx-apidoc
-    apidoc_cmd = [sys.executable, "-m", "sphinx.apidoc", "-o", docs_dir, src_dir]
-    print(f"Running sphinx-apidoc: {' '.join(apidoc_cmd)}")
-    result = subprocess.run(apidoc_cmd)
+    # Generate .rst files for your modules using sphinx-apidoc via Makefile
+    print("Running: make apidoc")
+    result = subprocess.run(["make", "apidoc"], cwd=docs_dir)
     if result.returncode != 0:
-        print("❌ sphinx-apidoc failed.")
+        print("❌ make apidoc failed.")
         sys.exit(result.returncode)
 
     os.makedirs(build_dir, exist_ok=True)

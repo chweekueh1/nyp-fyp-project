@@ -1,8 +1,6 @@
 services:
   benchmark:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.bench
+    image: nyp-fyp-chatbot-bench
     container_name: nyp-benchmark
     environment:
       - BENCHMARK_MODE=1
@@ -14,6 +12,7 @@ services:
       - ../data:/app/data:rw
       - ../.env:/app/.env:ro
     working_dir: /app
-    user: "1000:1000" # <--- ADD THIS LINE
+    user: "1000:1000"
+    entrypoint: ["/home/appuser/.nypai-chatbot/venv-bench/bin/python"]
     command: ["src/scripts/run_benchmarks.py"]
     restart: "no"

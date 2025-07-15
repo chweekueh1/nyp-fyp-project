@@ -39,7 +39,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Environment Setup and Path Resolution ---
-BASE_CHATBOT_DIR = str(os.getcwd())
+BASE_CHATBOT_DIR = os.getcwd()
 
 default_db_path = os.path.join("data", "vector_store", "chroma_db")
 DATABASE_PATH = rel2abspath(
@@ -383,9 +383,9 @@ def build_keyword_filter(
         return {}
 
     filter_clauses = []
-    for i in range(max_keywords):
-        filter_clauses.append({f"keyword{i}": {"$in": matched_keywords}})
-
+    filter_clauses.extend(
+        {f"keyword{i}": {"$in": matched_keywords}} for i in range(max_keywords)
+    )
     return {"$or": filter_clauses}
 
 
@@ -410,9 +410,8 @@ def route_retriever(question: str) -> Optional[Any]:
         logging.info("No keywords matched for routing, returning default retriever.")
         if db:
             return db.as_retriever(search_kwargs={"k": 5})
-        else:
-            logging.error("db is None in route_retriever's default path.")
-            return None
+        logging.error("db is None in route_retriever's default path.")
+        return None
 
     keyword_filter = build_keyword_filter(matched_keywords)
     logging.info(
@@ -422,9 +421,8 @@ def route_retriever(question: str) -> Optional[Any]:
         return db.as_retriever(
             search_kwargs={"k": 5, "filter": {"keywords": matched_keywords}}
         )
-    else:
-        logging.error("db is None in route_retriever's filtered path.")
-        return None
+    logging.error("db is None in route_retriever's filtered path.")
+    return None
 
 
 # --- LangGraph State and Nodes ---
@@ -512,10 +510,10 @@ def _error_state(
         LangGraph state with error information.
     """
     return {
-        "input": str(question),
+        "input": question,
         "chat_history": chat_history,
-        "context": str(context),
-        "answer": str(answer),
+        "context": context,
+        "answer": answer,
     }
 
 

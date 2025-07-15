@@ -71,14 +71,12 @@ async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
     :return: True if rate limit not exceeded, False otherwise.
     :rtype: bool
     """
-    if operation_type == "chat":
-        return await chat_rate_limiter.check_and_update(user_id)
-    elif operation_type == "file_upload":
-        return await file_upload_rate_limiter.check_and_update(user_id)
-    elif operation_type == "audio":
+    if operation_type == "audio":
         return await audio_rate_limiter.check_and_update(user_id)
     elif operation_type == "auth":
         return await auth_rate_limiter.check_and_update(user_id)
+    elif operation_type == "file_upload":
+        return await file_upload_rate_limiter.check_and_update(user_id)
     else:
         # Default to chat rate limiter
         return await chat_rate_limiter.check_and_update(user_id)
@@ -93,20 +91,7 @@ def get_rate_limit_info(operation_type: str = "chat") -> dict:
     :return: Dictionary containing rate limit information.
     :rtype: dict
     """
-    if operation_type == "chat":
-        return {
-            "max_requests": CHAT_RATE_LIMIT_REQUESTS,
-            "time_window": CHAT_RATE_LIMIT_WINDOW,
-            "requests_per_second": CHAT_RATE_LIMIT_REQUESTS / CHAT_RATE_LIMIT_WINDOW,
-        }
-    elif operation_type == "file_upload":
-        return {
-            "max_requests": FILE_UPLOAD_RATE_LIMIT_REQUESTS,
-            "time_window": FILE_UPLOAD_RATE_LIMIT_WINDOW,
-            "requests_per_second": FILE_UPLOAD_RATE_LIMIT_REQUESTS
-            / FILE_UPLOAD_RATE_LIMIT_WINDOW,
-        }
-    elif operation_type == "audio":
+    if operation_type == "audio":
         return {
             "max_requests": AUDIO_RATE_LIMIT_REQUESTS,
             "time_window": AUDIO_RATE_LIMIT_WINDOW,
@@ -117,6 +102,13 @@ def get_rate_limit_info(operation_type: str = "chat") -> dict:
             "max_requests": AUTH_RATE_LIMIT_REQUESTS,
             "time_window": AUTH_RATE_LIMIT_WINDOW,
             "requests_per_second": AUTH_RATE_LIMIT_REQUESTS / AUTH_RATE_LIMIT_WINDOW,
+        }
+    elif operation_type == "file_upload":
+        return {
+            "max_requests": FILE_UPLOAD_RATE_LIMIT_REQUESTS,
+            "time_window": FILE_UPLOAD_RATE_LIMIT_WINDOW,
+            "requests_per_second": FILE_UPLOAD_RATE_LIMIT_REQUESTS
+            / FILE_UPLOAD_RATE_LIMIT_WINDOW,
         }
     else:
         return {

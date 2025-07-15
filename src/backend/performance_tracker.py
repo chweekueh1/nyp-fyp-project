@@ -455,12 +455,11 @@ class PerformanceTracker:
             duration = end_time - startup_info["start_time"]
             end_timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(end_time))
 
-            # Prepare component load times JSON
-            component_times = {}
-            for comp_id, comp_info in startup_info["component_times"].items():
-                if "duration" in comp_info:
-                    component_times[comp_info["name"]] = comp_info["duration"]
-
+            component_times = {
+                comp_info["name"]: comp_info["duration"]
+                for comp_id, comp_info in startup_info["component_times"].items()
+                if "duration" in comp_info
+            }
             component_times_json = (
                 json.dumps(component_times) if component_times else None
             )

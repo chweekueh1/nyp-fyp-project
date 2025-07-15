@@ -463,27 +463,15 @@ def ExtractText(path: str) -> List[Document]:
                 if temp_path and os.path.exists(temp_path):
                     os.unlink(temp_path)
 
-            perf_monitor.end_timer("text_extraction_method")
-            return result
-
         elif file_extension_lower.endswith(fast_text_only_types):
             # Use FastTextExtraction for specific file types where Pandoc might be overkill
             # or introduce unwanted transformations (e.g., code files).
             result = FastTextExtraction(path)
-            perf_monitor.end_timer("text_extraction_method")
-            return result
-
-        elif file_extension_lower.endswith(".pdf"):
+        else:
             # Use Alpine-friendly PDF processing
             result = OptimizedUnstructuredExtraction(path)
-            perf_monitor.end_timer("text_extraction_method")
-            return result
-
-        else:
-            # For other formats, use the optimized extraction method
-            result = OptimizedUnstructuredExtraction(path)
-            perf_monitor.end_timer("text_extraction_method")
-            return result
+        perf_monitor.end_timer("text_extraction_method")
+        return result
 
     except Exception as e:
         logging.warning(
@@ -537,53 +525,57 @@ def OptimizedUnstructuredExtraction(file_path: str) -> list[Document]:
     import os
 
     file_extension = os.path.splitext(file_path)[1].lower()
-    if file_extension == ".pdf":
-        # Try poppler-utils (pdftotext) first
-        try:
-            result = subprocess.run(
-                ["pdftotext", file_path, "-"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                text_content = result.stdout
-                document = Document(
-                    page_content=text_content,
-                    metadata={
-                        "source": file_path,
-                        "extraction_method": "optimized_pdftotext",
-                        "file_size": len(text_content),
-                    },
-                )
-                return [document]
-        except Exception as e:
-            logging.warning(f"pdftotext failed for {file_path}: {e}")
-
-        # Fallback: pure Python with pypdf
-        try:
-            from pypdf import PdfReader
-
-            reader = PdfReader(file_path)
-            text_content = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_content += page_text
+    if file_extension != ".pdf":
+        return FastTextExtraction(file_path)
+    # Try poppler-utils (pdftotext) first
+    try:
+        result = subprocess.run(
+            ["pdftotext", file_path, "-"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            text_content = result.stdout
             document = Document(
                 page_content=text_content,
                 metadata={
                     "source": file_path,
-                    "extraction_method": "optimized_pypdf",
+                    "extraction_method": "optimized_pdftotext",
                     "file_size": len(text_content),
                 },
             )
             return [document]
-        except Exception as e:
-            logging.error(f"pypdf failed for {file_path}: {e}")
-            return []
-    else:
-        return FastTextExtraction(file_path)
+    except Exception as e:
+        logging.warning(f"pdftotext failed for {file_path}: {e}")
+
+        # Fallback: pure Python with pypdf
+    try:
+        return _extracted_from_OptimizedUnstructuredExtraction_30(file_path)
+    except Exception as e:
+        logging.error(f"pypdf failed for {file_path}: {e}")
+        return []
+
+
+# TODO Rename this here and in `OptimizedUnstructuredExtraction`
+def _extracted_from_OptimizedUnstructuredExtraction_30(file_path):
+    from pypdf import PdfReader
+
+    reader = PdfReader(file_path)
+    text_content = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text_content += page_text
+    document = Document(
+        page_content=text_content,
+        metadata={
+            "source": file_path,
+            "extraction_method": "optimized_pypdf",
+            "file_size": len(text_content),
+        },
+    )
+    return [document]
 
 
 def StandardUnstructuredExtraction(file_path: str) -> list[Document]:
@@ -604,30 +596,37 @@ def StandardUnstructuredExtraction(file_path: str) -> list[Document]:
         file_extension = Path(file_path).suffix.lower()
 
         if file_extension == ".pdf":
-            # Use PyMuPDF for PDF processing
-            doc = fitz.open(file_path)
-            text_content = ""
-            for page in doc:
-                text_content += page.get_text()
-            doc.close()
-
-            document = Document(
-                page_content=text_content,
-                metadata={
-                    "source": file_path,
-                    "extraction_method": "standard_pymupdf",
-                    "file_size": len(text_content),
-                },
-            )
-
-            logging.debug(
-                f"📄 Standard PDF extraction: {len(text_content)} chars from {file_path}"
-            )
-            return [document]
+            return _extracted_from_StandardUnstructuredExtraction_(file_path)
         else:
             # For non-PDF files, use fast text extraction
             return FastTextExtraction(file_path)
 
+    except Exception as e:
+        logging.warning(f"Standard extraction failed for {file_path}: {e}")
+        return FastTextExtraction(file_path)
+
+
+# TODO Rename this here and in `StandardUnstructuredExtraction`
+def _extracted_from_StandardUnstructuredExtraction_(file_path):
+    # Use PyMuPDF for PDF processing
+    try:
+        doc = fitz.open(file_path)
+        text_content = "".join(page.get_text() for page in doc)
+        doc.close()
+
+        document = Document(
+            page_content=text_content,
+            metadata={
+                "source": file_path,
+                "extraction_method": "standard_pymupdf",
+                "file_size": len(text_content),
+            },
+        )
+
+        logging.debug(
+            f"📄 Standard PDF extraction: {len(text_content)} chars from {file_path}"
+        )
+        return [document]
     except Exception as e:
         logging.warning(f"Standard extraction failed for {file_path}: {e}")
         return FastTextExtraction(file_path)
@@ -658,8 +657,7 @@ def OpenAIMetadataTagger(document: list[Document]) -> list[Document]:
     llm = ChatOpenAI(temperature=0.8, model="gpt-4o")
 
     document_transformer = create_metadata_tagger(metadata_schema=schema, llm=llm)
-    enhanced_documents = document_transformer.transform_documents(document)
-    return enhanced_documents
+    return document_transformer.transform_documents(document)
 
 
 def FastYAKEMetadataTagger(documents: list[Document]) -> list[Document]:
@@ -812,7 +810,7 @@ def parallelDatabaseInsertion(
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=max_workers_for_db
     ) as executor:
-        batch_data_tuples = [(i, batch) for i, batch in enumerate(batches_list)]
+        batch_data_tuples = list(enumerate(batches_list))
         future_to_batch = {
             executor.submit(insert_batch, data): data for data in batch_data_tuples
         }
@@ -848,7 +846,7 @@ def updateKeywordsDatabank(keywords_bank: list[str]) -> None:
         create_folders(os.path.dirname(keywords_path))
 
         existing_keywords = []
-        if os.path.exists(keywords_path + ".dat"):
+        if os.path.exists(f"{keywords_path}.dat"):
             try:
                 with shelve.open(keywords_path, "r") as existing_db:
                     existing_keywords = existing_db.get("keywords", [])

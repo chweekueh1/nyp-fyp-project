@@ -597,8 +597,8 @@ def search_chat_history(
                 )
                 continue
 
-            user_msg_original = message_pair[0] if message_pair[0] else ""
-            bot_resp_original = message_pair[1] if message_pair[1] else ""
+            user_msg_original = message_pair[0] or ""
+            bot_resp_original = message_pair[1] or ""
 
             # Skip empty messages
             if not user_msg_original and not bot_resp_original:

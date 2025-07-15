@@ -28,9 +28,8 @@ def _ensure_client_initialized() -> bool:
 
         if config.client is not None:
             return True
-        else:
-            logger.warning("OpenAI client not available in config")
-            return False
+        logger.warning("OpenAI client not available in config")
+        return False
     except Exception as e:
         logger.error(f"Failed to check OpenAI client: {e}")
         return False

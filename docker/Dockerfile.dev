@@ -87,9 +87,14 @@ ENV PATH="${VENV_PATH}/bin:$PATH" \
 # Copy requirements first for better caching
 COPY --chown=appuser:appgroup requirements/requirements-dev.txt .
 
-# Install Python dependencies
-RUN ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
-    ${VENV_PATH}/bin/pip install -r requirements-dev.txt
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    chmod +x $HOME/.local/bin/uv && \
+    export PATH="$HOME/.local/bin:$PATH" && \
+    ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
+    ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements-dev.txt
 
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/

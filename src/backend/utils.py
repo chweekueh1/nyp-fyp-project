@@ -62,10 +62,7 @@ def sanitize_input(input_text: str) -> str:
 
     # If the result is empty after stripping, return the original input
     # This prevents short queries like "hi" from becoming empty
-    if not cleaned and input_text.strip():
-        return input_text.strip()
-
-    return cleaned
+    return input_text.strip() if not cleaned and input_text.strip() else cleaned
 
 
 async def _ensure_db_and_folders_async() -> None:

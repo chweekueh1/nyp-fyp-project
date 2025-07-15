@@ -262,9 +262,7 @@ class SQLiteDatabase:
         if not set_clauses:
             return False
 
-        params.append(get_utc_timestamp())  # updated_at
-        params.append(username)  # WHERE clause
-
+        params.extend((get_utc_timestamp(), username))
         query = f"UPDATE users SET {', '.join(set_clauses)}, updated_at = ? WHERE username = ?"
         return self.execute_update(query, tuple(params))
 
@@ -296,18 +294,17 @@ class SQLiteDatabase:
         results = self.execute_query(query, (username,))
 
         sessions = []
-        for row in results:
-            sessions.append(
-                {
-                    "session_id": row[0],
-                    "session_name": row[1],
-                    "created_at": row[2],
-                    "updated_at": row[3],
-                    "message_count": row[4],
-                    "is_active": bool(row[5]),
-                }
-            )
-
+        sessions.extend(
+            {
+                "session_id": row[0],
+                "session_name": row[1],
+                "created_at": row[2],
+                "updated_at": row[3],
+                "message_count": row[4],
+                "is_active": bool(row[5]),
+            }
+            for row in results
+        )
         return sessions
 
     def create_chat_session(

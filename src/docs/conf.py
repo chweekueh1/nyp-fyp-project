@@ -14,4 +14,16 @@ exclude_patterns = []
 html_theme = "piccolo_theme"
 html_static_path = ["_static"]
 
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "piccolo_theme"]
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "piccolo_theme",
+    "sphinx.ext.autosummary",
+]
+
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+    "inherited-members": True,
+}

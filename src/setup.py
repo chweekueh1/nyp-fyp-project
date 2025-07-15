@@ -276,7 +276,7 @@ def extract_venv_path_from_dockerfile(dockerfile_path):
 
 
 def ensure_docker_image():
-    """Check if the Docker image exists, build if not."""
+    """Check if the Docker image exists, build if not, and record build time if built."""
     try:
         subprocess.run(
             ["docker", "images", "-q", "nyp-fyp-chatbot-dev"],
@@ -286,13 +286,32 @@ def ensure_docker_image():
         print("✅ Docker image 'nyp-fyp-chatbot-dev' exists.")
         logger.info("Docker image 'nyp-fyp-chatbot-dev' exists.")
     except subprocess.CalledProcessError:
-        print("🔨 Docker image 'nyp-fyp-chatbot-dev' not found. Building...")
         logger.info("Docker image 'nyp-fyp-chatbot-dev' not found. Building.")
-        docker_build()
+        # Build and record build time
+        build_cmd = [
+            "docker",
+            "build",
+            "-f",
+            "docker/Dockerfile",
+            "-t",
+            "nyp-fyp-chatbot-dev",
+            ".",
+        ]
+        from datetime import datetime
+
+        t0 = datetime.now()
+        build_result = subprocess.run(build_cmd)
+        t1 = datetime.now()
+        build_time = (t1 - t0).total_seconds()
+        if build_result.returncode != 0:
+            print("❌ Failed to build nyp-fyp-chatbot-dev")
+            sys.exit(1)
+        print(f"✅ Built nyp-fyp-chatbot-dev in {build_time:.2f} seconds")
+        record_docker_build("nyp-fyp-chatbot-dev", build_time)
 
 
 def ensure_test_docker_image():
-    """Check if the test Docker image exists, build if not."""
+    """Check if the test Docker image exists, build if not, and record build time if built."""
     try:
         subprocess.run(
             ["docker", "images", "-q", "nyp-fyp-chatbot-test"],
@@ -302,9 +321,28 @@ def ensure_test_docker_image():
         print("✅ Docker image 'nyp-fyp-chatbot-test' exists.")
         logger.info("Docker image 'nyp-fyp-chatbot-test' exists.")
     except subprocess.CalledProcessError:
-        print("🔨 Docker image 'nyp-fyp-chatbot-test' not found. Building...")
         logger.info("Docker image 'nyp-fyp-chatbot-test' not found. Building.")
-        docker_build_test()
+        # Build and record build time
+        build_cmd = [
+            "docker",
+            "build",
+            "-f",
+            "docker/Dockerfile.test",
+            "-t",
+            "nyp-fyp-chatbot-test",
+            ".",
+        ]
+        from datetime import datetime
+
+        t0 = datetime.now()
+        build_result = subprocess.run(build_cmd)
+        t1 = datetime.now()
+        build_time = (t1 - t0).total_seconds()
+        if build_result.returncode != 0:
+            print("❌ Failed to build nyp-fyp-chatbot-test")
+            sys.exit(1)
+        print(f"✅ Built nyp-fyp-chatbot-test in {build_time:.2f} seconds")
+        record_docker_build("nyp-fyp-chatbot-test", build_time)
 
 
 def docker_volume_path(local_path: str) -> str:
@@ -337,7 +375,12 @@ def check_env_file_exists(env_file_path=ENV_FILE_PATH):
 import sqlite3
 from datetime import datetime, timezone
 
-DOCKER_BUILD_DB = os.path.join(os.path.dirname(__file__), "docker_build_times.sqlite3")
+DOCKER_BUILD_DB = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "data",
+    "docker_build_times.sqlite3",
+)
 
 
 def init_build_db():
@@ -356,18 +399,80 @@ def init_build_db():
     conn.close()
 
 
+import json
+from datetime import timedelta
+
+DOCKER_BUILD_JSON = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "docker_build_times.json"
+)
+
+
 def record_docker_build(image_name: str, build_time: float):
-    """Record a docker build event with UTC-aware timestamp."""
-    init_build_db()
-    conn = sqlite3.connect(DOCKER_BUILD_DB)
+    """
+    Record a docker build event with UTC+8 timestamp and write to JSON and SQLite.
+    The JSON file will have the format:
+    {
+      "image_name": {
+        "build_duration": ...,
+        "total_builds": ...,
+        "average_build_duration": ...,
+        "last_build_on": ...
+      }
+    }
+    """
+    # Write to SQLite in project_root/data/docker_build_times.sqlite3
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+    os.makedirs(data_dir, exist_ok=True)
+    db_path = os.path.join(data_dir, "docker_build_times.sqlite3")
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    utc_now = datetime.now(timezone.utc).isoformat()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS docker_builds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image_name TEXT NOT NULL,
+            build_time REAL NOT NULL,
+            built_at_utc TEXT NOT NULL
+        )
+    """)
+    utc8 = timezone(timedelta(hours=8))
+    utc8_now = datetime.now(utc8).isoformat()
     c.execute(
         "INSERT INTO docker_builds (image_name, build_time, built_at_utc) VALUES (?, ?, ?)",
-        (image_name, round(build_time, 2), utc_now),
+        (image_name, round(build_time, 2), utc8_now),
     )
     conn.commit()
+    # Calculate stats for JSON
+    c.execute(
+        "SELECT COUNT(*), AVG(build_time) FROM docker_builds WHERE image_name = ?",
+        (image_name,),
+    )
+    row = c.fetchone()
+    total_builds = row[0] if row else 1
+    avg_build_time = (
+        round(row[1], 2) if row and row[1] is not None else round(build_time, 2)
+    )
     conn.close()
+
+    # Write to JSON file in project_root/data/docker_build_times.json
+    json_path = os.path.join(data_dir, "docker_build_times.json")
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        else:
+            data = {}
+        data[image_name] = {
+            "build_duration": round(build_time, 2),
+            "total_builds": total_builds,
+            "average_build_duration": avg_build_time,
+            "last_build_on": utc8_now,
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Warning: Could not write to {json_path}: {e}")
 
 
 def get_build_stats(image_name: str):
@@ -402,7 +507,8 @@ def print_build_stats(image_name: str):
 
 def docker_run():
     """
-    Build and run a selected Docker image, tracking build times in a local SQLite database.
+    Build and run a selected Docker image, tracking build times in a local SQLite database and JSON file.
+    Passes --env-file .env when running the container for benchmarks, similar to --docs.
     """
     images = [
         ("dev", "nyp-fyp-chatbot-dev", "docker/Dockerfile"),
@@ -431,6 +537,8 @@ def docker_run():
     # Build the image
     build_cmd = ["docker", "build", "-f", dockerfile, "-t", image_name, "."]
     print(f"Building image: {' '.join(build_cmd)}")
+    from datetime import datetime
+
     t0 = datetime.now()
     build_result = subprocess.run(build_cmd)
     t1 = datetime.now()
@@ -442,7 +550,11 @@ def docker_run():
     record_docker_build(image_name, build_time)
     print_build_stats(image_name)
     # Run the image
-    run_cmd = ["docker", "run", "--rm", "-it", image_name]
+    # For benchmarks and docs, pass --env-file .env to docker run
+    if label in ("bench", "dev"):
+        run_cmd = ["docker", "run", "--rm", "-it", "--env-file", ".env", image_name]
+    else:
+        run_cmd = ["docker", "run", "--rm", "-it", image_name]
     print(f"Running: {' '.join(run_cmd)}")
     subprocess.run(run_cmd)
 
@@ -742,10 +854,33 @@ def docker_docs():
 
 
 def run_docker_docs_server():
-    """Run Sphinx documentation server in Docker with real-time progress display."""
+    """Build and run Sphinx documentation server in Docker with real-time progress display and record build time."""
     ensure_docker_running()
     image_name = "nyp-fyp-chatbot:docs"
     container_name = "nyp-fyp-chatbot-docs"
+
+    # Build the docs image and record build time
+    build_cmd = [
+        "docker",
+        "build",
+        "-f",
+        "docker/Dockerfile.docs",
+        "-t",
+        image_name,
+        ".",
+    ]
+    print(f"Building docs image: {' '.join(build_cmd)}")
+    from datetime import datetime
+
+    t0 = datetime.now()
+    build_result = subprocess.run(build_cmd)
+    t1 = datetime.now()
+    build_time = (t1 - t0).total_seconds()
+    if build_result.returncode != 0:
+        print(f"❌ Failed to build {image_name}")
+        sys.exit(1)
+    print(f"✅ Built {image_name} in {build_time:.2f} seconds")
+    record_docker_build(image_name, build_time)
 
     # Stop and remove existing container if it exists
     subprocess.run(
@@ -1063,46 +1198,126 @@ def update_test_shebangs():
         logger.error(f"Error updating test shebangs: {e}", exc_info=True)
 
 
-def docker_build():
-    """Build the development Docker image."""
-    print("[DEBUG] Building dev image from docker/Dockerfile ...")
-    result = subprocess.run(
-        [
-            "docker",
-            "build",
-            "-f",
-            "docker/Dockerfile",
-            "-t",
-            "nyp-fyp-chatbot-dev",
-            ".",
-        ],
-        check=False,
-    )
+def build_and_record_docker_image(image_name, dockerfile_path):
+    """
+    Build a Docker image and record its build time in both sqlite and JSON.
+    JSON format:
+    {
+      "image_name": {
+        "build_duration": x.yz,
+        "total_builds": a,
+        "average_build_duration": b.cd,
+        "last_build_on": "someutc+8time"
+      }
+    }
+    The build history is saved into the sqlite file.
+    """
+    from datetime import datetime, timezone, timedelta
+    import json
+    import sqlite3
+
+    print(f"[DEBUG] Building image {image_name} from {dockerfile_path} ...")
+    build_cmd = [
+        "docker",
+        "build",
+        "-f",
+        dockerfile_path,
+        "-t",
+        image_name,
+        ".",
+    ]
+    t0 = datetime.now(timezone.utc)
+    result = subprocess.run(build_cmd, check=False)
+    t1 = datetime.now(timezone.utc)
+    build_time = (t1 - t0).total_seconds()
+
+    # Convert to Singapore time (UTC+8) for last_build_on
+    sg_tz = timezone(timedelta(hours=8))
+    t1_sg = t1.astimezone(sg_tz)
+    last_build_on = t1_sg.isoformat()
+
+    # Write to JSON file in the required format
+    json_path = os.path.join(os.getcwd(), "data", "docker_build_times.json")
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, "r") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        else:
+            data = {}
+
+        # Update build history for this image
+        prev = data.get(image_name, {})
+        prev_builds = prev.get("total_builds", 0)
+        prev_avg = prev.get("average_build_duration", 0.0)
+        prev_total = prev_builds * prev_avg
+
+        new_total_builds = prev_builds + 1
+        new_total_duration = prev_total + build_time
+        new_avg = (
+            new_total_duration / new_total_builds
+            if new_total_builds > 0
+            else build_time
+        )
+
+        data[image_name] = {
+            "build_duration": build_time,
+            "total_builds": new_total_builds,
+            "average_build_duration": new_avg,
+            "last_build_on": last_build_on,
+        }
+        with open(json_path, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Failed to write docker build time to JSON: {e}")
+
+    # Write to sqlite (local file, not backend)
+    try:
+        # Always write to project_root/data/docker_build_times.sqlite3
+        data_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "data"
+        )
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "docker_build_times.sqlite3")
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS docker_builds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_name TEXT NOT NULL,
+                build_time REAL NOT NULL,
+                built_at_utc TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        c.execute(
+            "INSERT INTO docker_builds (image_name, build_time, built_at_utc) VALUES (?, ?, ?)",
+            (image_name, round(build_time, 2), last_build_on),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ Failed to write docker build time to local sqlite: {e}")
+
     if result.returncode == 0:
-        print("✅ Dev image 'nyp-fyp-chatbot-dev' built successfully.")
+        print(
+            f"✅ Image '{image_name}' built successfully in {build_time:.2f} seconds."
+        )
     else:
-        print("❌ Failed to build dev image.")
+        print(f"❌ Failed to build image '{image_name}'.")
+    return result.returncode
+
+
+def docker_build():
+    """Build the development Docker image and record build time."""
+    build_and_record_docker_image("nyp-fyp-chatbot-dev", "docker/Dockerfile")
 
 
 def docker_build_bench():
-    """Build the benchmark Docker image."""
-    print("[DEBUG] Building benchmark image from docker/Dockerfile.bench...")
-    result = subprocess.run(
-        [
-            "docker",
-            "build",
-            "-f",
-            "docker/Dockerfile.bench",
-            "-t",
-            "nyp-fyp-chatbot-bench",
-            ".",
-        ],
-        check=False,
-    )
-    if result.returncode == 0:
-        print("✅ Benchmark image 'nyp-fyp-chatbot-bench' built successfully.")
-    else:
-        print("❌ Failed to build benchmark image.")
+    """Build the benchmark Docker image and record build time."""
+    build_and_record_docker_image("nyp-fyp-chatbot-bench", "docker/Dockerfile.bench")
 
 
 def show_help():
@@ -1153,6 +1368,15 @@ def main(shutdown_requested=False):
 
         try:
             start = time.time()
+            # --- Build the benchmark image and record build time ---
+            if (
+                build_and_record_docker_image(
+                    "nyp-fyp-chatbot-bench", "docker/Dockerfile.bench"
+                )
+                != 0
+            ):
+                sys.exit(1)
+
             docker_compose_cmd = None
             try:
                 subprocess.run(
@@ -1195,18 +1419,14 @@ def main(shutdown_requested=False):
                 ]
 
             print(f"\n🐳 Executing Docker Compose command: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Stream output live to avoid "freezing" appearance
+            result = subprocess.run(cmd)
             if result.returncode != 0:
                 print(
                     f"\n❌ Docker Compose command failed with exit code {result.returncode}"
                 )
-                print("\n--- STDOUT from Docker Compose ---")
-                print(result.stdout)
-                print(result.stderr)
             else:
                 print("\n✅ Docker Compose command completed successfully.")
-                print("\n--- STDOUT from Docker Compose ---")
-                print(result.stdout)
 
             os.chdir(os.path.join(docker_dir, ".."))
             duration = int(time.time() - start)
@@ -1240,19 +1460,12 @@ def main(shutdown_requested=False):
             "\n=== [docs] Building and running Sphinx documentation server (single container) ==="
         )
         start = time.time()
-        result = subprocess.run(
-            [
-                "docker",
-                "build",
-                "-f",
-                "docker/Dockerfile.docs",
-                "-t",
-                "nyp-fyp-chatbot:docs",
-                ".",
-            ],
-            check=False,
-        )
-        if result.returncode == 0:
+        if (
+            build_and_record_docker_image(
+                "nyp-fyp-chatbot:docs", "docker/Dockerfile.docs"
+            )
+            == 0
+        ):
             duration = int(time.time() - start)
             print(f"[DEBUG] Build time for docs image: {duration} seconds")
             docker_docs()

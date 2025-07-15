@@ -360,7 +360,7 @@ def generateUniqueFilename(prefix: str, username: str, extension: str) -> str:
 
         # Clean extension
         if not extension.startswith("."):
-            extension = "." + extension
+            extension = f".{extension}"
 
         return f"{unique_id}{extension}"
 

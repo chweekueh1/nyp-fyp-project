@@ -374,7 +374,7 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
             # Add to history
             history.append(
                 {
-                    "transcription": edited_text.strip() + " (edited)",
+                    "transcription": f"{edited_text.strip()} (edited)",
                     "response": response,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }

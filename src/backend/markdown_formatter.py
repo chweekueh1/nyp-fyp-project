@@ -521,15 +521,15 @@ def _format_markdown_tables(text: str) -> str:
 
         # Ensure header starts and ends with |
         if not header_line.startswith("|"):
-            header_line = "|" + header_line
+            header_line = f"|{header_line}"
         if not header_line.endswith("|"):
-            header_line = header_line + "|"
+            header_line = f"{header_line}|"
 
         # Process separator line
         if not separator_line.startswith("|"):
-            separator_line = "|" + separator_line
+            separator_line = f"|{separator_line}"
         if not separator_line.endswith("|"):
-            separator_line = separator_line + "|"
+            separator_line = f"{separator_line}|"
 
         # Ensure separator has proper alignment markers
         separator_parts = separator_line.split("|")[
@@ -560,9 +560,9 @@ def _format_markdown_tables(text: str) -> str:
             if line.strip():
                 # Ensure row starts and ends with |
                 if not line.startswith("|"):
-                    line = "|" + line
+                    line = f"|{line}"
                 if not line.endswith("|"):
-                    line = line + "|"
+                    line = f"{line}|"
 
                 # Clean up cell content and escape special characters
                 cells = line.split("|")[1:-1]  # Remove empty first/last parts
@@ -637,11 +637,7 @@ def safe_markdown_format(text: str) -> str:
         >>> safe_markdown_format("```mermaid \\n abc ```")
         "```mermaid \\n\\n abc ```\\n\\n"
     """
-    if not text:
-        return text
-
-    # Apply unified markdown formatting (includes Mermaid validation)
-    return format_markdown(text)
+    return format_markdown(text) if text else text
 
 
 # Legacy function for backward compatibility

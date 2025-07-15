@@ -95,10 +95,11 @@ def get_uploaded_files(username: str) -> List[str]:
             return []
 
         files = []
-        for file_path in Path(uploads_dir).glob("*"):
-            if file_path.is_file() and is_file_allowed(file_path.name):
-                files.append(file_path.name)
-
+        files.extend(
+            file_path.name
+            for file_path in Path(uploads_dir).glob("*")
+            if file_path.is_file() and is_file_allowed(file_path.name)
+        )
         return sorted(files, reverse=True)  # Most recent first
     except Exception as e:
         print(f"Error getting uploaded files: {e}")
@@ -121,9 +122,7 @@ def get_file_path(username: str, filename: str) -> str:
     uploads_dir = get_uploads_dir(username)
     file_path = os.path.join(uploads_dir, filename)
 
-    if os.path.exists(file_path):
-        return file_path
-    return ""
+    return file_path if os.path.exists(file_path) else ""
 
 
 def is_file_allowed(filename: str) -> bool:
@@ -309,39 +308,7 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
         )
 
     try:
-        # Save the uploaded file
-        saved_path, original_filename = save_uploaded_file(file_obj, username)
-        perf_monitor.start_timer("extraction")
-        extraction_result = enhanced_extract_file_content(saved_path)
-        perf_monitor.end_timer("extraction")
-        content_text = extraction_result.get("content", "")
-        perf_monitor.start_timer("classification")
-        classification = call_backend_data_classification(content_text)
-        perf_monitor.end_timer("classification")
-        perf_monitor.start_timer("formatting")
-
-        # Use the improved format_classification_response
-        formatted_results = format_classification_response(
-            classification, extraction_result, original_filename
-        )
-        perf_monitor.end_timer("formatting")
-        perf_monitor.end_timer("file_classification_total")
-
-        return (
-            gr.update(
-                visible=True,
-                value="✅ **File uploaded and classified successfully!**",
-            ),
-            gr.update(visible=True),  # Make results box visible
-            formatted_results["classification"],
-            formatted_results["sensitivity"],
-            formatted_results["file_info"],
-            formatted_results["reasoning"],
-            formatted_results["summary"],  # This will directly contain markdown
-            hide_loading(),
-            refresh_file_dropdown(username),
-            get_upload_history(username),
-        )
+        return _extracted_from_handle_upload_click_44(file_obj, username)
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
         # Ensure all outputs are provided even on error
@@ -357,6 +324,43 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
             refresh_file_dropdown(username),
             get_upload_history(username),
         )
+
+
+# TODO Rename this here and in `handle_upload_click`
+def _extracted_from_handle_upload_click_44(file_obj, username):
+    # Save the uploaded file
+    saved_path, original_filename = save_uploaded_file(file_obj, username)
+    perf_monitor.start_timer("extraction")
+    extraction_result = enhanced_extract_file_content(saved_path)
+    perf_monitor.end_timer("extraction")
+    content_text = extraction_result.get("content", "")
+    perf_monitor.start_timer("classification")
+    classification = call_backend_data_classification(content_text)
+    perf_monitor.end_timer("classification")
+    perf_monitor.start_timer("formatting")
+
+    # Use the improved format_classification_response
+    formatted_results = format_classification_response(
+        classification, extraction_result, original_filename
+    )
+    perf_monitor.end_timer("formatting")
+    perf_monitor.end_timer("file_classification_total")
+
+    return (
+        gr.update(
+            visible=True,
+            value="✅ **File uploaded and classified successfully!**",
+        ),
+        gr.update(visible=True),  # Make results box visible
+        formatted_results["classification"],
+        formatted_results["sensitivity"],
+        formatted_results["file_info"],
+        formatted_results["reasoning"],
+        formatted_results["summary"],  # This will directly contain markdown
+        hide_loading(),
+        refresh_file_dropdown(username),
+        get_upload_history(username),
+    )
 
 
 def handle_classify_existing(selected_file: str, username: str) -> tuple:
@@ -399,47 +403,7 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
         )
 
     try:
-        file_path = get_file_path(username, selected_file)
-        if not file_path:
-            return (
-                gr.update(visible=True, value="❌ **Error:** File not found"),
-                gr.update(visible=False),
-                "",
-                "",
-                "",
-                "",
-                "",
-                hide_loading(),
-                get_upload_history(username),
-            )
-
-        perf_monitor.start_timer("extraction")
-        extraction_result = enhanced_extract_file_content(file_path)
-        perf_monitor.end_timer("extraction")
-        content_text = extraction_result.get("content", "")
-        perf_monitor.start_timer("classification")
-        classification = call_backend_data_classification(content_text)
-        perf_monitor.end_timer("classification")
-        perf_monitor.start_timer("formatting")
-
-        # Use the improved format_classification_response
-        formatted_results = format_classification_response(
-            classification, extraction_result, selected_file
-        )
-        perf_monitor.end_timer("formatting")
-        perf_monitor.end_timer("file_classification_total")
-
-        return (
-            gr.update(visible=True, value="✅ **File classified successfully!**"),
-            gr.update(visible=True),  # Make results box visible
-            formatted_results["classification"],
-            formatted_results["sensitivity"],
-            formatted_results["file_info"],
-            formatted_results["reasoning"],
-            formatted_results["summary"],  # This will directly contain markdown
-            hide_loading(),
-            get_upload_history(username),
-        )
+        return _extracted_from_handle_classify_existing_41(username, selected_file)
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
         # Ensure all outputs are provided even on error
@@ -454,6 +418,51 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
             hide_loading(),
             get_upload_history(username),
         )
+
+
+# TODO Rename this here and in `handle_classify_existing`
+def _extracted_from_handle_classify_existing_41(username, selected_file):
+    file_path = get_file_path(username, selected_file)
+    if not file_path:
+        return (
+            gr.update(visible=True, value="❌ **Error:** File not found"),
+            gr.update(visible=False),
+            "",
+            "",
+            "",
+            "",
+            "",
+            hide_loading(),
+            get_upload_history(username),
+        )
+
+    perf_monitor.start_timer("extraction")
+    extraction_result = enhanced_extract_file_content(file_path)
+    perf_monitor.end_timer("extraction")
+    content_text = extraction_result.get("content", "")
+    perf_monitor.start_timer("classification")
+    classification = call_backend_data_classification(content_text)
+    perf_monitor.end_timer("classification")
+    perf_monitor.start_timer("formatting")
+
+    # Use the improved format_classification_response
+    formatted_results = format_classification_response(
+        classification, extraction_result, selected_file
+    )
+    perf_monitor.end_timer("formatting")
+    perf_monitor.end_timer("file_classification_total")
+
+    return (
+        gr.update(visible=True, value="✅ **File classified successfully!**"),
+        gr.update(visible=True),  # Make results box visible
+        formatted_results["classification"],
+        formatted_results["sensitivity"],
+        formatted_results["file_info"],
+        formatted_results["reasoning"],
+        formatted_results["summary"],  # This will directly contain markdown
+        hide_loading(),
+        get_upload_history(username),
+    )
 
 
 def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
@@ -471,9 +480,7 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
         raise ValueError("File object and username are required")
 
     # Get original filename
-    original_filename = getattr(file_obj, "name", "unknown_file")
-    if not original_filename:
-        original_filename = "unknown_file"
+    original_filename = getattr(file_obj, "name", "unknown_file") or "unknown_file"
 
     # Check file extension
     if not is_file_allowed(original_filename):

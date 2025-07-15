@@ -19,6 +19,7 @@ The interface integrates with the consolidated SQLite database system
 and provides detailed performance insights for each user.
 """
 
+import contextlib
 import gradio as gr
 import json
 import time
@@ -73,43 +74,38 @@ class StatsInterface:
                     averages = data.get("averages", {})
                     last_build_time = data.get("last_build_time", "")
                     # Calculate overall average if multiple images
-                    if averages:
-                        overall_avg = sum(averages.values()) / len(averages)
-                    else:
-                        overall_avg = 0.0
-
+                    overall_avg = (
+                        sum(averages.values()) / len(averages) if averages else 0.0
+                    )
                     return {
                         "avg_duration": overall_avg,
                         "averages": averages,
                         "last_build_time": last_build_time,
                         "history": data.get("history", []),
                     }
-                # Handle old format: { "avg_duration": float }
                 elif isinstance(data, dict) and "avg_duration" in data:
                     return data
-                # Handle legacy array format: [{ "timestamp": "...", "image": "...", "duration": ... }]
                 elif isinstance(data, list):
-                    if data:
-                        # Calculate average from history
-                        durations = [
-                            item.get("duration", 0)
-                            for item in data
-                            if isinstance(item, dict)
-                        ]
-                        avg = sum(durations) / len(durations) if durations else 0.0
-                        return {
-                            "avg_duration": avg,
-                            "history": data,
-                            "last_build_time": data[-1].get("timestamp", "")
-                            if data
-                            else "",
-                        }
-                    else:
+                    if not data:
                         return {
                             "avg_duration": 0.0,
                             "history": [],
                             "last_build_time": "",
                         }
+                    # Calculate average from history
+                    durations = [
+                        item.get("duration", 0)
+                        for item in data
+                        if isinstance(item, dict)
+                    ]
+                    avg = sum(durations) / len(durations) if durations else 0.0
+                    return {
+                        "avg_duration": avg,
+                        "history": data,
+                        "last_build_time": data[-1].get("timestamp", "")
+                        if data
+                        else "",
+                    }
                 else:
                     return {"avg_duration": 0.0, "history": [], "last_build_time": ""}
 
@@ -434,8 +430,8 @@ class StatsInterface:
                 benchmark_stats[benchmark_name]["run_count"] = bench[4]
 
                 # Parse metadata for category and description
-                try:
-                    metadata_str = bench[5] if bench[5] else "{}"
+                with contextlib.suppress(json.JSONDecodeError, KeyError):
+                    metadata_str = bench[5] or "{}"
                     metadata = json.loads(metadata_str)
                     benchmark_stats[benchmark_name]["category"] = metadata.get(
                         "category", "unknown"
@@ -443,9 +439,6 @@ class StatsInterface:
                     benchmark_stats[benchmark_name]["description"] = metadata.get(
                         "description", "No description available"
                     )
-                except (json.JSONDecodeError, KeyError):
-                    pass
-
             return benchmark_stats
 
         except Exception as e:
@@ -583,149 +576,177 @@ class StatsInterface:
         return diagrams
 
     def generate_markdown_tables(self, stats: Dict[str, Any]) -> str:
-        """Generate markdown tables from statistics.
+        """
+        Generate markdown tables from statistics.
 
         :param stats: User statistics
         :type stats: Dict[str, Any]
         :return: Formatted markdown tables
         :rtype: str
         """
+
+        def make_table(headers, rows):
+            table = "| " + " | ".join(headers) + " |\n"
+            table += "| " + " | ".join("-" * len(h) for h in headers) + " |\n"
+            for row in rows:
+                table += "| " + " | ".join(str(cell) for cell in row) + " |\n"
+            return table
+
         tables = []
 
         try:
             # Performance Summary Table
-            if "performance_summary" in stats:
-                perf = stats["performance_summary"]
-                if perf:
-                    table = "## Performance Summary\n\n"
-                    table += "| Metric | Value |\n"
-                    table += "|--------|-------|\n"
-
-                    for category, data in perf.items():
-                        if isinstance(data, dict):
-                            for metric, value in data.items():
-                                if isinstance(value, (int, float)):
-                                    metric_name = f"{category.title()} - {metric.replace('_', ' ').title()}"
-                                    table += f"| {metric_name} | {value} |\n"
-
-                    tables.append(table)
+            perf = stats.get("performance_summary")
+            if perf:
+                rows = []
+                for category, data in perf.items():
+                    if isinstance(data, dict):
+                        for metric, value in data.items():
+                            if isinstance(value, (int, float)):
+                                metric_name = f"{category.title()} - {metric.replace('_', ' ').title()}"
+                                rows.append([metric_name, value])
+                if rows:
+                    tables.append(
+                        "## Performance Summary\n\n"
+                        + make_table(["Metric", "Value"], rows)
+                    )
 
             # LLM Usage Table
-            if "llm_stats" in stats:
-                llm = stats["llm_stats"]
-                if llm and "error" not in llm:
-                    table = "## LLM Usage Statistics\n\n"
-                    table += "| Metric | Value |\n"
-                    table += "|--------|-------|\n"
-
-                    sessions = llm.get("sessions", {})
-                    for metric, value in sessions.items():
-                        metric_name = metric.replace("_", " ").title()
-                        table += f"| {metric_name} | {value} |\n"
-
-                    tables.append(table)
+            llm = stats.get("llm_stats")
+            if llm and "error" not in llm:
+                sessions = llm.get("sessions", {})
+                rows = [
+                    [metric.replace("_", " ").title(), value]
+                    for metric, value in sessions.items()
+                ]
+                if rows:
+                    tables.append(
+                        "## LLM Usage Statistics\n\n"
+                        + make_table(["Metric", "Value"], rows)
+                    )
 
             # Chat Activity Table
-            if "chat_stats" in stats:
-                chat = stats["chat_stats"]
-                if chat and "error" not in chat:
-                    table = "## Chat Activity Statistics\n\n"
-                    table += "| Metric | Value |\n"
-                    table += "|--------|-------|\n"
-
-                    sessions = chat.get("sessions", {})
-                    for metric, value in sessions.items():
-                        metric_name = metric.replace("_", " ").title()
-                        table += f"| {metric_name} | {value} |\n"
-
-                    tables.append(table)
+            chat = stats.get("chat_stats")
+            if chat and "error" not in chat:
+                sessions = chat.get("sessions", {})
+                rows = [
+                    [metric.replace("_", " ").title(), value]
+                    for metric, value in sessions.items()
+                ]
+                if rows:
+                    tables.append(
+                        "## Chat Activity Statistics\n\n"
+                        + make_table(["Metric", "Value"], rows)
+                    )
 
             # Benchmark Statistics Table
-            if "benchmark_stats" in stats:
-                benchmarks = stats["benchmark_stats"]
-                if benchmarks and "error" not in benchmarks:
-                    table = "## Performance Benchmarks\n\n"
-                    table += "| Benchmark | Category | Mean (s) | Std Dev (s) | Min (s) | Max (s) | Runs |\n"
-                    table += "|-----------|----------|----------|-------------|---------|---------|------|\n"
-
-                    for benchmark_name, benchmark_data in benchmarks.items():
-                        if (
-                            isinstance(benchmark_data, dict)
-                            and "mean" in benchmark_data
-                        ):
-                            category = benchmark_data.get("category", "unknown").title()
-                            mean = benchmark_data.get("mean", 0)
-                            stddev = benchmark_data.get("stddev", 0)
-                            min_val = benchmark_data.get("min", 0)
-                            max_val = benchmark_data.get("max", 0)
-                            runs = benchmark_data.get("run_count", 0)
-
-                            table += f"| {benchmark_name} | {category} | {mean:.4f} | {stddev:.4f} | {min_val:.4f} | {max_val:.4f} | {runs} |\n"
-
-                    tables.append(table)
+            benchmarks = stats.get("benchmark_stats")
+            if benchmarks and "error" not in benchmarks:
+                rows = []
+                for benchmark_name, benchmark_data in benchmarks.items():
+                    if isinstance(benchmark_data, dict) and "mean" in benchmark_data:
+                        category = benchmark_data.get("category", "unknown").title()
+                        mean = benchmark_data.get("mean", 0)
+                        stddev = benchmark_data.get("stddev", 0)
+                        min_val = benchmark_data.get("min", 0)
+                        max_val = benchmark_data.get("max", 0)
+                        runs = benchmark_data.get("run_count", 0)
+                        rows.append(
+                            [
+                                benchmark_name,
+                                category,
+                                f"{mean:.4f}",
+                                f"{stddev:.4f}",
+                                f"{min_val:.4f}",
+                                f"{max_val:.4f}",
+                                runs,
+                            ]
+                        )
+                if rows:
+                    tables.append(
+                        "## Performance Benchmarks\n\n"
+                        + make_table(
+                            [
+                                "Benchmark",
+                                "Category",
+                                "Mean (s)",
+                                "Std Dev (s)",
+                                "Min (s)",
+                                "Max (s)",
+                                "Runs",
+                            ],
+                            rows,
+                        )
+                    )
 
             # File Classification Table
-            if "classification_stats" in stats:
-                class_stats = stats["classification_stats"]
-                if class_stats and "error" not in class_stats:
-                    table = "## File Classification Statistics\n\n"
-                    table += "| Metric | Value |\n"
-                    table += "|--------|-------|\n"
-
-                    overview = class_stats.get("overview", {})
-                    for metric, value in overview.items():
-                        metric_name = metric.replace("_", " ").title()
-                        table += f"| {metric_name} | {value} |\n"
-
-                    tables.append(table)
+            class_stats = stats.get("classification_stats")
+            if class_stats and "error" not in class_stats:
+                overview = class_stats.get("overview", {})
+                rows = [
+                    [metric.replace("_", " ").title(), value]
+                    for metric, value in overview.items()
+                ]
+                if rows:
+                    tables.append(
+                        "## File Classification Statistics\n\n"
+                        + make_table(["Metric", "Value"], rows)
+                    )
 
             # Detailed Metrics Table
-            if "detailed_metrics" in stats:
-                metrics = stats["detailed_metrics"]
-                if metrics and "error" not in metrics:
-                    table = "## Detailed Performance Metrics\n\n"
-                    table += "| Type | Metric | Average | Min | Max |\n"
-                    table += "|------|--------|---------|-----|-----|\n"
-
-                    for metric_type, type_metrics in metrics.items():
-                        for metric_name, values in type_metrics.items():
-                            avg_val = values.get("avg", 0)
-                            min_val = values.get("min", 0)
-                            max_val = values.get("max", 0)
-                            table += f"| {metric_type} | {metric_name} | {avg_val:.2f} | {min_val:.2f} | {max_val:.2f} |\n"
-
-                    tables.append(table)
+            metrics = stats.get("detailed_metrics")
+            if metrics and "error" not in metrics:
+                rows = []
+                for metric_type, type_metrics in metrics.items():
+                    for metric_name, values in type_metrics.items():
+                        avg_val = values.get("avg", 0)
+                        min_val = values.get("min", 0)
+                        max_val = values.get("max", 0)
+                        rows.append(
+                            [
+                                metric_type,
+                                metric_name,
+                                f"{avg_val:.2f}",
+                                f"{min_val:.2f}",
+                                f"{max_val:.2f}",
+                            ]
+                        )
+                if rows:
+                    tables.append(
+                        "## Detailed Performance Metrics\n\n"
+                        + make_table(["Type", "Metric", "Average", "Min", "Max"], rows)
+                    )
 
             # Docker build times table
             docker_build_times = stats.get("docker_build_times", {})
             if docker_build_times:
-                table = "## Docker Build Times\n\n"
-
-                # Show overall average and last build time
                 avg = docker_build_times.get("avg_duration", 0.0)
                 last_build_time = docker_build_times.get("last_build_time", "")
-
-                table += "| Metric | Value |\n"
-                table += "|--------|-------|\n"
-                table += f"| Average Build Time | {avg:.2f} seconds |\n"
-                if last_build_time:
-                    table += f"| Last Build Time | {last_build_time} |\n"
-
-                # Show per-image averages if available
+                table = "## Docker Build Times\n\n" + make_table(
+                    ["Metric", "Value"],
+                    [
+                        ["Average Build Time", f"{avg:.2f} seconds"],
+                        *(
+                            [["Last Build Time", last_build_time]]
+                            if last_build_time
+                            else []
+                        ),
+                    ],
+                )
                 averages = docker_build_times.get("averages", {})
                 if averages and len(averages) > 1:
-                    table += "\n### Per-Image Averages\n\n"
-                    table += "| Image | Average Build Time (s) |\n"
-                    table += "|-------|------------------------|\n"
-                    for image, avg_time in averages.items():
-                        table += f"| {image} | {avg_time:.2f} |\n"
-
+                    avg_rows = [
+                        [image, f"{avg_time:.2f}"]
+                        for image, avg_time in averages.items()
+                    ]
+                    table += "\n### Per-Image Averages\n\n" + make_table(
+                        ["Image", "Average Build Time (s)"], avg_rows
+                    )
                 tables.append(table)
 
         except Exception as e:
             tables.append(f"Error generating tables: {str(e)}")
 
-        # Combine all tables and format with markdown formatter
         combined_tables = "\n\n".join(tables)
         return format_markdown(combined_tables)
 
@@ -797,7 +818,7 @@ class StatsInterface:
         """
         timestamp = format_singapore_datetime(datetime.now())
 
-        html = f"""
+        return f"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -847,8 +868,6 @@ class StatsInterface:
         </html>
         """
 
-        return html
-
     def _format_performance_summary(self, perf: Dict[str, Any]) -> str:
         """Format performance summary for HTML.
 
@@ -860,9 +879,7 @@ class StatsInterface:
         if not perf:
             return "<p>No performance data available</p>"
 
-        html = "<table>"
-        html += "<tr><th>Metric</th><th>Value</th></tr>"
-
+        html = "<table>" + "<tr><th>Metric</th><th>Value</th></tr>"
         for category, data in perf.items():
             if isinstance(data, dict):
                 for metric, value in data.items():
@@ -883,9 +900,7 @@ class StatsInterface:
         if not llm or "error" in llm:
             return "<p>No LLM data available</p>"
 
-        html = "<table>"
-        html += "<tr><th>Metric</th><th>Value</th></tr>"
-
+        html = "<table>" + "<tr><th>Metric</th><th>Value</th></tr>"
         sessions = llm.get("sessions", {})
         for metric, value in sessions.items():
             html += (
@@ -906,9 +921,7 @@ class StatsInterface:
         if not chat or "error" in chat:
             return "<p>No chat data available</p>"
 
-        html = "<table>"
-        html += "<tr><th>Metric</th><th>Value</th></tr>"
-
+        html = "<table>" + "<tr><th>Metric</th><th>Value</th></tr>"
         sessions = chat.get("sessions", {})
         for metric, value in sessions.items():
             html += (
@@ -929,9 +942,7 @@ class StatsInterface:
         if not class_stats or "error" in class_stats:
             return "<p>No classification data available</p>"
 
-        html = "<table>"
-        html += "<tr><th>Metric</th><th>Value</th></tr>"
-
+        html = "<table>" + "<tr><th>Metric</th><th>Value</th></tr>"
         overview = class_stats.get("overview", {})
         for metric, value in overview.items():
             html += (
@@ -952,9 +963,10 @@ class StatsInterface:
         if not metrics or "error" in metrics:
             return "<p>No detailed metrics available</p>"
 
-        html = "<table>"
-        html += "<tr><th>Type</th><th>Metric</th><th>Average</th><th>Min</th><th>Max</th></tr>"
-
+        html = (
+            "<table>"
+            + "<tr><th>Type</th><th>Metric</th><th>Average</th><th>Min</th><th>Max</th></tr>"
+        )
         for metric_type, type_metrics in metrics.items():
             for metric_name, values in type_metrics.items():
                 html += f"<tr><td>{metric_type}</td><td>{metric_name}</td><td>{values.get('avg', 0):.2f}</td><td>{values.get('min', 0):.2f}</td><td>{values.get('max', 0):.2f}</td></tr>"
