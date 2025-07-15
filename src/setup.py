@@ -1430,7 +1430,7 @@ def main(shutdown_requested=False):
 
             os.chdir(os.path.join(docker_dir, ".."))
             duration = int(time.time() - start)
-            print(f"Built in {duration} seconds")
+            print(f"Total Runtime {duration} seconds")
 
             # Results reporting
             for fname, desc in [
@@ -1493,7 +1493,7 @@ def main(shutdown_requested=False):
             from scripts.docker_utils import docker_run
 
             docker_run(mode="dev", prompt_for_mode=False)
-            print(f"Built in {duration} seconds")
+            print(f"Total Runtime {duration} seconds")
         elif choice == "2":
             print("docker_build_test: Not implemented yet.")
             print("🐳 Starting test container... (not implemented)")

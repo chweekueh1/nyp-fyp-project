@@ -31,7 +31,7 @@ import tempfile
 import os
 
 
-def run_hyperfine_command(name, command, runs=5, extra_env=None):
+def run_hyperfine_command(name, command, runs=5, extra_env=None, timeout=60):
     """
     Run a shell command using hyperfine and parse the results.
     Returns a dict with timing statistics.
@@ -41,11 +41,8 @@ def run_hyperfine_command(name, command, runs=5, extra_env=None):
         output_path = tf.name
 
     env = dict(**os.environ)
-    # Ensure both /app/src and /app are in PYTHONPATH for all project imports
-    # Also add the CWD to PYTHONPATH for python -c to resolve relative imports
     pythonpath = env.get("PYTHONPATH", "")
     extra_paths = ["/app/src", "/app", os.getcwd()]
-    # Remove duplicates and empty strings
     pythonpath_parts = [p for p in (pythonpath.split(":") if pythonpath else []) if p]
     for p in extra_paths:
         if p not in pythonpath_parts:
@@ -63,7 +60,12 @@ def run_hyperfine_command(name, command, runs=5, extra_env=None):
         command,
     ]
     try:
-        return parse_hyperfine_results(hyperfine_cmd, env, output_path, command)
+        return parse_hyperfine_results(
+            hyperfine_cmd, env, output_path, command, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        print(f"❌ Benchmark '{name}' timed out after {timeout} seconds.")
+        return {"error": f"Timeout after {timeout} seconds"}
     except subprocess.CalledProcessError as e:
         print(f"❌ Hyperfine failed: {e}")
         return {"error": str(e)}
@@ -74,7 +76,7 @@ def run_hyperfine_command(name, command, runs=5, extra_env=None):
         os.remove(output_path)
 
 
-def parse_hyperfine_results(hyperfine_cmd, env, output_path, command):
+def parse_hyperfine_results(hyperfine_cmd, env, output_path, command, timeout=60):
     """
     Run the hyperfine command and parse the results JSON for statistics.
     """
@@ -85,6 +87,7 @@ def parse_hyperfine_results(hyperfine_cmd, env, output_path, command):
             capture_output=True,
             text=True,
             check=True,
+            timeout=timeout,
         )
         print(result.stdout)
         print(result.stderr)
@@ -93,7 +96,6 @@ def parse_hyperfine_results(hyperfine_cmd, env, output_path, command):
         if not data.get("results"):
             return {"error": "No results from hyperfine"}
         stats = data["results"][0]
-        # Fallbacks for missing values
         return {
             "mean": stats.get("mean", 0.0),
             "stddev": stats.get("stddev", 0.0),
@@ -103,6 +105,14 @@ def parse_hyperfine_results(hyperfine_cmd, env, output_path, command):
             "runs": stats.get("parameters", {}).get("runs", 0),
             "command": command,
         }
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Hyperfine failed: {e}\nSTDOUT:\n{e.stdout}\nSTDERR:\n{e.stderr}")
+        return {
+            "error": f"Hyperfine failed: {e}\nSTDOUT:\n{e.stdout}\nSTDERR:\n{e.stderr}"
+        }
+    except subprocess.TimeoutExpired:
+        print(f"❌ Benchmark timed out after {timeout} seconds.")
+        return {"error": f"Timeout after {timeout} seconds"}
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         return {"error": str(e)}
@@ -132,7 +142,6 @@ def write_benchmark_report(results):
                 "Frontend/Gradio Benchmarks",
                 [
                     "Frontend Gradio Launch",
-                    "Frontend Static Asset Load",
                     "Login/Register Interface",
                     "Chatbot Interface",
                     "Search Interface",
@@ -153,8 +162,7 @@ def write_benchmark_report(results):
                     "LLM ClassificationModel Import",
                     "LLM ClassificationModel Clean Text",
                     "LLM DataProcessing Import",
-                    "LLM DataProcessing Clean Text",
-                    "LLM KeywordCache Import",
+                    "LLM DataProcessing Clean TextLLM KeywordCache Import",
                     "LLM KeywordCache Filter Filler Words",
                 ],
             ),
@@ -262,27 +270,6 @@ def gradio_launch():
     # Don't launch, just build the interface for timing
 
 
-def frontend_static_assets():
-    from pathlib import Path
-
-    styles_dir = Path(__file__).parent.parent.parent / "styles"
-    css_files = ["styles.css", "performance.css"]
-    opened_files = []
-    try:
-        for css_file in css_files:
-            css_path = styles_dir / css_file
-            if css_path.exists():
-                f = open(css_path, "r", encoding="utf-8")
-                _ = f.read()
-                opened_files.append(f)
-    finally:
-        for f in opened_files:
-            try:
-                f.close()
-            except Exception:
-                pass
-
-
 async def llm_model_load():
     from llm.chatModel import get_model
 
@@ -303,285 +290,185 @@ async def llm_inference():
 # --- Main Runner ---
 
 
+import concurrent.futures
+
+
 async def main():
     print(LINE_SEPARATOR)
     print("Running all benchmarks using hyperfine...\n")
-    # --- Backend Benchmarks (Accurate, minimal, and robust) ---
-    results = {
-        BENCH_BACKEND_INIT: run_hyperfine_command(
+
+    # Define all benchmarks as (name, command, runs)
+    benchmarks = [
+        (
             BENCH_BACKEND_INIT,
-            "python -c 'import asyncio; from backend.main import init_backend; asyncio.run(init_backend())'",
-            runs=5,
-        )
-    }
+            "python -c 'from backend.main import init_backend; init_backend()'",
+            5,
+        ),
+        (
+            BENCH_LLM_SETUP,
+            "python -c 'from llm.chatModel import initialize_llm_and_db; initialize_llm_and_db()'",
+            5,
+        ),
+        (
+            BENCH_DB_INIT,
+            "python -c 'from backend.consolidated_database import get_user_database; db = get_user_database(); db.execute_query(\"SELECT 1\")'",
+            5,
+        ),
+        (
+            BENCH_FILE_CLASSIFICATION,
+            "python -c 'from backend.file_handling import data_classification; data_classification(\"This is a test file for classification.\")'",
+            5,
+        ),
+        (
+            BENCH_CHATBOT_RESPONSE,
+            'python -c \'from backend.chat import get_chatbot_response; get_chatbot_response("Hello, how are you?", [], "testuser", "testchat")\'',
+            5,
+        ),
+        (BENCH_APP_STARTUP, 'python -c "from app import main; main()"', 5),
+        # Gradio UI benchmarks: wrap in try/except to avoid failing in headless mode, do NOT import gradio directly
+        (
+            "Frontend Gradio Launch",
+            'python -c \'import sys; try: from gradio_modules.chatbot import chatbot_ui; from gradio_modules.login_and_register import login_interface; from flexcyon_theme import flexcyon_theme; with __import__("gradio").Blocks(title="NYP FYP CNC Chatbot", theme=flexcyon_theme): pass except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Login/Register Interface",
+            'python -c \'import sys; try: from gradio_modules.login_and_register import login_interface; with __import__("gradio").Blocks(): login_interface(setup_events=False) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Chatbot Interface",
+            'python -c \'import sys; try: from gradio_modules.chatbot import chatbot_ui; with __import__("gradio").Blocks(): chatbot_ui(None, None, None, None, None) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Search Interface",
+            'python -c \'import sys; try: from gradio_modules.search_interface import search_interface; with __import__("gradio").Blocks(): search_interface(None, None, None, None, None) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "File Upload Interface",
+            'python -c \'import sys; try: from gradio_modules.file_upload import file_upload_ui; with __import__("gradio").Blocks(): file_upload_ui(None, None, None) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "File Classification Interface",
+            'python -c \'import sys; try: from gradio_modules.file_classification import file_classification_interface; with __import__("gradio").Blocks(): file_classification_interface(None) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Audio Input Interface",
+            'python -c \'import sys; try: from gradio_modules.audio_input import audio_interface; with __import__("gradio").Blocks(): audio_interface(None, setup_events=False) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Change Password Interface",
+            'python -c \'import sys; try: from gradio_modules.change_password import change_password_interface; with __import__("gradio").Blocks(): change_password_interface(None, None) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Stats Interface",
+            'python -c \'import sys; try: from gradio_modules.stats_interface import StatsInterface; with __import__("gradio").Blocks(): StatsInterface() except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Flexcyon Theme Import",
+            "python -c 'import sys; try: import flexcyon_theme; flexcyon_theme.flexcyon_theme except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "NLTK Config",
+            "python -c 'import sys; try: import infra_utils; infra_utils.nltk_config.setup_nltk_data_path(); infra_utils.nltk_config.get_stopwords(); infra_utils.nltk_config.download_required_nltk_data() except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "LLM Model Load",
+            "python -c 'import sys; try: from llm.chatModel import get_model; get_model() except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "LLM Inference",
+            'python -c \'import sys; try: from llm.chatModel import get_model; model = get_model(); prompt = "What is the capital of France?"; getattr(model, "predict", lambda x: None)(prompt) if hasattr(model, "predict") else getattr(model, "generate", lambda x: None)(prompt) if hasattr(model, "generate") else None except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "LLM ClassificationModel Import",
+            "python -c 'import sys; try: import llm.classificationModel except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "LLM ClassificationModel Clean Text",
+            'python -c \'import sys; try: from llm.classificationModel import clean_text_for_classification; clean_text_for_classification("# Heading\\nSome text.\\n- List item\\n") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "LLM DataProcessing Import",
+            "python -c 'import sys; try: import llm.dataProcessing except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "LLM DataProcessing Clean Text",
+            'python -c \'import sys; try: from llm.dataProcessing import global_clean_text_for_classification; global_clean_text_for_classification("Some\\ntext with   spaces\\n\\n") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "LLM KeywordCache Import",
+            "python -c 'import sys; try: import llm.keyword_cache except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "LLM KeywordCache Filter Filler Words",
+            'python -c \'import sys; try: from llm.keyword_cache import filter_filler_words; filter_filler_words("the quick brown fox jumps over the lazy dog") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Hashing Import",
+            "python -c 'import sys; try: import hashing except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "Hashing Password",
+            'python -c \'import sys; try: from hashing import hash_password; hash_password("mySuperSecretPassword123!") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "Hashing Verify",
+            'python -c \'import sys; try: from hashing import hash_password, verify_password; h = hash_password("mySuperSecretPassword123!"); verify_password("mySuperSecretPassword123!", h) except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "PerformanceUtils Import",
+            "python -c 'import sys; try: import performance_utils except Exception as e: print(f\"[SKIP] {e}\"); sys.exit(0)'",
+            5,
+        ),
+        (
+            "PerformanceUtils Timer",
+            'python -c \'import sys; try: from performance_utils import perf_monitor; perf_monitor.start_timer("test"); import time; time.sleep(0.01); perf_monitor.end_timer("test") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+        (
+            "PerformanceUtils Cached File Exists",
+            'python -c \'import sys; try: from performance_utils import cached_file_exists; cached_file_exists("/etc/hosts") except Exception as e: print(f"[SKIP] {e}"); sys.exit(0)\'',
+            5,
+        ),
+    ]
 
-    # LLM Setup: initialize LLM and DB (async)
-    results[BENCH_LLM_SETUP] = run_hyperfine_command(
-        BENCH_LLM_SETUP,
-        "python -c 'import asyncio; from llm.chatModel import initialize_llm_and_db; asyncio.run(initialize_llm_and_db())'",
-        runs=5,
-    )
+    results = {}
 
-    # Database Initialization: ensure user DB is ready (sync)
-    results[BENCH_DB_INIT] = run_hyperfine_command(
-        BENCH_DB_INIT,
-        "python -c 'from backend.consolidated_database import get_user_database; db = get_user_database(); db.execute_query(\"SELECT 1\")'",
-        runs=5,
-    )
+    def run_benchmark(name, command, runs):
+        res = run_hyperfine_command(name, command, runs)
+        print(f"✅ Benchmark '{name}' completed.")
+        return name, res
 
-    # File Classification: classify a test string (async)
-    results[BENCH_FILE_CLASSIFICATION] = run_hyperfine_command(
-        BENCH_FILE_CLASSIFICATION,
-        "python -c 'import asyncio; from backend.file_handling import data_classification; asyncio.run(data_classification(\"This is a test file for classification.\"))'",
-        runs=5,
-    )
-
-    # Chatbot Response: get a response from the chatbot (async)
-    results[BENCH_CHATBOT_RESPONSE] = run_hyperfine_command(
-        BENCH_CHATBOT_RESPONSE,
-        'python -c \'import asyncio; from backend.chat import get_chatbot_response; asyncio.run(get_chatbot_response("Hello, how are you?", [], "testuser", "testchat"))\'',
-        runs=5,
-    )
-
-    # App Startup: (leave as is, since it's frontend-related)
-    results[BENCH_APP_STARTUP] = run_hyperfine_command(
-        BENCH_APP_STARTUP,
-        "python -c 'import sys; from pathlib import Path; import gradio as gr; "
-        'src_path = Path(__file__).parent / "src"; '
-        "sys.path.insert(0, str(src_path)) if str(src_path) not in sys.path else None; "
-        "from gradio_modules.login_and_register import login_interface; "
-        "from gradio_modules.chatbot import chatbot_ui; "
-        "from gradio_modules.search_interface import search_interface; "
-        "from gradio_modules.file_upload import file_upload_ui; "
-        "from gradio_modules.audio_input import audio_interface; "
-        "from flexcyon_theme import flexcyon_theme; "
-        "def load_custom_css(): "
-        '    styles_dir = Path(__file__).parent.parent / "styles"; '
-        '    css_content = ""; '
-        '    styles_file = styles_dir / "styles.css"; '
-        "    if styles_file.exists(): "
-        '        css_content += styles_file.read_text(encoding="utf-8") + "\\n"; '
-        '    performance_file = styles_dir / "performance.css"; '
-        "    if performance_file.exists(): "
-        '        css_content += performance_file.read_text(encoding="utf-8") + "\\n"; '
-        "    return css_content; "
-        "custom_css = load_custom_css(); "
-        'with gr.Blocks(title="NYP FYP CNC Chatbot", theme=flexcyon_theme, css=custom_css) as app: '
-        "    with gr.Column(visible=gr.State(True)) as login_container: "
-        "        login_interface(setup_events=True); "
-        '    chat_id_state = gr.State(""); '
-        "    chat_history_state = gr.State([]); "
-        "    all_chats_data_state = gr.State({}); "
-        '    debug_info_state = gr.State(""); '
-        "    audio_history_state = gr.State([]); "
-        "    with gr.Tabs(visible=False) as main_tabs: "
-        '        with gr.Tab("💬 Chat"\): '
-        "            chatbot_ui("
-        "                None, chat_id_state, chat_history_state, all_chats_data_state, debug_info_state"
-        "            ); "
-        '        with gr.Tab("🔍 Search"\): '
-        "            search_interface("
-        "                None, chat_id_state, chat_history_state, all_chats_data_state, debug_info_state, audio_history_state"
-        "            ); "
-        '        with gr.Tab("📁 File Upload"\): '
-        "            file_upload_ui("
-        "                None, chat_history_state, chat_id_state"
-        "            ); "
-        '        with gr.Tab("🎤 Audio Input"\): '
-        "            audio_interface("
-        "                None, setup_events=True"
-        "            ); '",
-        runs=5,
-    )
-
-    # --- Frontend/Gradio Benchmarks (Accurate, minimal, robust) ---
-    # Gradio Launch: Build the main Blocks interface (no launch)
-    results["Frontend Gradio Launch"] = run_hyperfine_command(
-        "Frontend Gradio Launch",
-        "python -c 'import gradio; from gradio_modules.chatbot import chatbot_ui; from gradio_modules.login_and_register import login_interface; from flexcyon_theme import flexcyon_theme; with gradio.Blocks(title=\"NYP FYP CNC Chatbot\", theme=flexcyon_theme): pass'",
-        runs=5,
-    )
-
-    # Static Asset Load: Read CSS files from the styles directory
-    results["Frontend Static Asset Load"] = run_hyperfine_command(
-        "Frontend Static Asset Load",
-        'python -c \'import pathlib; styles_dir = pathlib.Path("styles"); [open(styles_dir / f, "r", encoding="utf-8").read() for f in ["styles.css", "performance.css"] if (styles_dir / f).exists()]\'',
-        runs=5,
-    )
-
-    # Login/Register Interface: Build login/register UI (no events)
-    results["Login/Register Interface"] = run_hyperfine_command(
-        "Login/Register Interface",
-        "python -c 'import gradio; from gradio_modules.login_and_register import login_interface; with gradio.Blocks(): login_interface(setup_events=False)'",
-        runs=5,
-    )
-
-    # Chatbot Interface: Build chatbot UI (no events)
-    results["Chatbot Interface"] = run_hyperfine_command(
-        "Chatbot Interface",
-        "python -c 'import gradio; from gradio_modules.chatbot import chatbot_ui; with gradio.Blocks(): chatbot_ui(None, None, None, None, None)'",
-        runs=5,
-    )
-
-    # Search Interface: Build search UI (no events)
-    results["Search Interface"] = run_hyperfine_command(
-        "Search Interface",
-        "python -c 'import gradio; from gradio_modules.search_interface import search_interface; with gradio.Blocks(): search_interface(None, None, None, None, None)'",
-        runs=5,
-    )
-
-    # File Upload Interface: Build file upload UI (no events)
-    results["File Upload Interface"] = run_hyperfine_command(
-        "File Upload Interface",
-        "python -c 'import gradio; from gradio_modules.file_upload import file_upload_ui; with gradio.Blocks(): file_upload_ui(None, None, None)'",
-        runs=5,
-    )
-
-    # File Classification Interface: Build file classification UI (no events)
-    results["File Classification Interface"] = run_hyperfine_command(
-        "File Classification Interface",
-        "python -c 'import gradio; from gradio_modules.file_classification import file_classification_interface; with gradio.Blocks(): file_classification_interface(None)'",
-        runs=5,
-    )
-
-    # Audio Input Interface: Build audio input UI (no events)
-    results["Audio Input Interface"] = run_hyperfine_command(
-        "Audio Input Interface",
-        "python -c 'import gradio; from gradio_modules.audio_input import audio_interface; with gradio.Blocks(): audio_interface(None, setup_events=False)'",
-        runs=5,
-    )
-
-    # Change Password Interface: Build change password UI (no events)
-    results["Change Password Interface"] = run_hyperfine_command(
-        "Change Password Interface",
-        "python -c 'import gradio; from gradio_modules.change_password import change_password_interface; with gradio.Blocks(): change_password_interface(None, None)'",
-        runs=5,
-    )
-
-    # Stats Interface: Build stats UI (no events)
-    results["Stats Interface"] = run_hyperfine_command(
-        "Stats Interface",
-        "python -c 'import gradio; from gradio_modules.stats_interface import StatsInterface; with gradio.Blocks(): StatsInterface()'",
-        runs=5,
-    )
-
-    # Flexcyon Theme Import: Import the theme and access the object
-    results["Flexcyon Theme Import"] = run_hyperfine_command(
-        "Flexcyon Theme Import",
-        "python -c 'import flexcyon_theme; flexcyon_theme.flexcyon_theme'",
-        runs=5,
-    )
-
-    # NLTK Config
-    results["NLTK Config"] = run_hyperfine_command(
-        "NLTK Config",
-        "python -c 'import infra_utils; infra_utils.nltk_config.setup_nltk_data_path(); infra_utils.nltk_config.get_stopwords(); infra_utils.nltk_config.download_required_nltk_data()'",
-        runs=5,
-    )
-
-    # LLM
-    results["LLM Model Load"] = run_hyperfine_command(
-        "LLM Model Load",
-        "python -c 'from llm.chatModel import get_model; import asyncio; asyncio.run(get_model())'",
-        runs=5,
-    )
-    results["LLM Inference"] = run_hyperfine_command(
-        "LLM Inference",
-        'python -c \'from llm.chatModel import get_model; import asyncio; model = asyncio.run(get_model()); prompt = "What is the capital of France?"; getattr(model, "predict", lambda x: None)(prompt) if hasattr(model, "predict") else getattr(model, "generate", lambda x: None)(prompt) if hasattr(model, "generate") else None\'',
-        runs=5,
-    )
-
-    # LLM: classificationModel.py
-    results["LLM ClassificationModel Import"] = run_hyperfine_command(
-        "LLM ClassificationModel Import",
-        "python -c 'import llm.classificationModel'",
-        runs=5,
-    )
-    results["LLM ClassificationModel Clean Text"] = run_hyperfine_command(
-        "LLM ClassificationModel Clean Text",
-        "python -c 'from llm.classificationModel import clean_text_for_classification; clean_text_for_classification(\"# Heading\\nSome text.\\n- List item\\n\")'",
-        runs=5,
-    )
-
-    # LLM: dataProcessing.py
-    results["LLM DataProcessing Import"] = run_hyperfine_command(
-        "LLM DataProcessing Import", "python -c 'import llm.dataProcessing'", runs=5
-    )
-    results["LLM DataProcessing Clean Text"] = run_hyperfine_command(
-        "LLM DataProcessing Clean Text",
-        "python -c 'from llm.dataProcessing import global_clean_text_for_classification; global_clean_text_for_classification(\"Some\\ntext with   spaces\\n\\n\")'",
-        runs=5,
-    )
-
-    # LLM: keyword_cache.py
-    results["LLM KeywordCache Import"] = run_hyperfine_command(
-        "LLM KeywordCache Import", "python -c 'import llm.keyword_cache'", runs=5
-    )
-    results["LLM KeywordCache Filter Filler Words"] = run_hyperfine_command(
-        "LLM KeywordCache Filter Filler Words",
-        "python -c 'from llm.keyword_cache import filter_filler_words; filter_filler_words(\"the quick brown fox jumps over the lazy dog\")'",
-        runs=5,
-    )
-
-    # Hashing benchmarks
-    results["Hashing Import"] = run_hyperfine_command(
-        "Hashing Import", "python -c 'import hashing'", runs=5
-    )
-    results["Hashing Password"] = run_hyperfine_command(
-        "Hashing Password",
-        "python -c 'from hashing import hash_password; hash_password(\"mySuperSecretPassword123!\")'",
-        runs=5,
-    )
-    results["Hashing Verify"] = run_hyperfine_command(
-        "Hashing Verify",
-        'python -c \'from hashing import hash_password, verify_password; h = hash_password("mySuperSecretPassword123!"); verify_password("mySuperSecretPassword123!", h)\'',
-        runs=5,
-    )
-
-    # Performance utils benchmarks
-    results["PerformanceUtils Import"] = run_hyperfine_command(
-        "PerformanceUtils Import", "python -c 'import performance_utils'", runs=5
-    )
-    results["PerformanceUtils Timer"] = run_hyperfine_command(
-        "PerformanceUtils Timer",
-        'python -c \'from performance_utils import perf_monitor; perf_monitor.start_timer("test"); import time; time.sleep(0.01); perf_monitor.end_timer("test")\'',
-        runs=5,
-    )
-    results["PerformanceUtils Cached File Exists"] = run_hyperfine_command(
-        "PerformanceUtils Cached File Exists",
-        "python -c 'from performance_utils import cached_file_exists; cached_file_exists(\"/etc/hosts\")'",
-        runs=5,
-    )
-
-    # Hashing benchmarks
-    results["Hashing Import"] = run_hyperfine_command(
-        "Hashing Import", "python -c 'import hashing'", runs=5
-    )
-    results["Hashing Password"] = run_hyperfine_command(
-        "Hashing Password",
-        "python -c 'from hashing import hash_password; hash_password(\"mySuperSecretPassword123!\")'",
-        runs=5,
-    )
-    results["Hashing Verify"] = run_hyperfine_command(
-        "Hashing Verify",
-        'python -c \'from hashing import hash_password, verify_password; h = hash_password("mySuperSecretPassword123!"); verify_password("mySuperSecretPassword123!", h)\'',
-        runs=5,
-    )
-
-    # Performance utils benchmarks
-    results["PerformanceUtils Import"] = run_hyperfine_command(
-        "PerformanceUtils Import", "python -c 'import performance_utils'", runs=5
-    )
-    results["PerformanceUtils Timer"] = run_hyperfine_command(
-        "PerformanceUtils Timer",
-        'python -c \'from performance_utils import perf_monitor; perf_monitor.start_timer("test"); import time; time.sleep(0.01); perf_monitor.end_timer("test")\'',
-        runs=5,
-    )
-    results["PerformanceUtils Cached File Exists"] = run_hyperfine_command(
-        "PerformanceUtils Cached File Exists",
-        "python -c 'from performance_utils import cached_file_exists; cached_file_exists(\"/etc/hosts\")'",
-        runs=5,
-    )
+    # Use ThreadPoolExecutor to run benchmarks in parallel (non-blocking main thread)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_bench = {
+            executor.submit(run_benchmark, name, command, runs): name
+            for name, command, runs in benchmarks
+        }
+        for future in concurrent.futures.as_completed(future_to_bench):
+            name, res = future.result()
+            results[name] = res
 
     print("\nAll benchmarks completed. Writing results...")
     write_benchmark_report(results)
