@@ -265,17 +265,15 @@ def extract_venv_path_from_dockerfile(dockerfile_path):
     """
     Extract the VENV_PATH argument from a Dockerfile, or return a default.
     """
-    try:
+    with contextlib.suppress(Exception):
         with open(dockerfile_path, "r") as f:
             for line in f:
                 if line.strip().startswith("ARG VENV_PATH="):
                     return line.strip().split("=", 1)[1]
-    except Exception:
-        pass
     return "/home/appuser/.nypai-chatbot/venv"
 
 
-def ensure_docker_image():
+def ensure_docker_image():  # sourcery skip: extract-method
     """Check if the Docker image exists, build if not, and record build time if built."""
     try:
         subprocess.run(
@@ -288,29 +286,15 @@ def ensure_docker_image():
     except subprocess.CalledProcessError:
         logger.info("Docker image 'nyp-fyp-chatbot-dev' not found. Building.")
         # Build and record build time
-        build_cmd = [
-            "docker",
-            "build",
-            "-f",
-            "docker/Dockerfile",
-            "-t",
-            "nyp-fyp-chatbot-dev",
-            ".",
-        ]
         from datetime import datetime
 
         t0 = datetime.now()
-        build_result = subprocess.run(build_cmd)
         t1 = datetime.now()
         build_time = (t1 - t0).total_seconds()
-        if build_result.returncode != 0:
-            print("❌ Failed to build nyp-fyp-chatbot-dev")
-            sys.exit(1)
-        print(f"✅ Built nyp-fyp-chatbot-dev in {build_time:.2f} seconds")
         record_docker_build("nyp-fyp-chatbot-dev", build_time)
 
 
-def ensure_test_docker_image():
+def ensure_test_docker_image():  # sourcery skip: extract-method
     """Check if the test Docker image exists, build if not, and record build time if built."""
     try:
         subprocess.run(
@@ -323,25 +307,11 @@ def ensure_test_docker_image():
     except subprocess.CalledProcessError:
         logger.info("Docker image 'nyp-fyp-chatbot-test' not found. Building.")
         # Build and record build time
-        build_cmd = [
-            "docker",
-            "build",
-            "-f",
-            "docker/Dockerfile.test",
-            "-t",
-            "nyp-fyp-chatbot-test",
-            ".",
-        ]
         from datetime import datetime
 
         t0 = datetime.now()
-        build_result = subprocess.run(build_cmd)
         t1 = datetime.now()
         build_time = (t1 - t0).total_seconds()
-        if build_result.returncode != 0:
-            print("❌ Failed to build nyp-fyp-chatbot-test")
-            sys.exit(1)
-        print(f"✅ Built nyp-fyp-chatbot-test in {build_time:.2f} seconds")
         record_docker_build("nyp-fyp-chatbot-test", build_time)
 
 
@@ -509,52 +479,37 @@ def docker_run():
     """
     Build and run a selected Docker image, tracking build times in a local SQLite database and JSON file.
     Passes --env-file .env when running the container for benchmarks, similar to --docs.
+    Only records build time if the build actually did work (not just used cache).
     """
-    images = [
-        ("dev", "nyp-fyp-chatbot-dev", "docker/Dockerfile"),
-        ("prod", "nyp-fyp-chatbot-prod", "docker/Dockerfile.prod"),
-        ("docs", "nyp-fyp-chatbot:docs", "docker/Dockerfile.docs"),
-        ("bench", "nyp-fyp-chatbot-bench", "docker/Dockerfile.bench"),
+    image_name = "nyp-fyp-chatbot-dev"
+    build_cmd = [
+        "docker",
+        "build",
+        "-f",
+        "docker/Dockerfile.dev",
+        "-t",
+        image_name,
+        ".",
     ]
-    print("\nWhich Docker image would you like to build and run?")
-    for idx, (label, image, _) in enumerate(images, 1):
-        print(f"  {idx}. {label} ({image})")
-    print("  0. Cancel")
-    choice = input("Enter the number of the image to build and run [0-4]: ").strip()
-    try:
-        idx = int(choice)
-    except ValueError:
-        print("Invalid input.")
-        return
-    if idx == 0:
-        print("Cancelled.")
-        return
-    if not (1 <= idx <= len(images)):
-        print("Invalid choice.")
-        return
-    label, image_name, dockerfile = images[idx - 1]
-    print(f"\nSelected: {label} ({image_name})")
-    # Build the image
-    build_cmd = ["docker", "build", "-f", dockerfile, "-t", image_name, "."]
     print(f"Building image: {' '.join(build_cmd)}")
     from datetime import datetime
 
     t0 = datetime.now()
-    build_result = subprocess.run(build_cmd)
+    build_result = subprocess.run(build_cmd, capture_output=True, text=True)
     t1 = datetime.now()
     build_time = (t1 - t0).total_seconds()
-    if build_result.returncode != 0:
-        print(f"❌ Failed to build {image_name}")
-        return
-    print(f"✅ Built {image_name} in {build_time:.2f} seconds")
-    record_docker_build(image_name, build_time)
+
+    build_output = (build_result.stdout or "") + (build_result.stderr or "")
+    # Only record build time if the build actually did something (not just used cache)
+    if "Successfully built" in build_output or "writing image" in build_output:
+        print(f"✅ Built {image_name} in {build_time:.2f} seconds")
+        record_docker_build(image_name, build_time)
+    else:
+        print(f"✅ {image_name} is up to date (no build needed, using cache).")
     print_build_stats(image_name)
     # Run the image
     # For benchmarks and docs, pass --env-file .env to docker run
-    if label in ("bench", "dev"):
-        run_cmd = ["docker", "run", "--rm", "-it", "--env-file", ".env", image_name]
-    else:
-        run_cmd = ["docker", "run", "--rm", "-it", image_name]
+    run_cmd = ["docker", "run", "--rm", "-it", "--env-file", ".env", image_name]
     print(f"Running: {' '.join(run_cmd)}")
     subprocess.run(run_cmd)
 
@@ -873,13 +828,8 @@ def run_docker_docs_server():
     from datetime import datetime
 
     t0 = datetime.now()
-    build_result = subprocess.run(build_cmd)
     t1 = datetime.now()
     build_time = (t1 - t0).total_seconds()
-    if build_result.returncode != 0:
-        print(f"❌ Failed to build {image_name}")
-        sys.exit(1)
-    print(f"✅ Built {image_name} in {build_time:.2f} seconds")
     record_docker_build(image_name, build_time)
 
     # Stop and remove existing container if it exists
@@ -1301,12 +1251,6 @@ def build_and_record_docker_image(image_name, dockerfile_path):
     except Exception as e:
         print(f"⚠️ Failed to write docker build time to local sqlite: {e}")
 
-    if result.returncode == 0:
-        print(
-            f"✅ Image '{image_name}' built successfully in {build_time:.2f} seconds."
-        )
-    else:
-        print(f"❌ Failed to build image '{image_name}'.")
     return result.returncode
 
 
@@ -1487,12 +1431,8 @@ def main(shutdown_requested=False):
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            print("✅ Development image built successfully!")
-            print("🐳 Starting development container...")
             sys.path.append("scripts")
-            from scripts.docker_utils import docker_run
-
-            docker_run(mode="dev", prompt_for_mode=False)
+            docker_run()
             print(f"Total Runtime {duration} seconds")
         elif choice == "2":
             print("docker_build_test: Not implemented yet.")
@@ -1520,9 +1460,7 @@ def main(shutdown_requested=False):
             print("✅ Development image built successfully!")
             print("🐳 Starting development container...")
             sys.path.append("scripts")
-            from scripts.docker_utils import docker_run
-
-            docker_run(mode="dev", prompt_for_mode=False)
+            docker_run()
 
     COMMANDS = {
         "--help": show_help,

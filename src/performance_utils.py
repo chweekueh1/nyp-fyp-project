@@ -104,9 +104,7 @@ class ConnectionPool:
         :rtype: object or None
         """
         with self.lock:
-            if self.connections:
-                return self.connections.pop()
-            return None
+            return self.connections.pop() if self.connections else None
 
     def return_connection(self, connection: object) -> None:
         """

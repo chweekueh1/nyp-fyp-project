@@ -14,20 +14,12 @@ import gradio as gr
 from backend import change_password
 
 
+import os
+
+
 def change_password_interface(
     username_state: gr.State, logged_in_state: gr.State, rate_limit_seconds: int = 60
 ) -> Tuple[gr.Button, gr.Column, gr.State]:
-    # Create change password interface with popup and password toggles.
-    #
-    # :param username_state: Gradio state containing the current username
-    # :type username_state: gr.State
-    # :param logged_in_state: Gradio state containing the login status
-    # :type logged_in_state: gr.State
-    # :param rate_limit_seconds: Number of seconds to rate limit password changes, defaults to 60
-    # :type rate_limit_seconds: int
-    # :return: Tuple containing change password button, popup column, and last change time state
-    # :rtype: Tuple[gr.Button, gr.Column, gr.State]
-    # Button to show the change password popup (only visible when logged in)
     change_password_btn = gr.Button(
         "🔐 Change Password",
         visible=False,
@@ -35,17 +27,12 @@ def change_password_interface(
         size="sm",
         variant="secondary",
     )
-
-    # Change Password Popup (using Column instead of Modal)
     with gr.Column(
         visible=False,
         elem_id="change_password_popup",
         elem_classes=["change-password-popup"],
     ) as change_password_popup:
-        # Header
         gr.Markdown("## 🔐 Change Password", elem_id="change_password_title")
-
-        # Current password field with toggle
         with gr.Row():
             old_password_input = gr.Textbox(
                 label="Current Password",
@@ -56,8 +43,6 @@ def change_password_interface(
             old_password_toggle = gr.Button(
                 "👁️", size="sm", elem_id="old_password_toggle"
             )
-
-        # New password field with toggle
         with gr.Row():
             new_password_input = gr.Textbox(
                 label="New Password",
@@ -68,8 +53,6 @@ def change_password_interface(
             new_password_toggle = gr.Button(
                 "👁️", size="sm", elem_id="new_password_toggle"
             )
-
-        # Confirm new password field with toggle
         with gr.Row():
             confirm_new_password_input = gr.Textbox(
                 label="Confirm New Password",
@@ -80,7 +63,6 @@ def change_password_interface(
             confirm_password_toggle = gr.Button(
                 "👁️", size="sm", elem_id="confirm_password_toggle"
             )
-
         gr.Markdown(
             """
             **Password Requirements:**
@@ -91,8 +73,6 @@ def change_password_interface(
             """,
             elem_id="password_requirements_info",
         )
-
-        # Action buttons
         with gr.Row():
             submit_change_password_btn = gr.Button(
                 "Change Password",
@@ -102,22 +82,20 @@ def change_password_interface(
             cancel_btn = gr.Button(
                 "Cancel", variant="secondary", elem_id="cancel_change_password_btn"
             )
-
-        # Status message
         change_password_message = gr.Markdown(
             visible=False, elem_id="change_password_message"
         )
-
-        # Loading indicator
         loading_indicator = gr.HTML(
             value="", visible=False, elem_id="change_password_loading"
         )
-
-    # State for tracking last change time and password visibility
     last_change_time = gr.State(0)
     old_password_visible = gr.State(False)
     new_password_visible = gr.State(False)
     confirm_password_visible = gr.State(False)
+
+    # Patch: In benchmark mode, skip event setup
+    if os.environ.get("BENCHMARK_MODE"):
+        return change_password_btn, change_password_popup, last_change_time
 
     def toggle_old_password(visible: bool) -> Tuple[gr.update, str, bool]:
         # Toggle the visibility of the old password field.

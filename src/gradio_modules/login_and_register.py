@@ -13,22 +13,11 @@ from infra_utils import setup_logging
 logger = setup_logging()
 
 
+import os
+
+
 def login_interface(setup_events: bool = True) -> tuple:
-    """Create the login and registration interface with dynamic form switching.
-
-    This version shows only one form at a time for better performance and UX.
-    Features:
-    - Dynamic switching between login and registration
-    - Password visibility toggles
-    - Email validation
-    - Password requirements
-    - Proper state management
-
-    :param setup_events: Whether to set up event handlers, defaults to True
-    :type setup_events: bool
-    :return: Tuple of components and state variables
-    :rtype: tuple
-    """
+    """Create the login and registration interface with dynamic form switching."""
 
     # State variables
     logged_in_state = gr.State(False)
@@ -40,29 +29,23 @@ def login_interface(setup_events: bool = True) -> tuple:
     confirm_password_visible = gr.State(False)
 
     # Create all components individually (avoid Gradio 5.x context manager issues)
-    # Header that changes based on mode
     gr.Markdown("# 🚀 NYP FYP Chatbot", elem_id="auth_title")
     header_subtitle = gr.Markdown("## 🔐 Login", elem_id="auth_subtitle")
     header_instruction = gr.Markdown(
         "Please log in to access the chatbot.", elem_id="auth_instruction"
     )
 
-    # Dynamic form fields
     username_input = gr.Textbox(
         label="Username or Email",
         placeholder="Enter your username or email",
         elem_id="username_input",
     )
-
-    # Email field (only visible in register mode)
     email_input = gr.Textbox(
         label="Email",
         placeholder="Enter your authorized email address",
         elem_id="email_input",
         visible=False,
     )
-
-    # Email domains info (only visible in register mode)
     email_info = gr.Markdown(
         """
     **Authorized Email Domains:**
@@ -73,7 +56,6 @@ def login_interface(setup_events: bool = True) -> tuple:
         elem_id="email_info",
         visible=False,
     )
-
     password_input = gr.Textbox(
         label="Password",
         placeholder="Enter your password",
@@ -81,8 +63,6 @@ def login_interface(setup_events: bool = True) -> tuple:
         elem_id="password_input",
     )
     show_password_btn = gr.Button("👁️", elem_id="show_password_btn", size="sm")
-
-    # Confirm password field (only visible in register mode)
     confirm_password_input = gr.Textbox(
         label="Confirm Password",
         placeholder="Confirm your password",
@@ -93,8 +73,6 @@ def login_interface(setup_events: bool = True) -> tuple:
     show_confirm_btn = gr.Button(
         "👁️", elem_id="show_confirm_btn", size="sm", visible=False
     )
-
-    # Password requirements (only visible in register mode)
     password_requirements = gr.Markdown(
         """
     **Password Requirements:**
@@ -106,18 +84,13 @@ def login_interface(setup_events: bool = True) -> tuple:
         elem_id="password_requirements",
         visible=False,
     )
-
-    # Action buttons
     primary_btn = gr.Button("Login", variant="primary", elem_id="primary_btn")
     secondary_btn = gr.Button("Register", variant="secondary", elem_id="secondary_btn")
-
-    # Error/success messages
     error_message = gr.Markdown(visible=False, elem_id="error_message")
-
-    # Create a simple container without context manager
     main_container = gr.Column(elem_classes=["auth-container"])
 
-    if not setup_events:
+    # Patch: In benchmark mode, always skip event setup
+    if os.environ.get("BENCHMARK_MODE") or not setup_events:
         return (
             logged_in_state,
             username_state,

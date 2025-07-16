@@ -16,32 +16,47 @@ logger = logging.getLogger(__name__)
 
 def setup_nltk_data_path() -> str:
     """
-    Set up NLTK data path to use .nypai-chatbot directory.
+    Set up NLTK data path to use /home/appuser/.nypai-chatbot/data/nltk_data directory.
 
     :return: Path to NLTK data directory
     :rtype: str
     """
     try:
-        # Import get_chatbot_dir from the package
-        from . import get_chatbot_dir
+        # Hardcode the correct NLTK data path for all environments
+        nltk_data_path = "/home/appuser/.nypai-chatbot/data/nltk_data"
 
-        # Set NLTK data path to .nypai-chatbot directory
-        nltk_data_path = os.path.join(get_chatbot_dir(), "data", "nltk_data")
-
-        # Skip directory creation during benchmarks
-        if not os.environ.get("BENCHMARK_MODE"):
-            os.makedirs(nltk_data_path, exist_ok=True)
-
-        # Configure NLTK to use this path
+        # Remove any reference to /root/.nypai-chatbot from NLTK data path
         import nltk
 
+        # Remove /root/.nypai-chatbot and its subdirs from nltk.data.path
+        nltk.data.path = [
+            p for p in nltk.data.path if not p.startswith("/root/.nypai-chatbot")
+        ]
+
+        # Also ensure the directory and subdirectories exist and are writable
+        if not os.environ.get("BENCHMARK_MODE"):
+            os.makedirs(nltk_data_path, exist_ok=True)
+            # Create required subdirectories for NLTK data
+            for subdir in ["tokenizers", "corpora", "taggers"]:
+                subdir_path = os.path.join(nltk_data_path, subdir)
+                os.makedirs(subdir_path, exist_ok=True)
+                try:
+                    os.chmod(subdir_path, 0o777)
+                except Exception:
+                    pass
+            # Set permissions to ensure appuser can write
+            try:
+                os.chmod(nltk_data_path, 0o777)
+            except Exception:
+                pass
+
+        # Configure NLTK to use this path
         if nltk_data_path not in nltk.data.path:
             nltk.data.path.insert(0, nltk_data_path)
 
-        logger.info(f"NLTK data path configured: {nltk_data_path}")
         return nltk_data_path
 
-    except ImportError as e:
+    except Exception as e:
         logger.warning(f"Failed to configure NLTK data path: {e}")
         return ""
 
@@ -64,18 +79,11 @@ def get_stopwords(language: str = "english") -> Set[str]:
 
         try:
             stop_words = set(stopwords.words(language))
-            logger.debug(f"Loaded {len(stop_words)} stopwords for {language}")
             return stop_words
         except LookupError:
             if nltk_data_path:
-                logger.info(
-                    f"Downloading NLTK stopwords for {language} to {nltk_data_path}"
-                )
                 nltk.download("stopwords", download_dir=nltk_data_path, quiet=True)
                 stop_words = set(stopwords.words(language))
-                logger.info(
-                    f"Successfully downloaded and loaded {len(stop_words)} stopwords"
-                )
                 return stop_words
             else:
                 logger.warning("Could not download stopwords - no valid data path")
@@ -550,7 +558,6 @@ def download_required_nltk_data() -> bool:
         success = True
         for data_name in required_data:
             try:
-                logger.info(f"Downloading NLTK data: {data_name}")
                 nltk.download(data_name, download_dir=nltk_data_path, quiet=True)
             except Exception as e:
                 logger.warning(f"Failed to download {data_name}: {e}")

@@ -86,8 +86,8 @@ USER root
 RUN apk add --no-cache hyperfine
 USER appuser
 
-# Download NLTK stopwords corpus
-RUN ${VENV_PATH}/bin/python -m nltk.downloader stopwords
+# Download NLTK stopwords corpus to the correct directory
+RUN ${VENV_PATH}/bin/python -c "import nltk; nltk.download('stopwords', download_dir='/home/appuser/.nypai-chatbot/data/nltk_data')"
 
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
@@ -103,7 +103,16 @@ RUN set -e; \
     if [ -f src/docker_build_times.json ]; then \
         cp src/docker_build_times.json ./docker_build_times.json; \
         echo "Copied src/docker_build_times.json"; \
-    fi
+    fi; \
+    # Remove any benchmark_results.md file that may have been copied in from the host
+    if [ -f /app/data/benchmark_results.md ]; then \
+        rm -f /app/data/benchmark_results.md; \
+        echo "Removed stale /app/data/benchmark_results.md"; \
+    fi; \
+    # Ensure permissions after all copies
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/nltk_data || true; \
+    # Ensure permissions after all copies
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/nltk_data || true
 
 # Set entrypoint and command for benchmarking
 ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-bench/bin/python"]

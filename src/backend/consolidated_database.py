@@ -33,17 +33,25 @@ def get_database_path(db_name: str) -> str:
     Returns the path to the user's database file.
 
     Args:
-        username (str): The username for which to get the database path.
+        db_name (str): The database name.
 
     Returns:
         str: The path to the user's database file.
 
     Raises:
-        ValueError: If the username is invalid or the path cannot be determined.
+        ValueError: If the db_name is invalid or the path cannot be determined.
     """
     # Sanitize database name to prevent path traversal
     if not re.match(r"^[a-zA-Z0-9_]+$", db_name):
         raise ValueError(f"Invalid database name: {db_name}")
+
+    # If running in Docker or benchmark mode and db_name is 'users', use a temp directory to avoid persistence
+    if (
+        os.environ.get("IN_DOCKER") == "1" or os.environ.get("BENCHMARK_MODE") == "1"
+    ) and "users" in db_name:
+        db_dir = "/tmp/nypai-chatbot/sqlite"
+        os.makedirs(db_dir, exist_ok=True)
+        return os.path.join(db_dir, f"{db_name}.db")
 
     base_dir = get_chatbot_dir()
     db_dir = os.path.join(base_dir, "data", "sqlite")
@@ -172,10 +180,6 @@ class ConsolidatedDatabase:
                     raise ValueError(f"Unknown database name: {self.db_name}")
 
                 conn.commit()
-                logger.info(
-                    f"SQLite database '{self.db_name}' initialized successfully"
-                )
-
         except Exception as e:
             logger.error(f"Failed to initialize SQLite database '{self.db_name}': {e}")
             raise

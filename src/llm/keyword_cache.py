@@ -15,7 +15,6 @@ try:
     from infra_utils.nltk_config import get_stopwords
 
     stop_words = get_stopwords("english")
-    logging.info(f"Loaded {len(stop_words)} stopwords for keyword filtering")
 except ImportError:
     stop_words = set()
     logging.warning(

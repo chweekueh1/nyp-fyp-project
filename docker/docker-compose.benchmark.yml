@@ -13,6 +13,10 @@ services:
       - ../.env:/app/.env:ro
     working_dir: /app
     user: "1000:1000"
-    entrypoint: ["/home/appuser/.nypai-chatbot/venv-bench/bin/python"]
-    command: ["src/scripts/run_benchmarks.py"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /home/appuser/.nypai-chatbot/venv-bench/bin/python src/scripts/run_benchmarks.py
+        # Clean up project root DB files after benchmarks
+        rm -f /app/chat /app/classifications /app/llm /app/performance /app/users
     restart: "no"

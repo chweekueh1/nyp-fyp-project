@@ -34,8 +34,7 @@ from .timezone_utils import now_singapore
 from infra_utils import setup_logging
 from .markdown_formatter import format_markdown
 
-# New imports from chatModel.py
-from llm.chatModel import get_convo_hist_answer, initialize_llm_and_db, is_llm_ready
+# (Delayed import of llm.chatModel to avoid circular import)
 
 
 # Set up logging
@@ -61,12 +60,17 @@ def _get_user_chat_dir(username: str) -> Path:
     """
     Get the directory for a user's chat sessions.
 
-    :param username: The username.
-    :type username: str
-    :return: Path to the user's chat directory.
-    :rtype: Path
+    Args:
+        username (str): The username.
+
+    Returns:
+        Path: Path to the user's chat directory.
     """
-    return Path(CHAT_SESSIONS_PATH) / username
+    # Always use /home/appuser/.nypai-chatbot/data/chat_sessions as base, never /root/.nypai-chatbot
+    base_dir = os.environ.get(
+        "CHAT_SESSIONS_PATH", "/home/appuser/.nypai-chatbot/data/chat_sessions"
+    )
+    return Path(base_dir) / username
 
 
 def _get_chat_file_path(username: str, chat_id: str) -> Path:
@@ -317,97 +321,83 @@ def escape_markdown(text: str) -> str:
 
 def highlight_query_in_text(text: str, query: str) -> str:
     """
-    Highlight the search query in the text with context.
-    Escapes markdown special characters before highlighting.
+    Highlight all occurrences of the query (or its significant words) in the text,
+    escaping markdown and providing context. Avoids overlapping highlights.
 
-    :param text: The text to search and highlight in.
-    :type text: str
-    :param query: The search query to highlight.
-    :type query: str
-    :return: The text with highlighted query terms and context.
-    :rtype: str
+    Args:
+        text (str): The text to search and highlight in.
+        query (str): The search query to highlight.
+
+    Returns:
+        str: The text with highlighted query terms and context.
     """
     if not text or not query:
         return escape_markdown(text)
 
     # Escape markdown before processing
-    text = escape_markdown(text)
-
-    # Convert to lowercase for case-insensitive matching
-    text_lower = text.lower()
+    text_escaped = escape_markdown(text)
+    text_lower = text_escaped.lower()
     query_lower = query.lower()
 
-    # Find all occurrences of the query
-    matches = []
-    start = 0
-    while True:
-        pos = text_lower.find(query_lower, start)
-        if pos == -1:
-            break
-        matches.append((pos, pos + len(query)))
-        start = pos + 1
+    # Helper to find all non-overlapping matches
+    def find_matches(haystack: str, needle: str) -> list:
+        matches = []
+        start = 0
+        while True:
+            pos = haystack.find(needle, start)
+            if pos == -1:
+                break
+            matches.append((pos, pos + len(needle)))
+            start = pos + len(needle)
+        return matches
+
+    matches = find_matches(text_lower, query_lower)
+
+    # If no full query match, try to match significant words (length >= 3)
+    if not matches:
+        words = [w for w in query_lower.split() if len(w) >= 3]
+        for word in words:
+            matches.extend(find_matches(text_lower, word))
 
     if not matches:
-        # If no exact matches, try to find partial matches for better context
-        words = query_lower.split()
-        if len(words) > 1:
-            # Try to find individual words from the query
-            for word in words:
-                if len(word) >= 3:  # Only highlight words with 3+ characters
-                    word_start = 0
-                    while True:
-                        word_pos = text_lower.find(word, word_start)
-                        if word_pos == -1:
-                            break
-                        matches.append((word_pos, word_pos + len(word)))
-                        word_start = word_pos + 1
+        # No matches at all, return truncated text if too long
+        return f"{text_escaped[:197]}..." if len(text_escaped) > 200 else text_escaped
 
-    if not matches:
-        # If still no matches, return truncated text with ellipsis
-        if len(text) > 200:
-            return text[:197] + "..."
-        return text
-
-    # Sort matches by position to avoid overlapping
+    # Merge overlapping matches
     matches.sort()
-
-    # Build highlighted text with better context
-    highlighted_parts = []
-    last_end = 0
-
+    merged = []
     for start, end in matches:
-        # Add text before the match with better context
-        if start > last_end:
-            context_before = text[last_end:start]
-            if len(context_before) > 80:
-                # Show more context before the match
-                context_before = "..." + context_before[-77:]
-            highlighted_parts.append(context_before)
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
 
-        # Add highlighted match with better styling
-        match_text = text[start:end]
-        highlighted_parts.append(f"**`{match_text}`**")
-        last_end = end
+    # Build highlighted text
+    highlighted = []
+    last = 0
+    for start, end in merged:
+        # Add context before match
+        if start > last:
+            context = text_escaped[last:start]
+            if len(context) > 80:
+                context = f"...{context[-77:]}"
+            highlighted.append(context)
+        # Add highlight
+        highlighted.append(f"**`{text_escaped[start:end]}`**")
+        last = end
+    # Add context after last match
+    if last < len(text_escaped):
+        context = text_escaped[last:]
+        if len(context) > 80:
+            context = f"{context[:77]}..."
+        highlighted.append(context)
 
-    # Add remaining text after last match
-    if last_end < len(text):
-        context_after = text[last_end:]
-        if len(context_after) > 80:
-            # Show more context after the match
-            context_after = context_after[:77] + "..."
-        highlighted_parts.append(context_after)
-
-    result = "".join(highlighted_parts)
-
-    # If the result is too long, truncate it while preserving highlights
+    result = "".join(highlighted)
+    # Truncate if too long, preserving highlights
     if len(result) > 500:
-        # Find the first highlight
-        first_highlight = result.find("**`")
-        if first_highlight != -1:
-            # Start from 50 characters before the first highlight
-            start_pos = max(0, first_highlight - 50)
-            result = "..." + result[start_pos : start_pos + 450] + "..."
-
+        first = result.find("**`")
+        start_pos = max(0, first - 50) if first != -1 else 0
+        result = f"...{result[start_pos : start_pos + 450]}..."
     return result
 
 
@@ -500,217 +490,94 @@ def search_chat_history(
     search_query: str, username: str, chat_id: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], str]:
     """
-    Searches through chat history for a given query for a specific user,
+    Search through chat history for a given query for a specific user,
     optionally within a specific chat, using both fuzzy matching with difflib
     and simple substring matching for better results.
 
-    :param search_query: The query string to search for.
-    :type search_query: str
-    :param username: The username whose chats are being searched.
-    :type username: str
-    :param chat_id: Optional. The specific chat ID to search within. If None,
-                    all chats for the user are searched.
-    :type chat_id: Optional[str]
-    :return: A tuple containing:
-             - A list of dictionaries, where each dictionary represents a found match:
-               {'chat_id': ..., 'chat_name': ..., 'message_index': ...,
-                'message_type': 'user' or 'bot', 'content': ..., 'similarity_score': ...}
-             - A status message.
-    :rtype: Tuple[List[Dict[str, Any]], str]
-    """
-    logger.info(
-        f"🔍 [SEARCH] Starting search for query: '{search_query}' for user: '{username}'"
-    )
+    Args:
+        search_query (str): The query string to search for.
+        username (str): The username whose chats are being searched.
+        chat_id (Optional[str], optional): The specific chat ID to search within. If None,
+            all chats for the user are searched.
 
+    Returns:
+        Tuple[List[Dict[str, Any]], str]: A tuple containing:
+            - A list of dictionaries, where each dictionary represents a found match:
+              {'chat_id': ..., 'chat_name': ..., 'message_index': ...,
+               'message_type': 'user' or 'bot', 'content': ..., 'similarity_score': ...}
+            - A status message.
+    """
     if not search_query:
-        logger.info("🔍 [SEARCH] Empty query, returning early")
         return [], "Please enter a search query."
 
     sanitized_query = sanitize_input(search_query).lower()
-    logger.info(f"🔍 [SEARCH] Sanitized query: '{sanitized_query}'")
     search_results = []
 
-    # Ensure we have the latest data by reloading the cache
-    # This is important because the cache might have been updated by recent chat activity
-    logger.info(f"🔍 [SEARCH] Loading chat metadata cache for user: '{username}'")
+    # Reload cache to ensure latest data
     _load_chat_metadata_cache(username)
     user_chats = _get_chat_metadata_cache(username)
-    logger.info(f"🔍 [SEARCH] Found {len(user_chats)} chats for user: '{username}'")
 
-    target_chats = {}
+    # Select chats to search
     if chat_id and chat_id != "all":
         if chat_id in user_chats:
-            target_chats[chat_id] = user_chats[chat_id]
-            logger.info(f"🔍 [SEARCH] Searching in specific chat: '{chat_id}'")
+            target_chats = {chat_id: user_chats[chat_id]}
         else:
-            logger.warning(
-                f"🔍 [SEARCH] Specified chat '{chat_id}' not found for user '{username}'"
-            )
             return [], "Specified chat not found."
     else:
         target_chats = user_chats
-        logger.info(f"🔍 [SEARCH] Searching in all {len(target_chats)} chats")
 
-    # Define similarity thresholds for fuzzy matching
-    # Lowered threshold from 0.6 to 0.25 to catch partial word matches like "data" in "data security"
-    FUZZY_THRESHOLD = 0.25  # For longer queries
-    MIN_QUERY_LENGTH = 3  # Minimum length for fuzzy matching
+    FUZZY_THRESHOLD = 0.25
+    MIN_QUERY_LENGTH = 3
+    use_fuzzy = len(sanitized_query) >= MIN_QUERY_LENGTH
+    threshold = FUZZY_THRESHOLD if use_fuzzy else 0.1
 
-    # For short queries, use substring matching instead of fuzzy matching
-    use_fuzzy_matching = len(sanitized_query) >= MIN_QUERY_LENGTH
-    threshold = FUZZY_THRESHOLD if use_fuzzy_matching else 0.1
+    def match_score(query: str, text: str) -> float:
+        if use_fuzzy:
+            return difflib.SequenceMatcher(None, query, text).ratio()
+        if query in text:
+            match_pos = text.find(query)
+            return 1.0 - (match_pos / max(len(text), 1))
+        return 0.0
 
-    # Additional debug info
-    logger.info("🔍 [SEARCH] Query details:")
-    logger.info(f"  - Original query: '{search_query}'")
-    logger.info(f"  - Sanitized query: '{sanitized_query}'")
-    logger.info(f"  - Query length: {len(sanitized_query)}")
-    logger.info(f"  - Using {'fuzzy' if use_fuzzy_matching else 'substring'} matching")
-    logger.info(f"  - Threshold: {threshold}")
-    logger.info(
-        f"🔍 [SEARCH] Query length: {len(sanitized_query)}, using {'fuzzy' if use_fuzzy_matching else 'substring'} matching with threshold {threshold}"
-    )
-
-    total_messages_searched = 0
     for current_chat_id, chat_data in target_chats.items():
         chat_name = chat_data.get("name", "Unnamed Chat")
         history = chat_data.get("history", [])
-        logger.info(
-            f"🔍 [SEARCH] Searching chat '{chat_name}' ({current_chat_id}) with {len(history)} messages"
-        )
-
-        # Log sample content for debugging
-        if history:
-            sample_msg = history[0]
-            if isinstance(sample_msg, list) and len(sample_msg) >= 2:
-                logger.info(f"🔍 [SEARCH] Sample content from '{chat_name}':")
-                logger.info(f"  User: '{sample_msg[0][:100]}...'")
-                logger.info(f"  Bot:  '{sample_msg[1][:100]}...'")
-
         for i, message_pair in enumerate(history):
-            total_messages_searched += 1
-
-            # Defensive programming: ensure message_pair is properly structured
             if not isinstance(message_pair, list) or len(message_pair) < 2:
-                logger.warning(
-                    f"🔍 [SEARCH] Skipping malformed message pair {i}: {message_pair}"
-                )
                 continue
-
-            user_msg_original = message_pair[0] or ""
-            bot_resp_original = message_pair[1] or ""
-
-            # Skip empty messages
-            if not user_msg_original and not bot_resp_original:
-                logger.debug(f"🔍 [SEARCH] Skipping empty message pair {i}")
+            user_msg = message_pair[0] or ""
+            bot_msg = message_pair[1] or ""
+            if not user_msg and not bot_msg:
                 continue
-
-            user_msg_lower = user_msg_original.lower()
-            bot_resp_lower = bot_resp_original.lower()
-
-            logger.info(
-                f"🔍 [SEARCH_DEBUG] Searching message pair {i}: User='{user_msg_original[:100]}...', Bot='{bot_resp_original[:100]}...'"
-            )
-
-            # Check user message
-            user_match_score = 0
-            if use_fuzzy_matching:
-                # Use fuzzy matching for longer queries
-                user_match_score = difflib.SequenceMatcher(
-                    None, sanitized_query, user_msg_lower
-                ).ratio()
-                logger.info(
-                    f"🔍 [SEARCH_DEBUG] User message fuzzy score: {user_match_score:.3f} for '{sanitized_query}' in '{user_msg_original[:100]}...'"
-                )
-            else:
-                # Use substring matching for short queries
-                if sanitized_query in user_msg_lower:
-                    # Calculate a simple score based on how early the match appears
-                    match_pos = user_msg_lower.find(sanitized_query)
-                    user_match_score = 1.0 - (match_pos / max(len(user_msg_lower), 1))
-                    logger.info(
-                        f"🔍 [SEARCH_DEBUG] User message substring score: {user_match_score:.3f} for '{sanitized_query}' in '{user_msg_original[:100]}...'"
-                    )
-                else:
-                    user_match_score = 0
-                    logger.info(
-                        f"🔍 [SEARCH_DEBUG] User message no match for '{sanitized_query}' in '{user_msg_original[:100]}...'"
-                    )
-
-            # Check bot response
-            bot_match_score = 0
-            if use_fuzzy_matching:
-                # Use fuzzy matching for longer queries
-                bot_match_score = difflib.SequenceMatcher(
-                    None, sanitized_query, bot_resp_lower
-                ).ratio()
-                logger.info(
-                    f"🔍 [SEARCH_DEBUG] Bot message fuzzy score: {bot_match_score:.3f} for '{sanitized_query}' in '{bot_resp_original[:100]}...'"
-                )
-            else:
-                # Use substring matching for short queries
-                if sanitized_query in bot_resp_lower:
-                    # Calculate a simple score based on how early the match appears
-                    match_pos = bot_resp_lower.find(sanitized_query)
-                    bot_match_score = 1.0 - (match_pos / max(len(bot_resp_lower), 1))
-                    logger.info(
-                        f"🔍 [SEARCH_DEBUG] Bot message substring score: {bot_match_score:.3f} for '{sanitized_query}' in '{bot_resp_original[:100]}...'"
-                    )
-                else:
-                    bot_match_score = 0
-                    logger.info(
-                        f"🔍 [SEARCH_DEBUG] Bot message no match for '{sanitized_query}' in '{bot_resp_original[:100]}...'"
-                    )
-
-            # Add user message match if it meets the threshold
-            logger.info(
-                f"🔍 [SEARCH_DEBUG] User message score {user_match_score:.3f} vs threshold {threshold}"
-            )
-            if user_match_score >= threshold:
-                logger.info(
-                    f"🔍 [SEARCH] User message match found! Score: {user_match_score:.2f}, Chat: {chat_name}, Index: {i}"
-                )
+            user_score = match_score(sanitized_query, user_msg.lower())
+            bot_score = match_score(sanitized_query, bot_msg.lower())
+            if user_score >= threshold:
                 search_results.append(
                     {
                         "chat_id": current_chat_id,
                         "chat_name": chat_name,
                         "message_index": i,
                         "message_type": "user",
-                        "content": user_msg_original,  # Keep original casing for display
-                        "similarity_score": round(user_match_score, 2),
+                        "content": user_msg,
+                        "similarity_score": round(user_score, 2),
                     }
                 )
-
-            # Add bot response match if it meets the threshold
-            logger.info(
-                f"🔍 [SEARCH_DEBUG] Bot message score {bot_match_score:.3f} vs threshold {threshold}"
-            )
-            if bot_match_score >= threshold:
-                logger.info(
-                    f"🔍 [SEARCH] Bot message match found! Score: {bot_match_score:.2f}, Chat: {chat_name}, Index: {i}"
-                )
+            if bot_score >= threshold:
                 search_results.append(
                     {
                         "chat_id": current_chat_id,
                         "chat_name": chat_name,
                         "message_index": i,
                         "message_type": "bot",
-                        "content": bot_resp_original,  # Keep original casing for display
-                        "similarity_score": round(bot_match_score, 2),
+                        "content": bot_msg,
+                        "similarity_score": round(bot_score, 2),
                     }
                 )
 
-    logger.info(
-        f"🔍 [SEARCH] Search completed. Total messages searched: {total_messages_searched}, Results found: {len(search_results)}"
-    )
-
     if search_results:
-        # Sort results by similarity score in descending order for better relevance
         search_results.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
-        logger.info(f"🔍 [SEARCH] Returning {len(search_results)} results")
         return search_results, f"Found {len(search_results)} matching entries."
     else:
-        logger.info("🔍 [SEARCH] No results found")
         return [], "No matching entries found."
 
 
@@ -788,6 +655,9 @@ async def get_chatbot_response(
              (empty_message_input, updated_history, current_chat_id, all_user_chats_data, debug_info)
     :rtype: Tuple[str, List[List[str]], str, Dict[str, Any], str]
     """
+    # Delayed import to avoid circular import
+    from llm.chatModel import get_convo_hist_answer, initialize_llm_and_db, is_llm_ready
+
     # Ensure LLM and DB are initialized for every call (safe due to internal lock)
     if not is_llm_ready():
         await initialize_llm_and_db()

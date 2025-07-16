@@ -99,12 +99,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup styles/ ./styles/
-COPY --chown=appuser:appgroup src/scripts/entrypoint.py ./
-COPY --chown=appuser:appgroup src/tests/ ./tests/
-
-# Copy Docker build tracking files (if they exist)
-COPY --chown=appuser:appgroup docker/copy_build_data.sh ./
-RUN chmod +x ./copy_build_data.sh && ./copy_build_data.sh
 
 # Expose port
 EXPOSE 7860
@@ -114,11 +108,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:7860/ || exit 1
 
 # Set entrypoint and command
-ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-dev/bin/python", "/app/entrypoint.py"]
 CMD ["python", "src/app.py"]
 
 # Print build information
-RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /app/entrypoint.py" && \
-    echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
+RUN echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
     echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
     echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)"

@@ -4,6 +4,7 @@ Chat Model module for the NYP FYP CNC Chatbot.
 Integrates with OpenAI and other LLM providers. Loads API keys and configuration from environment variables using dotenv.
 """
 
+import contextlib
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -72,6 +73,15 @@ client: Optional[openai.OpenAI] = None
 db: Optional[Any] = None
 app = None
 llm_init_lock = threading.Lock()
+
+
+def get_model():
+    global llm
+    if llm is None:
+        import asyncio
+
+        asyncio.run(initialize_llm_and_db())
+    return llm
 
 
 async def initialize_llm_and_db() -> None:
@@ -280,32 +290,33 @@ def match_keywords(question: str) -> List[str]:
         return []
     cached = get_cached_response(question)
     if cached is not None:
-        try:
+        with contextlib.suppress(Exception):
             predictions = json.loads(cached)
             if isinstance(predictions, list):
                 return predictions
-        except Exception:
-            pass
     try:
-        tool_param = ChatCompletionToolParam(
-            type="function",
-            function=FunctionDefinition(
-                name="match_keywords",
-                description="Match the question to relevant keywords",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "prediction": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of matched keywords",
-                        }
-                    },
-                    "required": ["prediction"],
-                },
-            ),
-        )
 
+        def get_chat_completion():
+            return ChatCompletionToolParam(
+                type="function",
+                function=FunctionDefinition(
+                    name="match_keywords",
+                    description="Match the question to relevant keywords",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "prediction": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of matched keywords",
+                            }
+                        },
+                        "required": ["prediction"],
+                    },
+                ),
+            )
+
+        tool_param = get_chat_completion()
         if client is None:
             logging.error("OpenAI client not initialized")
             return []

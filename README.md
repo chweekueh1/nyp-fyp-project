@@ -60,6 +60,16 @@ python setup.py --docs
 
 Docs available at <http://127.0.0.1:8080>
 
+### ⏳️ Benchmarking
+
+Benchmarks for various function and API calls in the codebase can be triggered via:
+
+```bash
+python setup.py --run-benchmarks
+```
+
+It will output to the `<project root>/data` directory once complete.
+
 ### 🔧 Code Quality
 
 Pre-commit hooks with ruff for linting and formatting:

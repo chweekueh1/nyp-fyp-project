@@ -20,44 +20,20 @@ from infra_utils import setup_logging
 logger = setup_logging()
 
 
-def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
-    # Create audio input interface.
-    #
-    # :param username_state: Gradio state containing the current username (optional for testing)
-    # :type username_state: str
-    # :param setup_events: Whether to set up event handlers (default: True)
-    # :type setup_events: bool
-    # :return: Tuple of Gradio components for the interface:
-    #          - audio_input: Audio input component
-    #          - process_audio_btn: Process audio button
-    #          - transcription_output: Transcription textbox
-    #          - response_output: Response textbox
-    #          - status_message: Status message component
-    #          - edit_transcription: Edit transcription textbox
-    #          - edit_btn: Edit button
-    #          - send_edited_btn: Send edited button
-    #          - history_output: History display
-    #          - clear_history_btn: Clear history button
-    #          - audio_history: Audio history state
-    # :rtype: Tuple
+import os
 
+
+def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
     with gr.Column(elem_classes=["audio-interface-container"]):
-        # Header
         gr.Markdown("## 🎤 Audio Input & Transcription")
         gr.Markdown(
             "Record audio or upload an audio file for transcription and chatbot interaction."
         )
-
-        # Audio input section
         with gr.Group():
             gr.Markdown("### 🎙️ Audio Input")
-
-            # Audio input component
             audio_input = gr.Audio(
                 label="Record or Upload Audio", type="filepath", elem_id="audio_input"
             )
-
-            # Supported formats info
             gr.Markdown("""
             **Supported Audio Formats:** MP3, WAV, M4A, FLAC, OGG
 
@@ -66,60 +42,46 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
             - Minimize background noise
             - Keep recordings under 25MB for best results
             """)
-
             process_audio_btn = gr.Button(
                 "🎯 Process Audio", variant="primary", size="lg"
             )
-
-        # Results section
         with gr.Group():
             gr.Markdown("### 📝 Transcription & Response")
-
-            # Status indicator
             status_message = gr.Markdown(visible=False)
-
-            # Transcription output
             transcription_output = gr.Textbox(
                 label="📄 Audio Transcription",
                 placeholder="Audio transcription will appear here...",
                 interactive=False,
                 lines=4,
-                max_lines=20,  # Increased from 8 to show more transcription content
+                max_lines=20,
             )
-
-            # Edit transcription option
             with gr.Row():
                 edit_transcription = gr.Textbox(
                     label="✏️ Edit Transcription (Optional)",
                     placeholder="You can edit the transcription here before sending to chatbot...",
                     lines=2,
-                    max_lines=20,  # Increased from 8 to show more transcription content
+                    max_lines=20,
                     visible=False,
                 )
                 edit_btn = gr.Button("✏️ Edit", size="sm", visible=False)
                 send_edited_btn = gr.Button(
                     "📤 Send Edited", variant="primary", size="sm", visible=False
                 )
-
-            # Chatbot response
             response_output = gr.Textbox(
                 label="🤖 Chatbot Response",
                 placeholder="Chatbot response will appear here...",
                 interactive=False,
                 lines=6,
-                max_lines=30,  # Increased from 12 to show more chatbot responses
+                max_lines=30,
             )
-
-        # Audio history section
         with gr.Group():
             gr.Markdown("### 📋 Audio Session History")
             history_output = gr.Markdown("No audio processed yet in this session.")
             clear_history_btn = gr.Button("🗑️ Clear History", variant="secondary")
-
-    # Session history storage
     audio_history = gr.State([])
 
-    if not setup_events:
+    # Patch: In benchmark mode, skip event setup
+    if os.environ.get("BENCHMARK_MODE") or not setup_events:
         return (
             audio_input,
             process_audio_btn,

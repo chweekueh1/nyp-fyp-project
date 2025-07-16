@@ -4,6 +4,7 @@ Enhanced Content Extraction Module for NYP FYP Chatbot
 This module provides advanced file content extraction, cleaning, and keyword filtering utilities for the chatbot's file classification and search features. It supports parallel processing, integration with LLM keyword cache, and robust handling of various file types.
 """
 
+import contextlib
 import os
 import subprocess
 import tempfile
@@ -299,10 +300,8 @@ def extract_with_pandoc(
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if temp_path:
-            try:
+            with contextlib.suppress(Exception):
                 os.unlink(temp_path)
-            except Exception:
-                pass  # Already logged warning if it fails in finally block
         if result.returncode == 0:
             content = result.stdout.strip()
             if content:
