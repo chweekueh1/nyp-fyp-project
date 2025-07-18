@@ -68,13 +68,46 @@ RUN apk add --no-cache \
 # Create user and directories
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
-    mkdir -p /home/appuser/.nypai-chatbot/data/{cache,vector_store/chroma_db,memory_persistence,nltk_data,chat_sessions,user_info,uploads,test_uploads,logs} && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/cache && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/vector_store/chroma_db && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/memory_persistence && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/nltk_data && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/chat_sessions && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/user_info && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/uploads && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/test_uploads && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/logs && \
     mkdir -p /app/data && \
+    mkdir -p /app/data/memory_persistence && \
+    mkdir -p /app/data/keyword && \
+    mkdir -p /app/data/chat_sessions && \
+    chmod -R 777 /app/data/memory_persistence && \
+    chmod -R 777 /app/data/keyword && \
+    chmod -R 777 /app/data/chat_sessions && \
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/memory_persistence && \
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/chat_sessions && \
     mkdir -p /app/docs/modules /app/docs/modules/src && \
+    mkdir -p /tmp/nypai-chatbot/sqlite && \
     chown -R appuser:appgroup /app && \
     chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
+    chown -R appuser:appgroup /tmp/nypai-chatbot && \
+    chown -R appuser:appgroup /app/data && \
+    chown -R appuser:appgroup /app/data/memory_persistence && \
+    chown -R appuser:appgroup /app/data/keyword && \
+    chown -R appuser:appgroup /app/data/chat_sessions && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data/memory_persistence && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data/chat_sessions && \
     chmod -R 755 /home/appuser/.nypai-chatbot && \
-    chmod -R 755 /app
+    chmod -R 755 /app && \
+    chmod -R 777 /tmp/nypai-chatbot/sqlite && \
+    chmod -R 777 /app/data && \
+    chmod -R 777 /app/data/memory_persistence && \
+    chmod -R 777 /app/data/keyword && \
+    chmod -R 777 /app/data/chat_sessions && \
+    chmod -R 777 /home/appuser/.nypai-chatbot/data && \
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/memory_persistence && \
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/chat_sessions
 
 # Switch to non-root user
 USER appuser
@@ -96,8 +129,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --upgrade pip wheel setuptools && \
     uv pip install --prerelease=allow -r requirements-dev.txt
 
+# Download NLTK stopwords corpus to the correct directory
+RUN ${VENV_PATH}/bin/python -c "import nltk; nltk.download('stopwords', download_dir='/home/appuser/.nypai-chatbot/data/nltk_data')"
+
+
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
+COPY --chown=appuser:appgroup data/ ./data/
 COPY --chown=appuser:appgroup styles/ ./styles/
 
 # Expose port

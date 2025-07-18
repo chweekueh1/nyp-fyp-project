@@ -19,7 +19,7 @@ import json
 import os
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from .config import get_chatbot_dir
+from infra_utils import get_chatbot_dir
 from .timezone_utils import get_utc_timestamp
 
 # Set up logging
@@ -48,7 +48,7 @@ class SQLiteDatabase:
         self.db_name = os.path.basename(db_path).replace(".db", "")
         self._init_database()
 
-    def _init_database(self):
+    def _init_database(self):  # sourcery skip: extract-method
         """Initialize the database with required tables."""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -475,19 +475,18 @@ class SQLiteDatabase:
         results = self.execute_query(query, (username, limit))
 
         classifications = []
-        for row in results:
-            classifications.append(
-                {
-                    "file_path": row[0],
-                    "classification_result": row[1],
-                    "sensitivity_level": row[2],
-                    "security_level": row[3],
-                    "created_at": row[4],
-                    "file_size": row[5],
-                    "extraction_method": row[6],
-                }
-            )
-
+        classifications.extend(
+            {
+                "file_path": row[0],
+                "classification_result": row[1],
+                "sensitivity_level": row[2],
+                "security_level": row[3],
+                "created_at": row[4],
+                "file_size": row[5],
+                "extraction_method": row[6],
+            }
+            for row in results
+        )
         return classifications
 
 

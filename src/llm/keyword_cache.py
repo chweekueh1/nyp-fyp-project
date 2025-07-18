@@ -21,8 +21,10 @@ except ImportError:
         "NLTK configuration not available, stopword filtering will be skipped."
     )
 
+from infra_utils import get_chatbot_dir
+
 # Use BASE_CHATBOT_DIR and env var for cache path
-BASE_CHATBOT_DIR = os.getenv("BASE_CHATBOT_DIR", os.getcwd())
+BASE_CHATBOT_DIR = get_chatbot_dir()
 default_cache_path = os.path.join("data", "keyword_cache", "keywords_cache.db")
 CACHE_PATH = os.path.join(
     BASE_CHATBOT_DIR, os.getenv("KEYWORD_CACHE_PATH", default_cache_path)

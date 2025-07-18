@@ -6,6 +6,7 @@ environment management, and NLTK configuration for both local and Docker deploym
 It is used throughout the project for consistent infrastructure operations and test environment cleanup.
 """
 
+import contextlib
 import os
 import logging
 import shutil
@@ -245,13 +246,11 @@ def get_docker_venv_path(mode="prod") -> str:
         "test": "docker/Dockerfile.test",
     }
     dockerfile = dockerfile_map.get(mode, "docker/Dockerfile")
-    try:
+    with contextlib.suppress(Exception):
         with open(dockerfile, "r") as f:
             for line in f:
                 if line.strip().startswith("ARG VENV_PATH="):
                     return line.strip().split("=", 1)[1]
-    except Exception:
-        pass
     # Fallbacks
     if mode == "dev":
         return "/home/appuser/.nypai-chatbot/venv-dev"

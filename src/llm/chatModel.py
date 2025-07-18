@@ -39,8 +39,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from infra_utils import get_chatbot_dir
+
 # --- Environment Setup and Path Resolution ---
-BASE_CHATBOT_DIR = os.getcwd()
+BASE_CHATBOT_DIR = get_chatbot_dir()
 
 default_db_path = os.path.join("data", "vector_store", "chroma_db")
 DATABASE_PATH = rel2abspath(
@@ -124,12 +126,17 @@ async def initialize_llm_and_db() -> None:
                 create_folders(os.path.dirname(KEYWORDS_DATABANK_PATH))
                 create_folders(os.path.dirname(LANGCHAIN_CHECKPOINT_PATH))
                 create_folders(CACHE_DIR)
+                # Ensure /app/data/memory_persistence exists (for Docker volume mounts)
+                os.makedirs("/app/data/memory_persistence", exist_ok=True)
             except PermissionError as e:
                 logging.warning(f"Permission denied creating directories: {e}")
             except Exception as e:
                 logging.warning(f"Failed to create directories: {e}")
 
             logging.info("🤖 Initializing LLM components...")
+            print(
+                "🤖 [DEBUG] Initializing LLM components..."
+            )  # Always visible in Docker logs
             llm = ChatOpenAI(temperature=0.8, model="gpt-4o-mini")
             embedding = OpenAIEmbeddings(
                 model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")

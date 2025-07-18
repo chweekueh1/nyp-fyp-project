@@ -417,7 +417,7 @@ def extract_pdf_content(file_path: str) -> Optional[str]:
 
 def extract_text_file_content(
     file_path: str, pre_stripped_temp: Optional[str] = None
-) -> Optional[str]:
+) -> Optional[str]:  # sourcery skip: extract-method
     """
     Extracts content from text-based files, limited to the first CHUNK_CHAR_THRESHOLD characters.
     If the file is shorter than the threshold, the entire content is extracted.

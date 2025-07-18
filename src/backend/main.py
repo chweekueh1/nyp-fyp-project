@@ -46,7 +46,7 @@ async def init_backend() -> None:
             if llm_funcs:
                 logger.info("✅ LLM functions initialized")
                 # Explicitly initialize LLM and DB
-                llm_funcs["initialize_llm_and_db"]()
+                await llm_funcs["initialize_llm_and_db"]()
                 logger.info("✅ LLM and DB initialized after backend startup")
             else:
                 logger.warning("⚠️ LLM functions not available")

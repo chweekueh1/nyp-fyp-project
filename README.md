@@ -3,6 +3,8 @@
 A chatbot to help staff identify and use correct sensitivity labels in communications.
 Built with Python, Gradio, Pandoc, Tesseract OCR, and OpenAI.
 
+## **The software is in a beta state, expect bugs quirks and potentially broken code.**
+
 ## 🚀 Quick Start
 
 Recommended: Use Docker and Docker Compose for setup and running.
@@ -25,6 +27,10 @@ cp .env.dev .env   # Add your OpenAI API key to .env
 python setup.py --docker-build
 python setup.py --docker-run
 ```
+
+`setup.py` is just a wrapper over Docker commands, so run them directly if you are unable to run the setup script on Windows.
+
+Note that certain paths in the source code are hard coded.
 
 ### 🐳 Docker & Multi-Container
 

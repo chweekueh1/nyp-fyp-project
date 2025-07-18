@@ -21,7 +21,8 @@ import json
 import numpy as np
 from typing import List, Dict, Any, Optional  # noqa: F401
 from performance_utils import lazy_loader
-from .config import DATABASE_PATH, EMBEDDING_MODEL
+from infra_utils import get_chatbot_dir
+from .config import EMBEDDING_MODEL
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
@@ -39,18 +40,31 @@ class DuckDBVectorStore:
     """
 
     def __init__(self, db_path: str, collection_name: str, embedding_model: str):
-        self.db_path = db_path
+        import logging
+
+        logger = logging.getLogger(__name__)
+        # Ensure db_path is absolute and inside Docker volume
+        base_dir = get_chatbot_dir()
+        abs_db_path = os.path.join(base_dir, "data", "vector_store", "duck_db.db")
+        os.makedirs(abs_db_path, exist_ok=True)
+        self.db_path = abs_db_path
         self.collection_name = collection_name
         self.embedding_model = embedding_model
 
         # Create collection-specific database file in subdirectory
-        collection_dir = os.path.join(db_path, collection_name)
+        collection_dir = os.path.join(self.db_path, collection_name)
         create_folders(collection_dir)
         self.db_file = os.path.join(collection_dir, f"{collection_name}.db")
 
+        logger.info(
+            f"🔍 [DuckDBVectorStore] Initializing vector DB for collection '{collection_name}' at '{self.db_file}'"
+        )
         self.conn = duckdb.connect(self.db_file)
         self._ensure_table()
         self.embedding = OpenAIEmbeddings(model=embedding_model)
+        logger.info(
+            f"✅ [DuckDBVectorStore] Vector DB for '{collection_name}' initialized successfully"
+        )
 
     def _ensure_table(self):
         """Ensure the database table exists with the correct schema.
@@ -223,7 +237,7 @@ class DuckDBRetriever(BaseRetriever):
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
-    ) -> List[Document]:
+    ) -> List[Document]:  # sourcery skip: class-extract-method
         """Get relevant documents for a query using LangChain interface.
 
         :param query: The search query.
@@ -267,9 +281,19 @@ def get_duckdb_collection(collection_name: str) -> DuckDBVectorStore:
     :return: DuckDBVectorStore instance for the specified collection.
     :rtype: DuckDBVectorStore
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"🔍 [get_duckdb_collection] Loading DuckDB vector store for collection '{collection_name}'"
+    )
+    # Always use the Docker volume path for DuckDB
+    base_dir = get_chatbot_dir()
+    db_path = os.path.join(base_dir, "data", "vector_store", "duck_db.db")
+    os.makedirs(db_path, exist_ok=True)
     return lazy_loader.load_module(
         f"duckdb_{collection_name}",
-        lambda: DuckDBVectorStore(DATABASE_PATH, collection_name, EMBEDDING_MODEL),
+        lambda: DuckDBVectorStore(db_path, collection_name, EMBEDDING_MODEL),
     )
 
 
@@ -280,7 +304,13 @@ def get_chat_db() -> DuckDBVectorStore:
     :return: DuckDBVectorStore instance for chat documents.
     :rtype: DuckDBVectorStore
     """
-    return get_duckdb_collection("chat")
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info("🔍 [get_chat_db] Initializing DuckDB chat vector database...")
+    db = get_duckdb_collection("chat")
+    logger.info("✅ [get_chat_db] DuckDB chat vector database ready.")
+    return db
 
 
 def get_classification_db() -> DuckDBVectorStore:

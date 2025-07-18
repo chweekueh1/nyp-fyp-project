@@ -52,6 +52,7 @@ def fix_nypai_chatbot_permissions():
     """
     Fix permissions for key NYP FYP Chatbot directories and files.
     Ensures the current user has read/write/execute access to .nypai-chatbot and /app directories.
+    Also ensures /app/data/memory_persistence is owned by UID 1001 and is world-writable if running in Docker/dev.
     """
     paths = [
         os.path.expanduser("~/.nypai-chatbot"),
@@ -72,6 +73,33 @@ def fix_nypai_chatbot_permissions():
             except Exception as e:
                 print(f"Warning: Could not set permissions for {path}: {e}")
 
+    # --- Memory persistence directory fix for Docker/dev ---
+    # Only attempt if running on Linux and the directory exists
+    mem_persist_host = os.path.join(os.getcwd(), "data", "memory_persistence")
+    if os.path.exists(mem_persist_host):
+        try:
+            fix_memory_persistence_permissions(mem_persist_host)
+        except Exception as e:
+            print(f"Warning: Could not fix memory_persistence permissions: {e}")
+
+
+def fix_memory_persistence_permissions(mem_persist_host):
+    """
+    Set owner to UID 1001 (appuser) and group 1001, and permissions to 777 for memory_persistence.
+    """
+
+    # Only run chown if we are root or have sudo
+    if os.geteuid() == 0:
+        os.system(f"chown -R 1001:1001 '{mem_persist_host}'")
+    # Always set permissions to 777 for dev
+    os.chmod(mem_persist_host, 0o777)
+    for root, dirs, files in os.walk(mem_persist_host):
+        for d in dirs:
+            os.chmod(os.path.join(root, d), 0o777)
+        for f in files:
+            os.chmod(os.path.join(root, f), 0o666)
+    print(f"✅ Fixed permissions for memory persistence: {mem_persist_host}")
+
 
 # Register signal handlers for graceful shutdown
 signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
@@ -89,21 +117,74 @@ if os.path.exists(venv_path):
     except Exception as e:
         print(f"Warning: Could not remove venv at {venv_path}: {e}")
 
+
+# Always fix permissions before any Docker build/run operation
+def is_docker_build_or_run():
+    docker_keywords = [
+        "docker",
+        "build",
+        "run",
+        "compose",
+        "up",
+        "down",
+        "start",
+        "stop",
+        "restart",
+    ]
+    return any(any(kw in arg.lower() for kw in docker_keywords) for arg in sys.argv)
+
+
+# Always fix permissions before any Docker build/run operation, regardless of command
+def always_fix_permissions_before_docker():
+    """
+    Always fix permissions before any Docker build/run operation, and before any interactive prompt.
+    This function should be called:
+      - before any Docker build/run command
+      - before any interactive prompt (e.g., "Which docker image would you like to build and run?")
+      - at the start of the script
+    """
     # Skip permission fix for docs/Sphinx commands or if 'sphinx' is in the command
-if (
-    all(arg not in sys.argv for arg in ["--docs"])
-    and all("sphinx" not in arg.lower() for arg in sys.argv)
-    and os.name != "nt"
-):
-    entrypoint_path = os.path.join(
-        os.path.dirname(__file__), "scripts", "entrypoint.sh"
-    )
-    if os.path.exists(entrypoint_path):
+    if (
+        all(arg not in sys.argv for arg in ["--docs"])
+        and all("sphinx" not in arg.lower() for arg in sys.argv)
+        and os.name != "nt"
+    ):
+        entrypoint_path = os.path.join(
+            os.path.dirname(__file__), "scripts", "entrypoint.sh"
+        )
+        if os.path.exists(entrypoint_path):
+            try:
+                os.chmod(entrypoint_path, 0o755)
+            except Exception as e:
+                print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
+        # Always fix permissions before any Docker build/run command or prompt
+        fix_nypai_chatbot_permissions()
+
+
+def ensure_sudo():
+    """
+    Relaunch the script with sudo if not running as root (Linux/macOS).
+    On Windows, print a warning and continue (permission fixes are not supported).
+    """
+    if os.name == "nt":
+        print(
+            "⚠️  Permission and ownership fixes are not supported on Windows. Continuing without them."
+        )
+        return
+    if os.geteuid() != 0:
+        print("🔒 This operation requires elevated (sudo) permissions.")
         try:
-            os.chmod(entrypoint_path, 0o755)
+            # Re-exec the script with sudo, preserving all arguments
+            args = ["sudo", sys.executable] + sys.argv
+            os.execvp("sudo", args)
         except Exception as e:
-            print(f"Warning: Could not chmod +x {entrypoint_path}: {e}")
-    fix_nypai_chatbot_permissions()
+            print(f"❌ Failed to escalate privileges with sudo: {e}")
+            sys.exit(1)
+
+
+# Call at the very start of the script
+ensure_sudo()
+always_fix_permissions_before_docker()
 
 # Now continue with the rest of the imports and logger setup
 from infra_utils import setup_logging, get_docker_venv_python
@@ -113,6 +194,19 @@ from infra_utils import setup_logging, get_docker_venv_python
 logger = setup_logging()  # Get the configured logger instance
 
 print("setup.py argv:", sys.argv)
+
+
+# --- Ensure permissions are fixed before any interactive prompt ---
+def prompt_with_permission_fix(prompt_text, *args, **kwargs):
+    """
+    Wrapper for input() or prompt functions that ensures permissions are fixed before prompting.
+    """
+    always_fix_permissions_before_docker()
+    return input(prompt_text, *args, **kwargs)
+
+
+# Example usage in your script:
+# image_choice = prompt_with_permission_fix("Which docker image would you like to build and run? ")
 
 # Add a global variable for the env file path, defaulting to .env
 ENV_FILE_PATH = os.environ.get("DOCKER_ENV_FILE", ".env")
@@ -473,45 +567,6 @@ def print_build_stats(image_name: str):
     if avg_build_time is not None:
         print(f"  Average build time: {avg_build_time:.2f} seconds")
     print()
-
-
-def docker_run():
-    """
-    Build and run a selected Docker image, tracking build times in a local SQLite database and JSON file.
-    Passes --env-file .env when running the container for benchmarks, similar to --docs.
-    Only records build time if the build actually did work (not just used cache).
-    """
-    image_name = "nyp-fyp-chatbot-dev"
-    build_cmd = [
-        "docker",
-        "build",
-        "-f",
-        "docker/Dockerfile.dev",
-        "-t",
-        image_name,
-        ".",
-    ]
-    print(f"Building image: {' '.join(build_cmd)}")
-    from datetime import datetime
-
-    t0 = datetime.now()
-    build_result = subprocess.run(build_cmd, capture_output=True, text=True)
-    t1 = datetime.now()
-    build_time = (t1 - t0).total_seconds()
-
-    build_output = (build_result.stdout or "") + (build_result.stderr or "")
-    # Only record build time if the build actually did something (not just used cache)
-    if "Successfully built" in build_output or "writing image" in build_output:
-        print(f"✅ Built {image_name} in {build_time:.2f} seconds")
-        record_docker_build(image_name, build_time)
-    else:
-        print(f"✅ {image_name} is up to date (no build needed, using cache).")
-    print_build_stats(image_name)
-    # Run the image
-    # For benchmarks and docs, pass --env-file .env to docker run
-    run_cmd = ["docker", "run", "--rm", "-it", "--env-file", ".env", image_name]
-    print(f"Running: {' '.join(run_cmd)}")
-    subprocess.run(run_cmd)
 
 
 def docker_test(test_target: Optional[str] = None) -> None:
@@ -1256,7 +1311,60 @@ def build_and_record_docker_image(image_name, dockerfile_path):
 
 def docker_build():
     """Build the development Docker image and record build time."""
-    build_and_record_docker_image("nyp-fyp-chatbot-dev", "docker/Dockerfile")
+    build_and_record_docker_image("nyp-fyp-chatbot-dev", "docker/Dockerfile.dev")
+
+
+def docker_run():
+    """
+    Run the development Docker container interactively after ensuring the image is built.
+    """
+    ensure_docker_running()
+    image_name = "nyp-fyp-chatbot-dev"
+    container_name = "nyp-fyp-chatbot-dev"
+
+    # Check if image exists
+    try:
+        subprocess.run(
+            ["docker", "image", "inspect", image_name],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        print(f"❌ Docker image {image_name} not found. Building it first...")
+        docker_build()
+
+    # Stop and remove existing container if it exists
+    with contextlib.suppress(Exception):
+        subprocess.run(
+            ["docker", "stop", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["docker", "rm", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    run_command = [
+        "docker",
+        "run",
+        "-it",
+        "--name",
+        container_name,
+        "--env-file",
+        ENV_FILE_PATH,
+        "-v",
+        f"{os.getcwd()}:/app",
+        "-p",
+        "7680:7860",
+        image_name,
+    ]
+
+    print(f"🐳 Starting dev container: {' '.join(run_command)}")
+    logger.info(f"Starting dev Docker container: {' '.join(run_command)}")
+    subprocess.run(run_command, check=True)
 
 
 def docker_build_bench():
@@ -1431,9 +1539,8 @@ def main(shutdown_requested=False):
             start = time.time()
             docker_build()
             duration = int(time.time() - start)
-            sys.path.append("scripts")
-            docker_run()
             print(f"Total Runtime {duration} seconds")
+            docker_run()
         elif choice == "2":
             print("docker_build_test: Not implemented yet.")
             print("🐳 Starting test container... (not implemented)")
@@ -1444,7 +1551,6 @@ def main(shutdown_requested=False):
             start = time.time()
             duration = int(time.time() - start)
             build_and_run_docs()
-            docker_docs()
         elif choice == "5":
             start = time.time()
             docker_build_all()

@@ -133,6 +133,7 @@ def search_interface(
 
         try:
             logger.info("🔍 [SEARCH_UI] Calling backend search_chat_history...")
+            # Use backend's search_chat_history which returns (results, status_message)
             found_results, status_message = search_chat_history(query.strip(), username)
             logger.info(
                 f"🔍 [SEARCH_UI] Backend returned {len(found_results)} results, status: '{status_message}'"
@@ -153,7 +154,7 @@ def search_interface(
                             }
                         )
 
-            # Format results
+            # Format results using backend's format_search_results
             result_text = ""
             if found_results:
                 result_text += format_search_results(
@@ -166,7 +167,7 @@ def search_interface(
             if not found_results and not audio_results:
                 stats_text = f"❌ No results found for '{query}'"
                 result_text = f"**No results found for '{query}'**\n\n{status_message}. Try increasing the length of the query."
-                return result_text, stats_text
+                return format_markdown(result_text), stats_text
 
             stats_text = f"✅ Found {len(found_results) + len(audio_results)} result{'s' if (len(found_results) + len(audio_results)) != 1 else ''} for '{query}'"
             return format_markdown(result_text), stats_text
@@ -262,18 +263,21 @@ def search_interface(
 
     # Bind events
     logger.info("🔍 [SEARCH_UI] Binding search events")
+
+    # Helper to build inputs list
+    def _inputs_with_audio(*args):
+        if audio_history_state is not None:
+            return [*args, audio_history_state]
+        return list(args)
+
     search_query.submit(
-        fn=lambda q, u, a=audio_history_state: _handle_search_query(
-            q, u, a.value if a else None
-        ),
-        inputs=[search_query, username_state],
+        fn=lambda q, u, *rest: _handle_search_query(q, u, rest[0] if rest else None),
+        inputs=_inputs_with_audio(search_query, username_state),
         outputs=[search_results_md, search_stats],
     )
     search_btn.click(
-        fn=lambda q, u, a=audio_history_state: _handle_search_query(
-            q, u, a.value if a else None
-        ),
-        inputs=[search_query, username_state],
+        fn=lambda q, u, *rest: _handle_search_query(q, u, rest[0] if rest else None),
+        inputs=_inputs_with_audio(search_query, username_state),
         outputs=[search_results_md, search_stats],
     )
     logger.info("🔍 [SEARCH_UI] Search events bound successfully")

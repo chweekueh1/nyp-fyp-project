@@ -309,7 +309,7 @@ def login_interface(setup_events: bool = True) -> tuple:
 
                 # Execute the backend call
                 result = loop.run_until_complete(
-                    do_register_backend(username.strip(), password, email.strip())
+                    do_register_backend(username.strip(), email.strip(), password)
                 )
 
                 # Debug logging

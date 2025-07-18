@@ -191,9 +191,18 @@ def create_new_chat(username: str, chat_name: str = "New Chat") -> str:
     :type chat_name: str
     :return: The ID of the newly created chat session.
     :rtype: str
+
+    :raises Exception: If the parent directory for chat sessions cannot be created.
     """
     chat_id = str(uuid.uuid4())
     user_chats = _get_chat_metadata_cache(username)
+    user_chat_dir = _get_user_chat_dir(username)
+    # Ensure the parent directory exists before saving
+    try:
+        user_chat_dir.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.error(f"Failed to create parent directory for chat sessions: {e}")
+        raise
     user_chats[chat_id] = {
         "name": chat_name,
         "created_at": now_singapore().isoformat(),

@@ -62,7 +62,12 @@ def _load_chat_by_id(
 
     # Retrieve chat history from the in-memory state
     chat_info = all_chats_data.get(selected_chat_id, {})
+    # Ensure history is a list of [user, bot] pairs as per backend format
     history = chat_info.get("history", [])
+    # Defensive: If history is not a list of lists, convert it
+    if history and (not isinstance(history[0], list) or len(history[0]) != 2):
+        # Try to convert dicts to lists if needed
+        history = [[msg.get("user", ""), msg.get("bot", "")] for msg in history]
     chat_name = chat_info.get("name", "New Chat")
 
     # Return values. Interactivity is handled by app.py.
@@ -238,6 +243,7 @@ def chatbot_ui(
                 ),
                 elem_classes=["chatbot-display"],
                 render_markdown=True,
+                type="messages",
             )
             msg = gr.Textbox(
                 show_label=False,
@@ -296,4 +302,145 @@ def chatbot_ui(
             clear_chat_status,
             new_chat_btn,
         )
-    # ... rest of the function unchanged ...
+
+    # --- Enable interactivity for chat UI components after login ---
+    chat_selector.interactive = True
+    msg.interactive = True
+    send_btn.interactive = True
+    new_chat_btn_from_interface.interactive = True
+    clear_chat_btn.interactive = True
+
+    # --- Event Handlers ---
+
+    # 1. Load chat when chat_selector changes
+    def on_chat_selector_change(selected_chat_id, username, all_chats_data):
+        return _load_chat_by_id(selected_chat_id, username, all_chats_data)
+
+    chat_selector.change(
+        fn=on_chat_selector_change,
+        inputs=[chat_selector, username_state, all_chats_data_state],
+        outputs=[chat_history_state, chat_id_state, rename_input, debug_md],
+    )
+
+    # 2. Send message (on send_btn click or msg.submit)
+    async def on_send_message(message, history, username, chat_id, all_chats_data):
+        from backend.chat import get_chatbot_response
+
+        # Defensive: If chat_id is empty, create a new chat
+        if not chat_id or chat_id == "new_chat_id":
+            chat_id = "new_chat_id"
+        # Await backend response
+        result = await get_chatbot_response(message, history, username, chat_id)
+        # result: (empty_message, updated_history, current_chat_id, all_user_chats_data, debug_info)
+        (
+            empty_message,
+            updated_history,
+            current_chat_id,
+            all_user_chats_data,
+            debug_info,
+        ) = result
+        return (
+            updated_history,
+            current_chat_id,
+            all_user_chats_data,
+            "",  # Clear message input
+            debug_info,
+        )
+
+    send_btn.click(
+        fn=on_send_message,
+        inputs=[
+            msg,
+            chat_history_state,
+            username_state,
+            chat_id_state,
+            all_chats_data_state,
+        ],
+        outputs=[
+            chat_history_state,
+            chat_id_state,
+            all_chats_data_state,
+            msg,
+            debug_md,
+        ],
+        api_name="send_message",
+    )
+    msg.submit(
+        fn=on_send_message,
+        inputs=[
+            msg,
+            chat_history_state,
+            username_state,
+            chat_id_state,
+            all_chats_data_state,
+        ],
+        outputs=[
+            chat_history_state,
+            chat_id_state,
+            all_chats_data_state,
+            msg,
+            debug_md,
+        ],
+        api_name="send_message_submit",
+    )
+
+    # 3. New chat button
+    def on_new_chat(username, all_chats_data):
+        return _create_new_chat_ui_handler(username, all_chats_data)
+
+    new_chat_btn_from_interface.click(
+        fn=on_new_chat,
+        inputs=[username_state, all_chats_data_state],
+        outputs=[
+            chat_id_state,
+            chat_history_state,
+            rename_input,
+            all_chats_data_state,
+            chat_selector,
+        ],
+    )
+
+    # 4. Clear chat button
+    def on_clear_chat(chat_id, username):
+        return _clear_current_chat(chat_id, username)
+
+    clear_chat_btn.click(
+        fn=on_clear_chat,
+        inputs=[chat_id_state, username_state],
+        outputs=[
+            chat_history_state,
+            chat_id_state,
+            clear_chat_status,
+            all_chats_data_state,
+            debug_md,
+        ],
+    )
+
+    # 5. Rename chat button
+    def on_rename_chat(chat_id, new_name, username, all_chats_data):
+        from backend.chat import rename_chat
+
+        status, updated_chats = rename_chat(chat_id, new_name, username, all_chats_data)
+        return status, updated_chats
+
+    rename_btn.click(
+        fn=on_rename_chat,
+        inputs=[chat_id_state, rename_input, username_state, all_chats_data_state],
+        outputs=[rename_status_md, all_chats_data_state],
+    )
+
+    return (
+        chat_selector,
+        chatbot,
+        msg,
+        send_btn,
+        rename_input,
+        rename_btn,
+        rename_status_md,
+        search_container,
+        search_stats_md,
+        debug_md,
+        clear_chat_btn,
+        clear_chat_status,
+        new_chat_btn,
+    )

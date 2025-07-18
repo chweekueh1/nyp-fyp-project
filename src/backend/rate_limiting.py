@@ -60,7 +60,7 @@ audio_rate_limiter = RateLimiter(AUDIO_RATE_LIMIT_REQUESTS, AUDIO_RATE_LIMIT_WIN
 auth_rate_limiter = RateLimiter(AUTH_RATE_LIMIT_REQUESTS, AUTH_RATE_LIMIT_WINDOW)
 
 
-async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
+async def check_rate_limit(user_id: str, operation_type: str = "chat") -> dict:
     """
     Check if a user has exceeded their rate limit for a specific operation.
 
@@ -68,18 +68,26 @@ async def check_rate_limit(user_id: str, operation_type: str = "chat") -> bool:
     :type user_id: str
     :param operation_type: Type of operation to check rate limit for.
     :type operation_type: str
-    :return: True if rate limit not exceeded, False otherwise.
-    :rtype: bool
+    :return: Dict with keys "allowed" (bool) and "retry_after" (int, seconds).
+    :rtype: dict
     """
     if operation_type == "audio":
-        return await audio_rate_limiter.check_and_update(user_id)
+        allowed = await audio_rate_limiter.check_and_update(user_id)
+        time_window = AUDIO_RATE_LIMIT_WINDOW
     elif operation_type == "auth":
-        return await auth_rate_limiter.check_and_update(user_id)
+        allowed = await auth_rate_limiter.check_and_update(user_id)
+        time_window = AUTH_RATE_LIMIT_WINDOW
     elif operation_type == "file_upload":
-        return await file_upload_rate_limiter.check_and_update(user_id)
+        allowed = await file_upload_rate_limiter.check_and_update(user_id)
+        time_window = FILE_UPLOAD_RATE_LIMIT_WINDOW
     else:
         # Default to chat rate limiter
-        return await chat_rate_limiter.check_and_update(user_id)
+        allowed = await chat_rate_limiter.check_and_update(user_id)
+        time_window = CHAT_RATE_LIMIT_WINDOW
+
+    # If not allowed, estimate retry_after as the window (not exact, but safe)
+    retry_after = 0 if allowed else time_window
+    return {"allowed": allowed, "retry_after": retry_after}
 
 
 def get_rate_limit_info(operation_type: str = "chat") -> dict:

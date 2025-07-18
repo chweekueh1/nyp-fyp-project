@@ -6,6 +6,7 @@ This module provides centralized NLTK configuration for the NYP FYP Chatbot appl
 It ensures NLTK data is stored in the .nypai-chatbot directory for consistency.
 """
 
+import contextlib
 import os
 import logging
 from typing import Set
@@ -40,16 +41,11 @@ def setup_nltk_data_path() -> str:
             for subdir in ["tokenizers", "corpora", "taggers"]:
                 subdir_path = os.path.join(nltk_data_path, subdir)
                 os.makedirs(subdir_path, exist_ok=True)
-                try:
+                with contextlib.suppress(Exception):
                     os.chmod(subdir_path, 0o777)
-                except Exception:
-                    pass
             # Set permissions to ensure appuser can write
-            try:
+            with contextlib.suppress(Exception):
                 os.chmod(nltk_data_path, 0o777)
-            except Exception:
-                pass
-
         # Configure NLTK to use this path
         if nltk_data_path not in nltk.data.path:
             nltk.data.path.insert(0, nltk_data_path)
@@ -78,13 +74,11 @@ def get_stopwords(language: str = "english") -> Set[str]:
         nltk_data_path = setup_nltk_data_path()
 
         try:
-            stop_words = set(stopwords.words(language))
-            return stop_words
+            return set(stopwords.words(language))
         except LookupError:
             if nltk_data_path:
                 nltk.download("stopwords", download_dir=nltk_data_path, quiet=True)
-                stop_words = set(stopwords.words(language))
-                return stop_words
+                return set(stopwords.words(language))
             else:
                 logger.warning("Could not download stopwords - no valid data path")
                 return _get_fallback_stopwords()

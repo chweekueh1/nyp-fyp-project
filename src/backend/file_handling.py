@@ -230,6 +230,9 @@ async def upload_file(file_content: bytes, filename: str, username: str) -> dict
         return {"error": str(e)}
 
 
+from infra_utils.nltk_config import get_stopwords
+
+
 async def data_classification(content: str, keywords: Optional[str] = None) -> dict:
     """
     Classify the content of a text file, using filtered keywords if provided.
@@ -247,15 +250,23 @@ async def data_classification(content: str, keywords: Optional[str] = None) -> d
         if not classification_funcs:
             return {"error": "Classification functions not available"}
 
+        # Filter out NLTK stopwords from content
+        stopwords = get_stopwords("english")
+        filtered_content = " ".join(
+            word for word in content.split() if word.lower() not in stopwords
+        )
+
         # Perform classification using keywords if provided
         if keywords:
-            result = classification_funcs.classify_text(content, keywords=keywords)
+            result = classification_funcs.classify_text(
+                filtered_content, keywords=keywords
+            )
         else:
-            result = classification_funcs.classify_text(content)
+            result = classification_funcs.classify_text(filtered_content)
 
         return {
             "classification": result,
-            "content_length": len(content),
+            "content_length": len(filtered_content),
         }
 
     except Exception as e:

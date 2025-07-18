@@ -21,7 +21,7 @@ import logging
 import re
 from typing import List, Tuple
 from contextlib import contextmanager
-from .config import get_chatbot_dir
+from infra_utils import get_chatbot_dir
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -155,7 +155,91 @@ class ConsolidatedDatabase:
         self.db_name = os.path.basename(db_path).replace(
             ".db", ""
         )  # Extract db_name from path
+        logger.info(f"[DEBUG] Using user DB path: {self.db_path}")
         self._init_database()
+
+    def update_user(self, username: str, **kwargs):
+        """
+        Updates user information in the database.
+
+        Args:
+            username (str): The username to update.
+            **kwargs: Fields to update as keyword arguments.
+
+        Returns:
+            bool: True if update was successful, False otherwise.
+        """
+        if not kwargs:
+            return False
+
+        set_clauses = []
+        params = []
+
+        # Only allow updating these fields
+        allowed_fields = [
+            "username",
+            "email",
+            "password_hash",
+            "is_active",
+            "is_test_user",
+            "last_login",
+            "login_count",
+        ]
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                set_clauses.append(f"{key} = ?")
+                params.append(value)
+
+        if not set_clauses:
+            return False
+
+        # Always update updated_at
+        from .timezone_utils import get_utc_timestamp
+
+        params.extend((get_utc_timestamp(), username))
+        query = f"UPDATE users SET {', '.join(set_clauses)}, updated_at = ? WHERE username = ?"
+        return self.execute_update(query, tuple(params))
+
+    def get_user(self, username: str):
+        """
+        Get user by username.
+        Returns a dict or None.
+        """
+        query = "SELECT id, username, email, password_hash, created_at, updated_at, is_active, is_test_user, last_login, login_count FROM users WHERE username = ?"
+        results = self.execute_query(query, (username,))
+        if results:
+            row = results[0]
+            return {
+                "id": row[0],
+                "username": row[1],
+                "email": row[2],
+                "password_hash": row[3],
+                "created_at": row[4],
+                "updated_at": row[5],
+                "is_active": bool(row[6]),
+                "is_test_user": bool(row[7]),
+                "last_login": row[8],
+                "login_count": row[9] if row[9] is not None else 0,
+            }
+        return None
+
+    def create_user(
+        self, username: str, email: str, password_hash: str, is_test_user: bool = False
+    ) -> bool:
+        """
+        Create a new user.
+        Returns True if successful, False otherwise.
+        """
+        from .timezone_utils import get_utc_timestamp
+
+        timestamp = get_utc_timestamp()
+        query = """
+            INSERT INTO users (username, email, password_hash, created_at, updated_at, is_active, is_test_user, last_login, login_count)
+            VALUES (?, ?, ?, ?, ?, 1, ?, NULL, 0)
+        """
+        return self.execute_update(
+            query, (username, email, password_hash, timestamp, timestamp, is_test_user)
+        )
 
     def _init_database(self):
         """Initialize the database with required tables."""
@@ -529,7 +613,8 @@ def get_user_database() -> ConsolidatedDatabase:
     """Get the user database instance."""
     global _user_db
     if _user_db is None:
-        _user_db = ConsolidatedDatabase("users")
+        db_path = get_database_path("users")
+        _user_db = ConsolidatedDatabase(db_path)
     return _user_db
 
 
@@ -537,7 +622,8 @@ def get_llm_database() -> ConsolidatedDatabase:
     """Get the LLM database instance."""
     global _llm_db
     if _llm_db is None:
-        _llm_db = ConsolidatedDatabase("llm")
+        db_path = get_database_path("llm")
+        _llm_db = ConsolidatedDatabase(db_path)
     return _llm_db
 
 
@@ -545,7 +631,8 @@ def get_performance_database() -> ConsolidatedDatabase:
     """Get the performance database instance."""
     global _performance_db
     if _performance_db is None:
-        _performance_db = ConsolidatedDatabase("performance")
+        db_path = get_database_path("performance")
+        _performance_db = ConsolidatedDatabase(db_path)
     return _performance_db
 
 
@@ -553,7 +640,8 @@ def get_chat_database() -> ConsolidatedDatabase:
     """Get the chat database instance."""
     global _chat_db
     if _chat_db is None:
-        _chat_db = ConsolidatedDatabase("chat")
+        db_path = get_database_path("chat")
+        _chat_db = ConsolidatedDatabase(db_path)
     return _chat_db
 
 
@@ -561,5 +649,6 @@ def get_classifications_database() -> ConsolidatedDatabase:
     """Get the classifications database instance."""
     global _classifications_db
     if _classifications_db is None:
-        _classifications_db = ConsolidatedDatabase("classifications")
+        db_path = get_database_path("classifications")
+        _classifications_db = ConsolidatedDatabase(db_path)
     return _classifications_db

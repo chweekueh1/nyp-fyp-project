@@ -11,63 +11,32 @@ load_dotenv()
 
 import re
 import logging
-from typing import Dict, Any  # noqa: F401
+from typing import Dict, Any
 from hashing import verify_password, hash_password
 from .config import ALLOWED_EMAILS
 from .rate_limiting import check_rate_limit
 from .timezone_utils import get_utc_timestamp
 from .consolidated_database import get_user_database, InputSanitizer
 
-# Set up logging
 logger = logging.getLogger(__name__)
 
 
 def _validate_email(email: str) -> bool:
-    """
-    Validate email format and domain.
-
-    :param email: Email address to validate.
-    :type email: str
-    :return: True if valid, False otherwise.
-    :rtype: bool
-    """
     if not email or "@" not in email:
         return False
-
-    # Check if email domain is in allowed list
     domain = email.split("@")[1].lower()
     return domain in ALLOWED_EMAILS
 
 
 def _validate_username(username: str) -> bool:
-    """
-    Validate username format.
-
-    :param username: Username to validate.
-    :type username: str
-    :return: True if valid, False otherwise.
-    :rtype: bool
-    """
     if not username or len(username) < 3 or len(username) > 50:
         return False
-
-    # Allow alphanumeric characters, hyphens, and underscores
     return bool(re.match(r"^[a-zA-Z0-9_-]+$", username))
 
 
 def _validate_password(password: str) -> bool:
-    """
-    Validate password strength.
-
-    :param password: Password to validate.
-    :type password: str
-    :return: True if valid, False otherwise.
-    :rtype: bool
-    """
     if not password or len(password) < 8:
         return False
-
-    # Check for at least one uppercase, one lowercase, and one digit
     if not re.search(r"[A-Z]", password):
         return False
     if not re.search(r"[a-z]", password):
@@ -76,50 +45,41 @@ def _validate_password(password: str) -> bool:
 
 
 async def do_login(username: str, password: str) -> Dict[str, Any]:
-    """
-    Authenticate a user login.
-
-    :param username: Username for login.
-    :type username: str
-    :param password: Password for login.
-    :type password: str
-    :return: Dictionary containing login result.
-    :rtype: Dict[str, Any]
-    """
     try:
-        # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
+        if (
+            not isinstance(rate_limit_result, dict)
+            or "allowed" not in rate_limit_result
+        ):
+            logger.error(f"Rate limit result invalid: {rate_limit_result}")
+            return {
+                "status": "error",
+                "message": "Internal error: rate limit check failed.",
+            }
         if not rate_limit_result["allowed"]:
             return {
-                "success": False,
+                "status": "error",
                 "message": f"Rate limit exceeded. Try again in {rate_limit_result['retry_after']} seconds.",
             }
 
-        # Sanitize inputs using InputSanitizer
         try:
             username = InputSanitizer.sanitize_username(username)
             password = InputSanitizer.sanitize_string(password, max_length=100)
         except ValueError as e:
-            return {"success": False, "message": f"Invalid input: {e}"}
+            return {"status": "error", "message": f"Invalid input: {e}"}
 
         if not username or not password:
-            return {"success": False, "message": "Username and password are required."}
+            return {"status": "error", "message": "Username and password are required."}
 
-        # Get user from consolidated SQLite database
         db = get_user_database()
         user = db.get_user(username)
-
         if not user:
-            return {"success": False, "message": "Invalid username or password."}
-
-        if not user["is_active"]:
-            return {"success": False, "message": "Account is deactivated."}
-
-        # Verify password
+            return {"status": "error", "message": "Invalid username or password."}
+        if not user.get("is_active", True):
+            return {"status": "error", "message": "Account is deactivated."}
         if not verify_password(password, user["password_hash"]):
-            return {"success": False, "message": "Invalid username or password."}
+            return {"status": "error", "message": "Invalid username or password."}
 
-        # Update login statistics
         timestamp = get_utc_timestamp()
         db.update_user(
             username, last_login=timestamp, login_count=user.get("login_count", 0) + 1
@@ -127,90 +87,91 @@ async def do_login(username: str, password: str) -> Dict[str, Any]:
 
         logger.info(f"Successful login for user: {username}")
         return {
-            "success": True,
+            "status": "success",
             "message": "Login successful.",
-            "user": {
-                "username": user["username"],
-                "email": user["email"],
-                "is_test_user": user["is_test_user"],
-                "last_login": user.get("last_login"),
-                "login_count": user.get("login_count", 0),
-            },
+            "username": user["username"],
+            "email": user["email"],
+            "is_test_user": user.get("is_test_user", False),
+            "last_login": user.get("last_login"),
+            "login_count": user.get("login_count", 0),
         }
-
     except Exception as e:
         logger.error(f"Login error for user {username}: {e}")
-        return {"success": False, "message": "An error occurred during login."}
+        return {
+            "status": "error",
+            "message": "An error occurred during login.",
+        }
 
 
 async def do_register(username: str, email: str, password: str) -> Dict[str, Any]:
-    """
-    Register a new user.
-
-    :param username: Username for registration.
-    :type username: str
-    :param email: Email for registration.
-    :type email: str
-    :param password: Password for registration.
-    :type password: str
-    :return: Dictionary containing registration result.
-    :rtype: Dict[str, Any]
-    """
     try:
-        # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
+        if (
+            not isinstance(rate_limit_result, dict)
+            or "allowed" not in rate_limit_result
+        ):
+            logger.error(f"Rate limit result invalid: {rate_limit_result}")
+            return {
+                "status": "error",
+                "message": "Internal error: rate limit check failed.",
+            }
         if not rate_limit_result["allowed"]:
             return {
-                "success": False,
+                "status": "error",
                 "message": f"Rate limit exceeded. Try again in {rate_limit_result['retry_after']} seconds.",
             }
 
-        # Sanitize inputs using InputSanitizer
         try:
             username = InputSanitizer.sanitize_username(username)
             email = InputSanitizer.sanitize_email(email)
             password = InputSanitizer.sanitize_string(password, max_length=100)
         except ValueError as e:
-            return {"success": False, "message": f"Invalid input: {e}"}
+            return {"status": "error", "message": f"Invalid input: {e}"}
 
-        # Validate inputs
         if not username or not email or not password:
-            return {"success": False, "message": "All fields are required."}
-
+            return {"status": "error", "message": "All fields are required."}
         if not _validate_username(username):
             return {
-                "success": False,
+                "status": "error",
                 "message": "Username must be 3-50 characters long and contain only letters, numbers, hyphens, and underscores.",
             }
-
         if not _validate_email(email):
             return {
-                "success": False,
+                "status": "error",
                 "message": "Invalid email address or domain not allowed.",
             }
-
         if not _validate_password(password):
             return {
-                "success": False,
+                "status": "error",
                 "message": "Password must be at least 8 characters long and contain uppercase, lowercase, and numeric characters.",
             }
 
-        # Check if user already exists
         db = get_user_database()
         existing_user = db.get_user(username)
         if existing_user:
-            return {"success": False, "message": "Username already exists."}
+            return {"status": "error", "message": "Username already exists."}
 
-        # Hash password and create user
         password_hash = hash_password(password)
-        if not db.create_user(username, email, password_hash):
-            return {"success": False, "message": "Failed to create user account."}
+        create_result = db.create_user(username, email, password_hash)
+        if not create_result:
+            logger.error(
+                f"❌ [do_register] db.create_user returned {create_result} (type: {type(create_result)})"
+            )
+            return {"status": "error", "message": "Failed to create user account."}
 
         logger.info(f"New user registered: {username}")
-        return {"success": True, "message": "Registration successful."}
+        return {
+            "status": "success",
+            "message": "Registration successful.",
+            "username": username,
+            "email": email,
+        }
     except Exception as e:
         logger.error(f"Registration error for user {username}: {e}")
-        return {"success": False, "message": "An error occurred during registration."}
+        return {
+            "status": "error",
+            "message": "An error occurred during registration.",
+        }
 
 
 async def change_password(
@@ -230,7 +191,7 @@ async def change_password(
     """
     try:
         # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
         if not rate_limit_result["allowed"]:
             return {
                 "success": False,
@@ -299,7 +260,7 @@ async def do_login_test(username: str, password: str) -> Dict[str, Any]:
     """
     try:
         # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
         if not rate_limit_result["allowed"]:
             return {
                 "success": False,
@@ -341,20 +302,21 @@ async def do_login_test(username: str, password: str) -> Dict[str, Any]:
 
         logger.info(f"Successful test login for user: {username}")
         return {
-            "success": True,
+            "status": "success",
             "message": "Test login successful.",
-            "user": {
-                "username": user["username"],
-                "email": user["email"],
-                "is_test_user": user["is_test_user"],
-                "last_login": user.get("last_login"),
-                "login_count": user.get("login_count", 0),
-            },
+            "username": user["username"],
+            "email": user["email"],
+            "is_test_user": user["is_test_user"],
+            "last_login": user.get("last_login"),
+            "login_count": user.get("login_count", 0),
         }
 
     except Exception as e:
         logger.error(f"Test login error for user {username}: {e}")
-        return {"success": False, "message": "An error occurred during test login."}
+        return {
+            "status": "error",
+            "message": "An error occurred during test login.",
+        }
 
 
 async def do_register_test(username: str, email: str, password: str) -> Dict[str, Any]:
@@ -372,7 +334,7 @@ async def do_register_test(username: str, email: str, password: str) -> Dict[str
     """
     try:
         # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
         if not rate_limit_result["allowed"]:
             return {
                 "success": False,
@@ -421,11 +383,16 @@ async def do_register_test(username: str, email: str, password: str) -> Dict[str
             return {"success": False, "message": "Failed to create test user account."}
 
         logger.info(f"New test user registered: {username}")
-        return {"success": True, "message": "Test registration successful."}
+        return {
+            "status": "success",
+            "message": "Test registration successful.",
+            "username": username,
+            "email": email,
+        }
     except Exception as e:
         logger.error(f"Test registration error for user {username}: {e}")
         return {
-            "success": False,
+            "status": "error",
             "message": "An error occurred during test registration.",
         }
 
@@ -447,7 +414,7 @@ async def change_password_test(
     """
     try:
         # Rate limiting check
-        rate_limit_result = check_rate_limit("auth", username)
+        rate_limit_result = await check_rate_limit("auth", username)
         if not rate_limit_result["allowed"]:
             return {
                 "success": False,

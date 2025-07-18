@@ -13,6 +13,7 @@ import tempfile
 import shutil
 import collections
 import concurrent.futures
+import contextlib
 import warnings
 import shelve
 import subprocess
@@ -212,15 +213,13 @@ def dataProcessing(file: str, collection: Optional[DuckDBVectorStore] = None) ->
         cache_key = str(doc_hash)
         cached_data_str = get_cached_response(cache_key)
         if cached_data_str:
-            try:
+            with contextlib.suppress(Exception):
                 import json
 
                 cached_data = json.loads(cached_data_str)
                 doc.metadata["keywords"] = cached_data.get("keywords", [])
                 doc.metadata["top_10_keywords"] = cached_data.get("top_10_keywords", "")
                 return doc
-            except Exception:
-                pass
         doc_with_yake_keywords = FastYAKEMetadataTagger([doc])[0]
         doc.metadata["keywords"] = doc_with_yake_keywords.metadata.get("keywords", [])
         all_words_from_yake_keywords: List[str] = []
@@ -329,6 +328,7 @@ def strip_yaml_front_matter(md_path: str) -> str:
 
 
 def PandocTextExtraction(file_path: str) -> List[Document]:
+    # sourcery skip: extract-method
     """Extracts plain text content from a file using Pandoc.
 
     This function leverages the Pandoc command-line tool to convert various

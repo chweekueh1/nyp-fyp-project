@@ -194,22 +194,21 @@ def audio_interface(username_state: str, setup_events: bool = True) -> Tuple:
             # Use "new_chat_id" to let the backend create a proper chat
             chat_id = "new_chat_id"
 
-            # Get chatbot response
+            # Get chatbot response (expects backend to return (empty_message, updated_history, chat_id, all_chats_data, debug_info))
             response_result = await get_chatbot_response(
                 transcription, [], username, chat_id
             )
 
-            # Extract response from result
-            # get_chatbot_response returns (empty_message, updated_history, chat_id, all_chats_data, debug_info)
-            if len(response_result) >= 2:
+            # Extract response from backend's output format
+            if isinstance(response_result, (list, tuple)) and len(response_result) >= 2:
                 updated_history = response_result[1]
-                if updated_history and len(updated_history) > 0:
-                    # Get the last bot response from the updated history
-                    response = (
-                        updated_history[-1][1]
-                        if len(updated_history[-1]) > 1
-                        else "No response received"
-                    )
+                # Defensive: Ensure updated_history is a list of [user, bot] pairs
+                if (
+                    updated_history
+                    and isinstance(updated_history[-1], list)
+                    and len(updated_history[-1]) > 1
+                ):
+                    response = updated_history[-1][1]
                 else:
                     response = "No response received"
             else:

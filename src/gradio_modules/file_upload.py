@@ -20,7 +20,7 @@ def file_upload_ui(
     if os.environ.get("BENCHMARK_MODE"):
         return file_upload, file_btn, file_debug_md
 
-    def send_file(
+    async def send_file(
         user: str, file_obj: Any, history: List[List[str]], chat_id: str
     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         if not user:
@@ -35,10 +35,11 @@ def file_upload_ui(
                 gr.update(value="No file uploaded."),
                 gr.update(value=history),
             )
-        upload_dict = {"user": user, "file_obj": file_obj, "history": history}
+        upload_dict = {"username": user, "file_obj": file_obj, "history": history}
         if chat_id:
             upload_dict["chat_id"] = chat_id
-        response_dict = backend.handle_uploaded_file(upload_dict)
+        # Await the backend async handler
+        response_dict = await backend.handle_uploaded_file(upload_dict)
         new_history = response_dict.get("history", history)
         response_val = response_dict.get("response", "")
         if not isinstance(response_val, str):
@@ -53,5 +54,6 @@ def file_upload_ui(
         fn=send_file,
         inputs=[username_state, file_upload, chat_history_state, chat_id_state],
         outputs=[chat_history_state, file_debug_md, chat_history_state],
+        api_name="send_file_upload",
     )
     return file_upload, file_btn, file_debug_md
