@@ -1,16 +1,4 @@
-def load_custom_css():
-    import os
-
-    css = ""
-    styles_dir = os.path.join(os.path.dirname(__file__), "../styles")
-    for fname in ["styles.css", "performance.css"]:
-        fpath = os.path.join(styles_dir, fname)
-        if os.path.exists(fpath):
-            with open(fpath, "r", encoding="utf-8") as f:
-                css += f.read() + "\n"
-    return css
-
-
+import os
 import asyncio
 import gradio as gr
 
@@ -19,16 +7,35 @@ from gradio_modules.chatbot import chatbot_ui
 from gradio_modules.search_interface import search_interface
 from gradio_modules.audio_input import audio_interface
 from gradio_modules.stats_interface import create_stats_interface
-from gradio_modules.theme import flexcyon_theme
+from flexcyon_theme import flexcyon_theme
 
 from performance_utils import (
+    start_app_startup_tracking,
     mark_startup_milestone,
     complete_app_startup_tracking,
+    get_total_startup_time,
+    apply_all_optimizations,
 )
-from backend import init_backend, get_backend_status
+from backend import init_backend
+
+
+def load_custom_css():
+    css = ""
+    styles_dir = os.path.join(os.path.dirname(__file__), "../styles")
+    for fname in ["performance.css", "styles.css"]:
+        fpath = os.path.join(styles_dir, fname)
+        if os.path.exists(fpath):
+            with open(fpath, "r", encoding="utf-8") as f:
+                css += f.read() + "\n"
+    return css
 
 
 def main():
+    # --- Performance and startup tracking ---
+    start_app_startup_tracking()
+    apply_all_optimizations()
+    mark_startup_milestone("optimizations_applied")
+
     # Load custom CSS
     custom_css = load_custom_css()
 
@@ -44,119 +51,85 @@ def main():
             asyncio.set_event_loop(loop)
             loop.run_until_complete(init_backend())
             mark_startup_milestone("app.py: after backend init")
-            complete_app_startup_tracking()
             backend_ready["ready"] = True
-        except Exception:
+        except Exception as e:
+            mark_startup_milestone(f"app.py: backend init failed ({e})")
             backend_ready["ready"] = False
+        finally:
+            complete_app_startup_tracking()
+            total_time = get_total_startup_time()
+            print(
+                f"🟢 [DEBUG] App startup tracking complete. Total startup time: {total_time:.2f}s"
+            )
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     executor.submit(backend_init_thread)
 
-    # --- Loading Screen ---
+    # --- Gradio App UI ---
+    # --- Wait for backend to be ready before exposing the UI ---
+    import time
+
+    print("⏳ Waiting for backend to initialize before starting Gradio app...")
+    while not backend_ready["ready"]:
+        time.sleep(0.2)
+    print("✅ Backend initialized. Launching Gradio app...")
+
     with gr.Blocks(
         title="NYP FYP CNC Chatbot", theme=flexcyon_theme, css=custom_css
     ) as app:
-        with gr.Column(visible=True) as loading_container:
-            gr.Markdown(
-                """
-                # 🕒 Initializing Chatbot...
-                <div style="font-size:1.2em;">Please wait while the backend is starting up.<br>
-                This may take up to a minute on first launch.</div>
-                """,
-                elem_id="loading_screen",
-            )
-            loading_status = gr.Markdown(
-                "Backend status: Initializing...", elem_id="loading_status"
-            )
-
-        # Login interface - only visible when backend is ready and not logged in
-        with gr.Column(visible=False) as login_container:
-            (
-                logged_in_state,
-                username_state,
-                is_register_mode,
-                main_container,
-                error_message,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-                primary_btn,
-                secondary_btn,
-                show_password_btn,
-                show_confirm_btn,
-                password_visible,
-                confirm_password_visible,
-                header_subtitle,
-                header_instruction,
-                email_info,
-                password_requirements,
-            ) = login_interface(setup_events=True)
-
-        # Shared states for all tabs
+        # --- Shared States ---
         chat_id_state = gr.State("")
         chat_history_state = gr.State([])
         all_chats_data_state = gr.State({})
         debug_info_state = gr.State("")
-        audio_history_state = gr.State([])  # For audio session history
+        audio_history_state = gr.State([])
 
-        # Main application tabs - visibility controlled by login state
+        # --- Login Interface ---
+        # Place all login/register components in a visible column.
+        (
+            logged_in_state,
+            username_state,
+            is_register_mode,
+            main_container,
+            error_message,
+            username_input,
+            email_input,
+            password_input,
+            confirm_password_input,
+            primary_btn,
+            secondary_btn,
+            show_password_btn,
+            show_confirm_btn,
+            password_visible,
+            confirm_password_visible,
+            header_subtitle,
+            header_instruction,
+            email_info,
+            password_requirements,
+        ) = login_interface(setup_events=True)
+        with gr.Column(visible=True) as login_container:
+            # Do NOT call main_container.render() here! All components are already created and events are wired up in login_interface.
+            pass
+
+        # --- Main Tabs (hidden until login) ---
         with gr.Tabs(visible=False) as main_tabs:
-            pass  # Tabs will be dynamically constructed after backend is ready
+            pass  # Tabs will be constructed after login
 
-        # Add logout functionality
+        # --- Logout Handler ---
         def handle_logout():
-            """Handle logout - reset authentication state."""
             return (
                 False,  # logged_in_state = False
                 "",  # username_state = ""
-                gr.update(visible=False),  # main_tabs visible = False (hide tabs)
-                gr.update(visible=True),  # login_container visible = True (show login)
+                gr.update(visible=False),  # main_tabs
+                gr.update(visible=True),  # login_container
             )
 
-        # Handle login state changes to show/hide appropriate interfaces
-        def handle_login_state_change(logged_in: bool, username: str):
-            """Handle login state changes to show/hide appropriate interfaces."""
-            if logged_in:
-                # User logged in - hide login, show main tabs
-                return (
-                    gr.update(visible=False),  # login_container
-                    gr.update(visible=True),  # main_tabs
-                )
-            else:
-                # User not logged in - show login, hide main tabs
-                return (
-                    gr.update(visible=True),  # login_container
-                    gr.update(visible=False),  # main_tabs
-                )
-
-        # Connect login state changes to interface visibility
-        logged_in_state.change(
-            fn=handle_login_state_change,
-            inputs=[logged_in_state, username_state],
-            outputs=[login_container, main_tabs],
-        )
-
-        # Dynamically construct main tabs after backend is ready
+        # --- Main Tabs Construction ---
         def construct_main_tabs():
             with main_tabs:
                 # --- Chatbot Tab ---
                 with gr.Tab("💬 Chat"):
-                    (
-                        chat_selector,
-                        chatbot,
-                        msg,
-                        send_btn,
-                        rename_input,
-                        rename_btn,
-                        rename_status_md,
-                        search_container,
-                        search_stats_md,
-                        debug_md,
-                        clear_chat_btn,
-                        clear_chat_status,
-                        new_chat_btn,
-                    ) = chatbot_ui(
+                    chatbot_ui(
                         username_state,
                         chat_id_state,
                         chat_history_state,
@@ -166,13 +139,7 @@ def main():
 
                 # --- Search Tab ---
                 with gr.Tab("🔍 Search"):
-                    (
-                        search_container,
-                        search_query,
-                        search_btn,
-                        search_results_md,
-                        search_stats_md,
-                    ) = search_interface(
+                    search_interface(
                         username_state,
                         chat_id_state,
                         chat_history_state,
@@ -183,7 +150,6 @@ def main():
 
                 # --- File Upload Tab ---
                 with gr.Tab("📁 File Upload"):
-                    # Use the new file_classification interface and event setup
                     from gradio_modules.file_classification import (
                         file_classification_interface,
                         setup_file_classification_events,
@@ -205,12 +171,11 @@ def main():
 
                 # --- Stats Tab ---
                 with gr.Tab("📊 Stats"):
-                    # Use the new stats interface (returns a Gradio Interface)
                     stats_interface = create_stats_interface()
                     if hasattr(stats_interface, "launch"):
                         stats_interface.launch(inline=True, share=False)
 
-                # --- Reset Password Tab (if needed) ---
+                # --- Reset Password Tab ---
                 with gr.Tab("🔑 Reset Password"):
                     from gradio_modules.change_password import change_password_interface
 
@@ -219,7 +184,7 @@ def main():
                         logged_in_state=logged_in_state,
                     )
 
-                # Add logout button to the main tabs
+                # --- Logout Button ---
                 logout_btn = gr.Button("🚪 Logout", variant="secondary")
                 logout_btn.click(
                     fn=handle_logout,
@@ -231,75 +196,33 @@ def main():
                     ],
                 )
 
-        # --- Polling function to check backend status ---
-        def poll_backend_status():
-            try:
-                status = get_backend_status()
-                if status.get("ready", False) or backend_ready["ready"]:
-                    if (
-                        not hasattr(main_tabs, "_initialized")
-                        or not main_tabs._initialized
-                    ):
-                        construct_main_tabs()
-                        main_tabs._initialized = True
-                    return (
-                        gr.update(visible=False),  # loading_container
-                        gr.update(visible=True),  # login_container
-                        gr.update(visible=True),  # main_tabs
-                        "Backend status: Ready! Please log in.",
-                    )
-                msg = "Backend status: Initializing..."
-                if "error" in status:
-                    msg = f"Backend error: {status['error']}"
+        # --- Login State Change Handler ---
+        def handle_login_state_change(logged_in: bool, username: str):
+            if logged_in:
+                if not hasattr(main_tabs, "_initialized") or not main_tabs._initialized:
+                    construct_main_tabs()
+                    main_tabs._initialized = True
                 return (
-                    gr.update(visible=True),
-                    gr.update(visible=False),
-                    gr.update(visible=False),
-                    msg,
+                    gr.update(visible=False),  # login_container
+                    gr.update(visible=True),  # main_tabs
                 )
-            except Exception as e:
-                msg = f"Backend error: {e}"
+            else:
                 return (
-                    gr.update(visible=True),
-                    gr.update(visible=False),
-                    gr.update(visible=False),
-                    msg,
+                    gr.update(visible=True),  # login_container
+                    gr.update(visible=False),  # main_tabs
                 )
 
-        # --- Hidden polling button and thread ---
-        polling_btn = gr.Button(visible=False)
-
-        polling_btn.click(
-            fn=poll_backend_status,
-            outputs=[loading_container, login_container, main_tabs, loading_status],
-            queue=False,
+        logged_in_state.change(
+            fn=handle_login_state_change,
+            inputs=[logged_in_state, username_state],
+            outputs=[login_container, main_tabs],
         )
 
-        def start_polling():
-            import threading
-            import time
+    # Use optimized Gradio launch config to ensure server persists
+    from performance_utils import get_optimized_launch_config
 
-            def poll():
-                while True:
-                    try:
-                        polling_btn.click()
-                        time.sleep(1)
-                        # Stop polling if backend is ready and main_tabs is initialized
-                        if (
-                            hasattr(main_tabs, "_initialized")
-                            and main_tabs._initialized
-                        ):
-                            break
-                    except Exception:
-                        break
-
-            threading.Thread(target=poll, daemon=True).start()
-
-        # Start polling as soon as the UI is loaded
-        app.load(fn=lambda: None, outputs=[])  # dummy load to trigger UI load event
-        start_polling()
-
-    app.launch()
+    launch_config = get_optimized_launch_config()
+    app.launch(**launch_config)
 
 
 if __name__ == "__main__":

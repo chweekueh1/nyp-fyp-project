@@ -412,12 +412,15 @@ class StartupTimer:
     def complete_startup_tracking(self):
         """
         Complete the startup tracking and record the total startup time.
+        If startup tracking was not started, start it now.
         """
-        if self.startup_start_time is None:
-            logger.warning("⚠️ Startup tracking not started")
-            return
-
         import time
+
+        if self.startup_start_time is None:
+            logger.warning(
+                "⚠️ Startup tracking not started, calling start_startup_tracking() now"
+            )
+            self.start_startup_tracking()
 
         self.total_startup_time = time.time() - self.startup_start_time
         self.startup_completed = True
@@ -426,6 +429,7 @@ class StartupTimer:
         return self.total_startup_time
 
     def _log_comprehensive_startup_metrics(self):
+        # sourcery skip: extract-duplicate-method, extract-method
         """Log detailed startup performance metrics."""
         logger.info("=" * 80)
         logger.info("🎯 COMPLETE APP STARTUP PERFORMANCE REPORT")

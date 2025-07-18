@@ -815,6 +815,7 @@ class StatsInterface:
         return html
 
     def _format_llm_stats(self, llm: Dict[str, Any]) -> str:
+        # sourcery skip: class-extract-method
         """Format LLM stats for HTML.
 
         :param llm: LLM statistics
