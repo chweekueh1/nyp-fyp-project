@@ -7,14 +7,32 @@ Contains audio transcription and processing functions.
 import os
 import logging
 import tempfile
-from datetime import datetime, timezone  # noqa: F401
-from typing import Dict  # noqa: F401
+from typing import Dict, Any, Optional
 from .rate_limiting import check_rate_limit
-from .database import get_llm_functions
 from .timezone_utils import get_utc_timestamp
+from .consolidated_database import (
+    get_performance_database,
+    get_user_database,
+)  # Import performance_db
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Initialize database instances
+perf_db = get_performance_database()
+user_db = get_user_database()
+
+
+def _get_username_from_id(user_id: int) -> Optional[str]:
+    """Helper to retrieve username from user ID."""
+    try:
+        result = user_db.fetch_one(
+            "SELECT username FROM users WHERE id = ?", (user_id,)
+        )
+        return result[0] if result else None
+    except Exception as e:
+        logger.error(f"Error fetching username for user ID {user_id}: {e}")
+        return None
 
 
 def _ensure_client_initialized() -> bool:
@@ -48,177 +66,153 @@ async def audio_to_text(ui_state: dict) -> dict:
     username = ui_state.get("username")
     audio_file = ui_state.get("audio_file")
     history = ui_state.get("history", [])
-    chat_id = ui_state.get("chat_id", "default")
+    chat_id = ui_state.get("chat_id")
+    user_id = ui_state.get("user_id")  # Assuming user_id is passed in ui_state
+
+    # Get username from user_id if not directly available
+    if not username and user_id:
+        username = _get_username_from_id(user_id)
+
+    if not username:
+        return {"error": "Username or User ID is required."}
+
+    if not await check_rate_limit(username, "audio"):
+        return {
+            "history": history,
+            "response": "",
+            "transcript": "",
+            "debug_info": "Rate limit exceeded. Please try again later.",
+        }
 
     if not audio_file:
         return {
             "history": history,
-            "response": "[No audio file provided]",
-            "debug": "No audio.",
+            "response": "",
+            "transcript": "",
+            "debug_info": "No audio file provided.",
         }
 
-    if not username:
+    # Extract audio content (assuming audio_file is base64 encoded or similar if from UI)
+    # For now, let's assume audio_file is a path or bytes
+    if isinstance(audio_file, str) and os.path.exists(audio_file):
+        audio_content = audio_file
+        filename = os.path.basename(audio_file)
+    elif isinstance(audio_file, bytes):
+        # Handle bytes: save to temp file for transcription
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+            temp_audio.write(audio_file)
+            audio_content = temp_audio.name
+            filename = f"audio_{get_utc_timestamp().replace(':', '-').replace('.', '-')}.mp3"  # Generate a filename
+    else:
         return {
             "history": history,
-            "response": "[Error] Username required for audio processing",
-            "debug": "No username provided.",
-        }
-
-    # Check rate limit for audio operations
-    if not await check_rate_limit(username, "audio"):
-        return {
-            "history": history,
-            "response": "[Error] Rate limit exceeded for audio processing",
-            "debug": "Rate limit exceeded.",
+            "response": "",
+            "transcript": "",
+            "debug_info": "Invalid audio file format.",
         }
 
     try:
-        # Ensure client is initialized
-        if not _ensure_client_initialized():
+        transcription_result = await transcribe_audio(audio_content, filename, username)
+        transcript = transcription_result.get("transcript", "")
+        duration_seconds = transcription_result.get(
+            "duration_seconds", 0.0
+        )  # Assume transcribe_audio_async returns duration
+        model_used = transcription_result.get("model_used", "whisper-1")
+
+        if "error" in transcription_result:
+            logger.error(f"Audio transcription error: {transcription_result['error']}")
             return {
                 "history": history,
-                "response": "[Error] OpenAI client not initialized. Please ensure the backend is properly initialized and try again.",
-                "debug": "OpenAI client not ready.",
+                "response": "",
+                "transcript": "",
+                "debug_info": f"Audio transcription failed: {transcription_result['error']}",
             }
 
-        # Get LLM functions lazily
-        llm_funcs = get_llm_functions()
-        if not llm_funcs or not llm_funcs["is_llm_ready"]():
-            logging.error(
-                "LLM/DB not ready in audio_to_text. Backend may not be fully initialized."
-            )
+        if not transcript:
             return {
                 "history": history,
-                "response": "[Error] AI assistant is not fully initialized. Please try again later.",
-                "debug": "LLM/DB not ready.",
+                "response": "",
+                "transcript": "",
+                "debug_info": "No transcript obtained from audio.",
             }
 
-        # Transcribe audio
-        from . import config
-
-        with open(audio_file, "rb") as f:
-            transcript = config.client.audio.transcriptions.create(
-                model="whisper-1", file=f
-            ).text
-
-        # Now get chatbot response
-        result = llm_funcs["get_convo_hist_answer"](transcript, chat_id)
-        response = result["answer"]
-        history = history + [[f"[Audio: {audio_file}]", response]]
-
-        response_dict = {
-            "history": history,
-            "response": response,
-            "transcript": transcript,
-            "debug": "Audio transcribed and response generated.",
-        }
-        print(f"[DEBUG] backend.audio_to_text returning: {response_dict}")
-        return response_dict
-
-    except Exception as e:
-        print(f"[ERROR] backend.audio_to_text exception: {e}")
-        return {
-            "history": history,
-            "response": f"[Error] {e}",
-            "debug": f"Exception: {e}",
-        }
-
-
-def transcribe_audio(audio_file_path: str) -> str:
-    """Transcribe an audio file to text."""
-    try:
-        # Ensure client is initialized
-        if not _ensure_client_initialized():
-            return "Error transcribing audio: OpenAI client not initialized. Please ensure the backend is properly initialized and try again."
-
-        # Check if audio file exists
-        if not os.path.exists(audio_file_path):
-            logger.error(f"Audio file not found: {audio_file_path}")
-            return f"Error transcribing audio: File not found - {audio_file_path}"
-
-        # Check if audio file is readable
-        if not os.access(audio_file_path, os.R_OK):
-            logger.error(f"Cannot read audio file: {audio_file_path}")
-            return f"Error transcribing audio: Cannot read file - {audio_file_path}"
-
-        # Check file size (OpenAI has limits)
-        file_size = os.path.getsize(audio_file_path)
-        max_size = 25 * 1024 * 1024  # 25MB limit
-        if file_size > max_size:
-            logger.error(f"Audio file too large: {file_size} bytes (max: {max_size})")
-            return f"Error transcribing audio: File too large ({file_size / 1024 / 1024:.1f}MB, max 25MB)"
-
-        from . import config
-
-        with open(audio_file_path, "rb") as f:
-            transcript = config.client.audio.transcriptions.create(
-                model="whisper-1", file=f
-            ).text
-        return transcript
-
-    except Exception as e:
-        logger.error(f"Error in transcribe_audio: {e}")
-        return f"Error transcribing audio: {e}"
-
-
-async def transcribe_audio_async(audio_file: bytes, username: str) -> dict:
-    """Transcribe audio bytes asynchronously."""
-    try:
-        # Ensure client is initialized
-        if not _ensure_client_initialized():
-            return {
-                "status": "error",
-                "message": "OpenAI client not initialized. Please ensure the backend is properly initialized and try again.",
-            }
-
-        # Check rate limit
-        if not await check_rate_limit(username, "audio"):
-            return {
-                "status": "error",
-                "message": "Rate limit exceeded for audio processing",
-            }
-
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_file.write(audio_file)
-            temp_file_path = temp_file.name
-
+        # Log transcription details to the performance database
         try:
-            # Transcribe audio
-            from . import config
+            perf_db.execute_insert(
+                "INSERT INTO audio_transcriptions (username, audio_file_name, duration_seconds, transcription_length_chars, transcription_timestamp, model_used) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    username,
+                    filename,
+                    duration_seconds,
+                    len(transcript),
+                    get_utc_timestamp(),
+                    model_used,
+                ),
+            )
+            logger.info(f"Logged audio transcription for {username}: {filename}")
+        except Exception as db_e:
+            logger.error(
+                f"Failed to log audio transcription to DB for {username}: {db_e}"
+            )
 
-            with open(temp_file_path, "rb") as f:
-                transcript = config.client.audio.transcriptions.create(
-                    model="whisper-1", file=f
-                ).text
+        # Integrate with chat model for response
+        from chat import get_chatbot_response  # Import chat module's function
 
-            return {
-                "status": "success",
-                "transcript": transcript,
-                "processed_at": get_utc_timestamp(),
-            }
+        _, updated_history, final_chat_id, _, debug_info = await get_chatbot_response(
+            transcript,
+            chat_id,
+            user_id,  # Pass user_id for chat processing
+        )
 
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(temp_file_path)
-            except Exception as e:
-                logger.warning(f"Failed to delete temporary file {temp_file_path}: {e}")
+        return {
+            "history": updated_history,
+            "response": updated_history[-1]["content"]
+            if updated_history
+            else "",  # Last message is the LLM response
+            "transcript": transcript,
+            "chat_id": final_chat_id,
+            "debug_info": debug_info,
+        }
 
     except Exception as e:
-        logger.error(f"Error in transcribe_audio_async: {e}")
-        return {"status": "error", "message": f"Error transcribing audio: {e}"}
+        logger.error(f"Error in audio_to_text: {e}")
+        return {
+            "history": history,
+            "response": "",
+            "transcript": "",
+            "debug_info": f"An unexpected error occurred: {e}",
+        }
+    finally:
+        # Clean up temporary file if it was created
+        if (
+            isinstance(audio_content, str) and "temp" in audio_content
+        ):  # Simple check for temp files
+            try:
+                os.unlink(audio_content)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete temporary audio file {audio_content}: {e}"
+                )
 
 
-async def transcribe_audio_file_async(audio_path: str) -> Dict[str, str]:
+async def transcribe_audio(
+    audio_data: Any, filename: str, username: str
+) -> Dict[str, Any]:
     """
-    Transcribe an audio file asynchronously.
-
-    :param audio_path: Path to the audio file to transcribe.
-    :type audio_path: str
-    :return: Dictionary containing transcription result or error.
-    :rtype: Dict[str, str]
+    Transcribe audio data (file path or bytes) asynchronously.
+    This function will now be responsible for getting the duration as well.
+    :param audio_data: Path to the audio file or raw audio bytes.
+    :type audio_data: Any
+    :param filename: The filename to transcribe.
+    :type filename: str
+    :param username: The username to target.
+    :type username: str
+    :return: Dictionary containing transcription result, duration, model_used or error.
+    :rtype: Dict[str, Any]
     """
+    from . import config
+
+    temp_file_path = None
     try:
         # Ensure client is initialized
         if not _ensure_client_initialized():
@@ -226,22 +220,48 @@ async def transcribe_audio_file_async(audio_path: str) -> Dict[str, str]:
                 "error": "OpenAI client not initialized. Please ensure the backend is properly initialized and try again."
             }
 
-        if not os.path.exists(audio_path):
+        file_to_transcribe_path = audio_data
+        if isinstance(audio_data, bytes):
+            # Save bytes to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+                temp_audio.write(audio_data)
+                temp_file_path = temp_audio.name
+                file_to_transcribe_path = temp_file_path
+        elif not os.path.exists(audio_data):
             return {"error": "Audio file not found"}
 
-        from . import config
+        # Get audio duration
+        duration_seconds = 0.0
+        try:
+            # You might need a more robust audio metadata library like pydub, mutagen, or sox
+            # This is a placeholder for getting duration
+            # Example using a hypothetical `audio_metadata` module:
+            # audio_info = audio_metadata.load(file_to_transcribe_path)
+            # duration_seconds = audio_info.duration
+            pass  # Replace with actual audio duration extraction
+        except Exception as e:
+            logger.warning(f"Could not get audio duration for {filename}: {e}")
+            duration_seconds = 0.0  # Default to 0 if duration extraction fails
 
-        with open(audio_path, "rb") as f:
+        with open(file_to_transcribe_path, "rb") as f:
             transcript = config.client.audio.transcriptions.create(
                 model="whisper-1", file=f
             ).text
 
         return {
             "transcript": transcript,
-            "file_path": audio_path,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "file_path": file_to_transcribe_path,
+            "processed_at": get_utc_timestamp(),
+            "duration_seconds": duration_seconds,
+            "model_used": "whisper-1",  # Hardcoded for now, can be dynamic
         }
 
     except Exception as e:
-        logger.error(f"Error in transcribe_audio_file_async: {e}")
-        return {"error": str(e)}
+        logger.error(f"Error in transcribe_audio_async: {e}")
+        return {"error": f"Error transcribing audio: {e}"}
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary file {temp_file_path}: {e}")

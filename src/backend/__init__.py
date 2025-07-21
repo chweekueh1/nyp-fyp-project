@@ -54,7 +54,6 @@ from .chat import (
     search_chat_history,
     format_search_results,
     rename_chat,
-    list_user_chat_ids,  # 'rename_chat_file' removed
 )
 
 from .file_handling import (
@@ -134,7 +133,6 @@ __all__ = [
     "search_chat_history",
     "format_search_results",
     "rename_chat",
-    "list_user_chat_ids",  # 'rename_chat_file' removed
     # File handling
     "handle_uploaded_file",
     "upload_file",

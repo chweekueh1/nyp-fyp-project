@@ -1,3 +1,4 @@
+# login_and_register.py
 #!/usr/bin/env python3
 """Login and Registration Interface Module.
 
@@ -6,595 +7,357 @@ for the NYP FYP Chatbot application.
 """
 
 import gradio as gr
-
-import asyncio
 from infra_utils import setup_logging
+from backend.auth import do_login, do_register
+from backend.config import ALLOWED_EMAILS
 
 logger = setup_logging()
 
 
-import os
+def login_interface(
+    logged_in_state: gr.State,  # ACCEPT PASSED-IN STATE from app.py
+    username_state: gr.State,  # ACCEPT PASSED-IN STATE from app.py
+    is_register_mode: gr.State,  # ACCEPT PASSED-IN STATE from app.py
+) -> tuple:
+    """Create the login and registration interface components."""
 
-
-def login_interface(setup_events: bool = True) -> tuple:
-    """Create the login and registration interface with dynamic form switching."""
-
-    # State variables
-    logged_in_state = gr.State(False)
-    username_state = gr.State("")
-    is_register_mode = gr.State(False)  # Track which form is active
-
-    # State variables for password visibility
+    # State variables for password visibility (managed locally within this UI part)
     password_visible = gr.State(False)
     confirm_password_visible = gr.State(False)
 
-    # Create all components individually (avoid Gradio 5.x context manager issues)
-    gr.Markdown("# 🚀 NYP FYP Chatbot", elem_id="auth_title")
-    header_subtitle = gr.Markdown("## 🔐 Login", elem_id="auth_subtitle")
-    header_instruction = gr.Markdown(
-        "Please log in to access the chatbot.", elem_id="auth_instruction"
-    )
+    # Create all components individually within a Column context
+    with gr.Column(elem_id="login_register_container") as main_container:
+        gr.Markdown("# 🚀 NYP FYP Chatbot", elem_id="auth_title")
+        header_subtitle = gr.Markdown(
+            "## 🔐 Login", elem_id="auth_subtitle"
+        )  # Default to Login
+        header_instruction = gr.Markdown(
+            "Please log in to access the chatbot.", elem_id="auth_instruction"
+        )  # Default to Login
 
-    username_input = gr.Textbox(
-        label="Username or Email",
-        placeholder="Enter your username or email",
-        elem_id="username_input",
-    )
-    email_input = gr.Textbox(
-        label="Email",
-        placeholder="Enter your authorized email address",
-        elem_id="email_input",
-        visible=False,
-    )
-    email_info = gr.Markdown(
-        """
-    **Authorized Email Domains:**
-    - @nyp.edu.sg (NYP staff/faculty)
-    - @student.nyp.edu.sg (NYP students)
-    - Selected test emails for development
-    """,
-        elem_id="email_info",
-        visible=False,
-    )
-    password_input = gr.Textbox(
-        label="Password",
-        placeholder="Enter your password",
-        type="password",
-        elem_id="password_input",
-    )
-    show_password_btn = gr.Button("👁️", elem_id="show_password_btn", size="sm")
-    confirm_password_input = gr.Textbox(
-        label="Confirm Password",
-        placeholder="Confirm your password",
-        type="password",
-        elem_id="confirm_password_input",
-        visible=False,
-    )
-    show_confirm_btn = gr.Button(
-        "👁️", elem_id="show_confirm_btn", size="sm", visible=False
-    )
-    password_requirements = gr.Markdown(
-        """
-    **Password Requirements:**
-    - At least 8 characters long
-    - Contains uppercase and lowercase letters
-    - Contains at least one number
-    - Contains at least one special character (!@#$%^&*)
-    """,
-        elem_id="password_requirements",
-        visible=False,
-    )
-    primary_btn = gr.Button("Login", variant="primary", elem_id="primary_btn")
-    secondary_btn = gr.Button("Register", variant="secondary", elem_id="secondary_btn")
-    error_message = gr.Markdown(visible=False, elem_id="error_message")
-    main_container = gr.Column(elem_classes=["auth-container"])
+        error_message = gr.Markdown("", elem_id="auth_error_message", visible=True)
 
-    # Patch: In benchmark mode, always skip event setup
-    if os.environ.get("BENCHMARK_MODE") or not setup_events:
+        username_input = gr.Textbox(
+            label="Username",
+            placeholder="Enter your username",
+            elem_id="username_input",
+        )
+        email_input = gr.Textbox(
+            label="Email",
+            placeholder="Enter your authorized email address",
+            elem_id="email_input",
+            visible=False,  # Initially hidden for login mode
+        )
+        email_info = gr.Markdown(
+            f"**Note:** Only emails from `{', '.join(ALLOWED_EMAILS)}` are allowed for registration.",
+            elem_id="email_info",
+            visible=False,  # Initially hidden for login mode
+        )
+        password_input = gr.Textbox(
+            label="Password",
+            placeholder="Enter your password",
+            type="password",
+            elem_id="password_input",
+        )
+        show_password_btn = gr.Button("👁️", elem_id="show_password_btn", size="sm")
+
+        confirm_password_input = gr.Textbox(
+            label="Confirm Password",
+            placeholder="Confirm your password",
+            type="password",
+            visible=False,  # Initially hidden for login mode
+            elem_id="confirm_password_input",
+        )
+        show_confirm_btn = gr.Button(
+            "👁️", elem_id="show_confirm_btn", size="sm", visible=False
+        )  # Initially hidden for login mode
+
+        password_requirements = gr.Markdown(
+            """
+        **Password Requirements:**
+        <ul style="margin-top: 5px; margin-bottom: 5px;">
+            <li>Minimum 8 characters</li>
+            <li>At least one uppercase letter</li>
+            <li>At least one lowercase letter</li>
+            <li>At least one digit</li>
+        </ul>
+        """,
+            visible=False,  # Initially hidden for login mode
+            elem_id="password_requirements",
+        )
+
+        primary_btn = gr.Button(
+            "Login", variant="primary", elem_id="primary_auth_btn"
+        )  # Default to Login
+        secondary_btn = gr.Button(
+            "Don't have an account? Register",
+            variant="secondary",
+            elem_id="secondary_auth_btn",
+        )  # Default to Register prompt
+
+    # Event handlers (restored from older version, adapted for passed-in states)
+    # Password toggle handlers
+    def toggle_password(is_visible: bool) -> tuple:
+        """Toggle password visibility."""
+        if is_visible:
+            return gr.update(type="password"), "👁️", False
+        else:
+            return gr.update(type="text"), "🙈", True
+
+    def toggle_confirm_password(is_visible: bool) -> tuple:
+        """Toggle confirm password visibility."""
+        if is_visible:
+            return gr.update(type="password"), "👁️", False
+        else:
+            return gr.update(type="text"), "🙈", True
+
+    # Form switching handlers (adapted for passed-in is_register_mode)
+    def switch_to_register() -> tuple:
+        """Switch to register mode - show register fields and update labels."""
         return (
-            logged_in_state,
-            username_state,
-            is_register_mode,
-            main_container,
+            gr.update(value=True),  # is_register_mode = True
+            gr.update(value="## 📝 Register"),  # header_subtitle
+            gr.update(
+                value="Create a new account to access the chatbot."
+            ),  # header_instruction
+            gr.update(
+                label="Username", placeholder="Choose a username (3-20 characters)"
+            ),  # username_input
+            gr.update(visible=True),  # email_input
+            gr.update(visible=True),  # email_info
+            gr.update(
+                label="Password",
+                placeholder="Choose a strong password (min 8 characters)",
+            ),  # password_input
+            gr.update(visible=True),  # confirm_password_input
+            gr.update(visible=True),  # show_confirm_btn
+            gr.update(visible=True),  # password_requirements
+            gr.update(value="Register Account", variant="primary"),  # primary_btn
+            gr.update(value="Back to Login", variant="secondary"),  # secondary_btn
+            gr.update(
+                value="", visible=False
+            ),  # error_message (clear any previous errors)
+        )
+
+    def switch_to_login() -> tuple:
+        """Switch to login mode - hide register fields and update labels."""
+        return (
+            gr.update(value=False),  # is_register_mode = False
+            gr.update(value="## 🔐 Login"),  # header_subtitle
+            gr.update(
+                value="Please log in to access the chatbot."
+            ),  # header_instruction
+            gr.update(
+                label="Username",
+                placeholder="Enter your username",
+            ),  # username_input
+            gr.update(visible=False),  # email_input
+            gr.update(visible=False),  # email_info
+            gr.update(
+                label="Password", placeholder="Enter your password"
+            ),  # password_input
+            gr.update(visible=False),  # confirm_password_input
+            gr.update(visible=False),  # show_confirm_btn
+            gr.update(visible=False),  # password_requirements
+            gr.update(value="Login", variant="primary"),  # primary_btn
+            gr.update(
+                value="Don't have an account? Register", variant="secondary"
+            ),  # secondary_btn
+            gr.update(
+                value="", visible=False
+            ),  # error_message (clear any previous errors)
+        )
+
+    # Wire up password toggle events
+    show_password_btn.click(
+        fn=toggle_password,
+        inputs=[password_visible],
+        outputs=[password_input, show_password_btn, password_visible],
+        queue=False,  # UI responsiveness
+    )
+
+    show_confirm_btn.click(
+        fn=toggle_confirm_password,
+        inputs=[confirm_password_visible],
+        outputs=[
+            confirm_password_input,
+            show_confirm_btn,
+            confirm_password_visible,
+        ],
+        queue=False,  # UI responsiveness
+    )
+
+    # Wire up form switching events
+    def handle_secondary_btn_click_logic(current_is_register_mode_val: bool) -> tuple:
+        """Logic for secondary button click - switches between login/register modes."""
+        if current_is_register_mode_val:
+            return switch_to_login()
+        else:
+            return switch_to_register()
+
+    secondary_btn.click(
+        fn=handle_secondary_btn_click_logic,
+        inputs=[is_register_mode],  # Pass the value of the gr.State object
+        outputs=[
+            is_register_mode,  # Update the state itself
+            header_subtitle,
+            header_instruction,
+            username_input,
+            email_input,
+            email_info,
+            password_input,
+            confirm_password_input,
+            show_confirm_btn,
+            password_requirements,
+            primary_btn,
+            secondary_btn,
             error_message,
+        ],
+        queue=False,  # UI responsiveness
+    )
+
+    # Wire up primary button (login or register based on mode)
+    primary_btn.click(
+        fn=handle_primary_btn_click,
+        inputs=[
+            is_register_mode,  # Boolean value of the state
             username_input,
             email_input,
             password_input,
             confirm_password_input,
-            primary_btn,
-            secondary_btn,
-            show_password_btn,
-            show_confirm_btn,
-            password_visible,
-            confirm_password_visible,
-            header_subtitle,
-            header_instruction,
-            email_info,
-            password_requirements,
-        )
+            logged_in_state,  # Pass the current state objects
+            username_state,  # Pass the current state objects
+        ],
+        outputs=[
+            error_message,
+            logged_in_state,
+            username_state,
+        ],  # Update the states directly
+        queue=True,  # Allow queuing for backend operations
+    )
 
-    # Event handlers (only when setup_events=True)
-    if setup_events:
+    # Add Enter key support
+    password_input.submit(
+        fn=handle_primary_btn_click,
+        inputs=[
+            is_register_mode,
+            username_input,
+            email_input,
+            password_input,
+            confirm_password_input,
+            logged_in_state,
+            username_state,
+        ],
+        outputs=[error_message, logged_in_state, username_state],
+        queue=True,
+    )
 
-        def handle_login(username: str, password: str) -> tuple:
-            """Handle login attempt.
-
-            :param username: Username or email for login
-            :type username: str
-            :param password: Password for login
-            :type password: str
-            :return: Tuple of (login_success, username, error_message)
-            :rtype: tuple
-            :raises RuntimeError: When event loop is closed or other async operation fails
-            """
-            logger.info(f"Login attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value="❌ **Error:** Username is required"),
-                )
-            if not password or not password.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value="❌ **Error:** Password is required"),
-                )
-
-            try:
-                import os
-
-                testing = os.getenv("TESTING", "").lower() == "true"
-                if testing:
-                    from backend import do_login_test as do_login_backend
-                else:
-                    from backend import do_login as do_login_backend
-
-                # Use a more robust async approach
-                try:
-                    # Try to get existing event loop
-                    loop = asyncio.get_event_loop()
-                    if loop.is_closed():
-                        raise RuntimeError("Event loop is closed")
-                except RuntimeError:
-                    # Create new event loop if none exists or is closed
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                # Execute the backend call
-                result = loop.run_until_complete(
-                    do_login_backend(username.strip(), password)
-                )
-
-                # Debug logging to understand the exact response
-                logger.info(f"🔍 Backend login response for {username}: {result}")
-                logger.info(f"🔍 Response type: {type(result)}")
-                logger.info(f"🔍 Response repr: {repr(result)}")
-
-                # Validate result is a dictionary
-                if not isinstance(result, dict):
-                    logger.error(
-                        f"❌ Backend returned non-dict result: {type(result)} = {result}"
-                    )
-                    return (
-                        False,
-                        "",
-                        gr.update(
-                            visible=True,
-                            value="❌ **System error:** Invalid backend response format",
-                        ),
-                    )
-
-                status_value = result.get("status")
-                message_value = result.get("message", "")
-                logger.info(
-                    f"🔍 CRITICAL DEBUG: status_value = '{status_value}' (type: {type(status_value)})"
-                )
-                logger.info(
-                    f"🔍 CRITICAL DEBUG: message_value = '{message_value}' (type: {type(message_value)})"
-                )
-                logger.info(
-                    f"🔍 CRITICAL DEBUG: status_value == 'success' = {status_value == 'success'}"
-                )
-
-                # Check for success with explicit string comparison
-                if status_value == "success":
-                    actual_username = result.get("username", username.strip())
-                    user_email = result.get("email", "")
-                    logger.info(
-                        f"✅ SUCCESS PATH: Login successful for user: {actual_username}"
-                    )
-                    logger.info(f"✅ SUCCESS PATH: Email: {user_email}")
-                    logger.info(
-                        f"✅ SUCCESS PATH: Returning (True, '{actual_username}', gr.update(visible=False))"
-                    )
-                    return True, actual_username, gr.update(visible=False)
-                else:
-                    # Use the backend message directly without adding "Login failed:" prefix
-                    error_msg = message_value or "Authentication failed"
-                    logger.warning(f"❌ ERROR PATH: Login failed for user {username}")
-                    logger.warning(
-                        f"❌ ERROR PATH: Status: '{status_value}', Message: '{error_msg}'"
-                    )
-                    logger.warning(f"❌ ERROR PATH: Full result object: {result}")
-                    return (
-                        False,
-                        "",
-                        gr.update(visible=True, value=f"❌ **Error:** {error_msg}"),
-                    )
-            except Exception as e:
-                logger.error(f"Login error for user {username}: {e}")
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value=f"❌ **System error:** {str(e)}"),
-                )
-
-        def handle_register(
-            username: str, email: str, password: str, confirm: str
-        ) -> tuple:
-            """Handle registration attempt.
-
-            :param username: Username for registration
-            :type username: str
-            :param email: Email address for registration
-            :type email: str
-            :param password: Password for registration
-            :type password: str
-            :param confirm: Password confirmation
-            :type confirm: str
-            :return: Tuple of (registration_success, username, error_message)
-            :rtype: tuple
-            :raises RuntimeError: When event loop is closed or other async operation fails
-            """
-            logger.info(f"Registration attempt for user: {username}")
-
-            # Input validation
-            if not username or not username.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value="❌ **Error:** Username is required"),
-                )
-            if not email or not email.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value="❌ **Error:** Email is required"),
-                )
-            if not password or not password.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value="❌ **Error:** Password is required"),
-                )
-            if not confirm or not confirm.strip():
-                return (
-                    False,
-                    "",
-                    gr.update(
-                        visible=True, value="❌ **Error:** Please confirm your password"
-                    ),
-                )
-            if password != confirm:
-                return (
-                    False,
-                    "",
-                    gr.update(
-                        visible=True, value="❌ **Error:** Passwords do not match"
-                    ),
-                )
-
-            try:
-                import os
-
-                testing = os.getenv("TESTING", "").lower() == "true"
-                if testing:
-                    from backend import do_register_test as do_register_backend
-                else:
-                    from backend import do_register as do_register_backend
-
-                # Use a more robust async approach
-                try:
-                    # Try to get existing event loop
-                    loop = asyncio.get_event_loop()
-                    if loop.is_closed():
-                        raise RuntimeError("Event loop is closed")
-                except RuntimeError:
-                    # Create new event loop if none exists or is closed
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                # Execute the backend call
-                result = loop.run_until_complete(
-                    do_register_backend(username.strip(), email.strip(), password)
-                )
-
-                # Debug logging
-                logger.info(
-                    f"🔍 Backend registration response for {username}: {result}"
-                )
-                logger.info(f"🔍 Response type: {type(result)}")
-
-                # Validate result is a dictionary
-                if not isinstance(result, dict):
-                    logger.error(
-                        f"❌ Backend returned non-dict result: {type(result)} = {result}"
-                    )
-                    return (
-                        False,
-                        "",
-                        gr.update(
-                            visible=True,
-                            value="❌ **System error:** Invalid backend response format",
-                        ),
-                    )
-
-                status_value = result.get("status")
-                message_value = result.get("message", "")
-                logger.info(
-                    f"🔍 Registration status: '{status_value}', message: '{message_value}'"
-                )
-
-                if status_value == "success":
-                    registered_username = result.get("username", username.strip())
-                    registered_email = result.get("email", "")
-                    logger.info(
-                        f"✅ Registration successful for user: {registered_username}"
-                    )
-                    logger.info(f"✅ Registration email: {registered_email}")
-                    # Switch back to login mode and show success message
-                    return (
-                        False,
-                        "",
-                        gr.update(
-                            visible=True,
-                            value=f"✅ **Registration successful!** Account created for **{registered_username}**. Please log in with your new account.",
-                        ),
-                    )
-                else:
-                    # Use the backend message directly without adding "Registration failed:" prefix
-                    error_msg = message_value or "Registration failed"
-                    logger.warning(
-                        f"❌ Registration failed for user {username}: {error_msg}"
-                    )
-                    return (
-                        False,
-                        "",
-                        gr.update(
-                            visible=True,
-                            value=f"❌ **Error:** {error_msg}",
-                        ),
-                    )
-            except Exception as e:
-                logger.error(f"Registration error for user {username}: {e}")
-                return (
-                    False,
-                    "",
-                    gr.update(visible=True, value=f"❌ **System error:** {str(e)}"),
-                )
-
-        # Password toggle handlers
-        def toggle_password(is_visible: bool) -> tuple:
-            """Toggle password visibility.
-
-            :param is_visible: Current visibility state
-            :type is_visible: bool
-            :return: Tuple of (password_input_update, button_text, new_visibility)
-            :rtype: tuple
-            """
-            if is_visible:
-                return gr.update(type="password"), "👁️", False
-            else:
-                return gr.update(type="text"), "🙈", True
-
-        def toggle_confirm_password(is_visible: bool) -> tuple:
-            """Toggle confirm password visibility.
-
-            :param is_visible: Current visibility state
-            :type is_visible: bool
-            :return: Tuple of (confirm_password_input_update, button_text, new_visibility)
-            :rtype: tuple
-            """
-            if is_visible:
-                return gr.update(type="password"), "👁️", False
-            else:
-                return gr.update(type="text"), "🙈", True
-
-        # Form switching handlers
-        def switch_to_register() -> tuple:
-            """Switch to register mode - show register fields and update labels.
-
-            :return: Tuple of updates for all form components
-            :rtype: tuple
-            """
-            return (
-                True,  # is_register_mode = True
-                gr.update(value="## 📝 Register"),  # header_subtitle
-                gr.update(
-                    value="Create a new account to access the chatbot."
-                ),  # header_instruction
-                gr.update(
-                    label="Username", placeholder="Choose a username (3-20 characters)"
-                ),  # username_input
-                gr.update(visible=True),  # email_input
-                gr.update(visible=True),  # email_info
-                gr.update(
-                    label="Password",
-                    placeholder="Choose a strong password (min 8 characters)",
-                ),  # password_input
-                gr.update(visible=True),  # confirm_password_input
-                gr.update(visible=True),  # show_confirm_btn
-                gr.update(visible=True),  # password_requirements
-                gr.update(value="Register Account", variant="primary"),  # primary_btn
-                gr.update(value="Back to Login", variant="secondary"),  # secondary_btn
-                gr.update(visible=False),  # error_message
-            )
-
-        def switch_to_login() -> tuple:
-            """Switch to login mode - hide register fields and update labels.
-
-            :return: Tuple of updates for all form components
-            :rtype: tuple
-            """
-            return (
-                False,  # is_register_mode = False
-                gr.update(value="## 🔐 Login"),  # header_subtitle
-                gr.update(
-                    value="Please log in to access the chatbot."
-                ),  # header_instruction
-                gr.update(
-                    label="Username or Email",
-                    placeholder="Enter your username or email",
-                ),  # username_input
-                gr.update(visible=False),  # email_input
-                gr.update(visible=False),  # email_info
-                gr.update(
-                    label="Password", placeholder="Enter your password"
-                ),  # password_input
-                gr.update(visible=False),  # confirm_password_input
-                gr.update(visible=False),  # show_confirm_btn
-                gr.update(visible=False),  # password_requirements
-                gr.update(value="Login", variant="primary"),  # primary_btn
-                gr.update(value="Register", variant="secondary"),  # secondary_btn
-                gr.update(visible=False),  # error_message
-            )
-
-        # Wire up password toggle events
-        show_password_btn.click(
-            fn=toggle_password,
-            inputs=[password_visible],
-            outputs=[password_input, show_password_btn, password_visible],
-        )
-
-        show_confirm_btn.click(
-            fn=toggle_confirm_password,
-            inputs=[confirm_password_visible],
-            outputs=[
-                confirm_password_input,
-                show_confirm_btn,
-                confirm_password_visible,
-            ],
-        )
-
-        # Wire up form switching events
-        def handle_secondary_btn_click(is_register_mode: bool) -> tuple:
-            """Handle secondary button click - switches between login/register modes.
-
-            :param is_register_mode: Current mode state
-            :type is_register_mode: bool
-            :return: Tuple of updates for all form components
-            :rtype: tuple
-            """
-            return switch_to_login() if is_register_mode else switch_to_register()
-
-        secondary_btn.click(
-            fn=handle_secondary_btn_click,
-            inputs=[is_register_mode],
-            outputs=[
-                is_register_mode,
-                header_subtitle,
-                header_instruction,
-                username_input,
-                email_input,
-                email_info,
-                password_input,
-                confirm_password_input,
-                show_confirm_btn,
-                password_requirements,
-                primary_btn,
-                secondary_btn,
-                error_message,
-            ],
-        )
-
-        # Wire up primary button (login or register based on mode)
-        def handle_primary_btn_click(
-            is_register_mode: bool,
-            username: str,
-            email: str,
-            password: str,
-            confirm_password: str,
-        ) -> tuple:
-            """Handle primary button click - login or register based on current mode.
-
-            :param is_register_mode: Current mode state
-            :type is_register_mode: bool
-            :param username: Username input
-            :type username: str
-            :param email: Email input
-            :type email: str
-            :param password: Password input
-            :type password: str
-            :param confirm_password: Confirm password input
-            :type confirm_password: str
-            :return: Tuple of (success, username, error_message)
-            :rtype: tuple
-            """
-            if is_register_mode:
-                # Register mode
-                return handle_register(username, email, password, confirm_password)
-            else:
-                # Login mode
-                return handle_login(username, password)
-
-        primary_btn.click(
-            fn=handle_primary_btn_click,
-            inputs=[
-                is_register_mode,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-            ],
-            outputs=[logged_in_state, username_state, error_message],
-        )
-
-        # Add Enter key support
-        password_input.submit(
-            fn=handle_primary_btn_click,
-            inputs=[
-                is_register_mode,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-            ],
-            outputs=[logged_in_state, username_state, error_message],
-        )
-
-        confirm_password_input.submit(
-            fn=handle_primary_btn_click,
-            inputs=[
-                is_register_mode,
-                username_input,
-                email_input,
-                password_input,
-                confirm_password_input,
-            ],
-            outputs=[logged_in_state, username_state, error_message],
-        )
+    confirm_password_input.submit(
+        fn=handle_primary_btn_click,
+        inputs=[
+            is_register_mode,
+            username_input,
+            email_input,
+            password_input,
+            confirm_password_input,
+            logged_in_state,
+            username_state,
+        ],
+        outputs=[error_message, logged_in_state, username_state],
+        queue=True,
+    )
 
     return (
-        logged_in_state,
-        username_state,
-        is_register_mode,
-        main_container,
-        error_message,
-        username_input,
-        email_input,
-        password_input,
-        confirm_password_input,
-        primary_btn,
-        secondary_btn,
-        show_password_btn,
-        show_confirm_btn,
-        password_visible,
-        confirm_password_visible,
-        header_subtitle,
-        header_instruction,
-        email_info,
-        password_requirements,
+        main_container,  # 1
+        error_message,  # 2
+        username_input,  # 3
+        email_input,  # 4
+        password_input,  # 5
+        confirm_password_input,  # 6
+        primary_btn,  # 7
+        secondary_btn,  # 8
+        show_password_btn,  # 9
+        show_confirm_btn,  # 10
+        password_visible,  # 11
+        confirm_password_visible,  # 12
+        header_subtitle,  # 13
+        header_instruction,  # 14
+        email_info,  # 15
+        password_requirements,  # 16
     )
+
+
+# The handle_primary_btn_click function (modified to correctly update passed-in gr.State objects)
+async def handle_primary_btn_click(
+    mode: bool,  # This is the boolean value of is_register_mode_state
+    username_val: str,
+    email_val: str,
+    password_val: str,
+    confirm_password_val: str,
+    logged_in_state: gr.State,  # Passed-in gr.State object
+    username_state: gr.State,  # Passed-in gr.State object
+) -> tuple:
+    """Handles the primary button click for login or registration."""
+
+    allowed_domains = ALLOWED_EMAILS
+
+    if mode and "@" in username_val:
+        return (
+            gr.update(
+                value="Username cannot be an email address during registration.",
+                visible=True,
+            ),
+            gr.update(value=logged_in_state.value),  # Keep current value
+            gr.update(value=username_state.value),  # Keep current value
+        )
+
+    if not username_val or not password_val:
+        return (
+            gr.update(value="Username and password are required.", visible=True),
+            gr.update(value=logged_in_state.value),
+            gr.update(value=username_state.value),
+        )
+
+    if mode:  # Register mode
+        if not email_val or "@" not in email_val:
+            return (
+                gr.update(
+                    value="Valid email is required for registration.", visible=True
+                ),
+                gr.update(value=logged_in_state.value),
+                gr.update(value=username_state.value),
+            )
+
+        email_domain = email_val.split("@")[1].lower()
+        if email_domain not in allowed_domains:
+            return (
+                gr.update(
+                    value=f"Email domain '{email_domain}' is not authorized. Allowed domains: {', '.join(allowed_domains)}",
+                    visible=True,
+                ),
+                gr.update(value=logged_in_state.value),
+                gr.update(value=username_state.value),
+            )
+
+        if password_val != confirm_password_val:
+            return (
+                gr.update(value="Passwords do not match.", visible=True),
+                gr.update(value=logged_in_state.value),
+                gr.update(value=username_state.value),
+            )
+
+        register_result = await do_register(username_val, email_val, password_val)
+        if register_result["status"] == "success":
+            return (gr.update(""), True, register_result["username"])
+        else:
+            return (gr.update(value=register_result["message"]), False, "")
+    else:  # Login mode
+        login_result = await do_login(username_val, password_val)
+        if login_result["status"] == "success":
+            return (
+                gr.update(value=""),  # Clear error message
+                True,
+                login_result["username"],
+            )
+        else:
+            return (gr.update(value=login_result["message"]), False, "")

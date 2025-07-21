@@ -1,4 +1,3 @@
-# chat_interface.py
 #!/usr/bin/env python3
 
 """
@@ -15,432 +14,630 @@ The module integrates with Gradio to provide a web-based chat interface with:
 - Integration with backend chat and authentication systems
 """
 
-from typing import Tuple, Dict, Any, List  # noqa: F401
+from typing import Tuple, Dict, Any, List
 import gradio as gr
 import logging
-from datetime import datetime  # noqa: F401
+import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 # Import clear_chat_history from infra_utils
-from infra_utils import clear_chat_history
 
 # Import specific backend functions
 from backend.chat import (
-    _get_chat_metadata_cache_internal,  # Use the internal cache getter
+    get_chatbot_response,  # This is now assumed to be an async generator
+    rename_chat,
 )
-
-# Import the search_interface function
 
 # --- Helper functions for chatbot_ui (these handle overall chat session management) ---
 
 
 def _load_chat_by_id(
     selected_chat_id: str, username: str, all_chats_data: Dict[str, Dict[str, Any]]
-) -> Tuple[List[List[str]], str, str, str]:
+) -> Tuple[List[Dict[str, str]], str, str, str]:
     # Loads chat history for a selected chat ID from the `all_chats_data_state`.
     #
     # This function now only returns data/values, not interactive updates,
     # as interactivity is managed by app.py's _enable_chat_inputs_on_login.
-    #
-    # :param selected_chat_id: The ID of the chat to load.
-    # :type selected_chat_id: str
-    # :param username: The current username.
-    # :type username: str
-    # :param all_chats_data: Dictionary of all chat metadata and histories.
-    # :type all_chats_data: Dict[str, Dict[str, Any]]
-    # :return: A tuple containing the chat history, chat ID, rename input value, and debug message.
-    # :rtype: Tuple[List[List[str]], str, str, str]
-    if not selected_chat_id:
-        return (
-            [],
-            "",
-            "",  # rename_input value
-            "Please select a chat.",  # debug_md
+    # It prepares the history as a list of lists (Gradio's chatbot format).
+
+    if not selected_chat_id or selected_chat_id not in all_chats_data.get(username, {}):
+        logger.warning(
+            f"Attempted to load non-existent chat_id: {selected_chat_id} for user {username}"
         )
+        # Return empty history and clear values if chat_id is invalid or not found
+        return [], "", "", ""
 
-    # Retrieve chat history from the in-memory state
-    chat_info = all_chats_data.get(selected_chat_id, {})
-    # Ensure history is a list of [user, bot] pairs as per backend format
-    history = chat_info.get("history", [])
-    # Defensive: If history is not a list of lists, convert it
-    if history and (not isinstance(history[0], list) or len(history[0]) != 2):
-        # Try to convert dicts to lists if needed
-        history = [[msg.get("user", ""), msg.get("bot", "")] for msg in history]
-    chat_name = chat_info.get("name", "New Chat")
+    chat_data = all_chats_data[username][selected_chat_id]
+    history = chat_data["history"]  # This is the stored [{"user": "", "bot": ""}, ...]
+    chat_name = chat_data.get("chat_name", f"Chat {selected_chat_id}")
+    last_updated_time = chat_data.get("last_updated_time", "N/A")
 
-    # Return values. Interactivity is handled by app.py.
+    formatted_history = []  # This will be the Gradio "messages" format
+    for entry in history:
+        if entry.get("user"):
+            formatted_history.append({"role": "user", "content": entry["user"]})
+        if entry.get("bot"):
+            formatted_history.append({"role": "assistant", "content": entry["bot"]})
+
     return (
-        history,
+        formatted_history,
         selected_chat_id,
-        chat_name,  # Set rename input value
-        f"Chat '{chat_name}' loaded.",  # debug_md
+        chat_name,  # Pass the chat name for the rename input
+        last_updated_time,
     )
 
 
-def _clear_current_chat(
-    chat_id: str,
-    username: str,
-) -> Tuple[List[List[str]], str, str, Dict[str, Any], str]:
-    # Clears the history of the currently selected chat.
-    #
-    # Does not delete the chat, just its messages.
-    # This function now only returns data/values, not interactive updates,
-    # as interactivity is managed by app.py's _enable_chat_inputs_on_login.
-    #
-    # :param chat_id: The ID of the chat to clear.
-    # :type chat_id: str
-    # :param username: The current username.
-    # :type username: str
-    # :return: A tuple containing cleared chat history, current chat ID, status message,
-    #          updated all_chats_data, and debug message.
-    # :rtype: Tuple[List[List[str]], str, str, Dict[str, Any], str]
-    if not chat_id or chat_id == "new_chat_id":
+async def _handle_new_chat(
+    username: str, all_chats_data: Dict[str, Dict[str, Any]]
+) -> Tuple[gr.Dropdown, gr.State, gr.State, gr.State, gr.Textbox, gr.State]:
+    """Handles creating a new chat session."""
+    logger.info(f"Creating new chat for user: {username}")
+    if not username:
+        logger.warning("Attempted to create new chat without a username.")
         return (
-            [],
-            "new_chat_id",
-            "No chat selected or new chat. Nothing to clear.",
-            {},  # all_chats_data
-            "",  # debug_info_state
-        )
-    try:
-        success, all_chats = clear_chat_history(chat_id, username)
-        if success:
-            # Update the in-memory cache directly since clear_chat_history now returns all_chats
-            # Note: _get_chat_metadata_cache_internal() is used here to get the dict reference.
-            # The clear_chat_history function should ideally handle the persistence.
-            # Assuming `clear_chat_history` updates the persistent storage and returns the new state.
-            _get_chat_metadata_cache_internal()[username] = all_chats
-            return (
-                [],  # Clear chatbot display
-                chat_id,  # Keep the same chat_id
-                "Chat history cleared successfully.",
-                all_chats,  # Pass the updated all_chats_data
-                "",  # Clear debug md
-            )
-        else:
-            return (
-                [],
-                chat_id,
-                "Failed to clear chat history.",
-                all_chats,
-                "",
-            )
-    except Exception as e:
-        logger.error(f"Error clearing chat history for {chat_id}: {e}")
-        return (
-            [],
-            chat_id,
-            f"An error occurred: {e}",
-            {},
-            "",
-        )
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+        )  # Return unchanged if no username
 
+    current_time_str = datetime.now().strftime("%Y%m%d%H%M%S")
+    new_chat_id = f"chat_{current_time_str}"
+    new_chat_name = f"New Chat {len(all_chats_data.get(username, {})) + 1}"
 
-def _create_new_chat_ui_handler(
-    username: str,
-    all_chats_data: Dict[str, Dict[str, Any]],
-) -> Tuple[str, List[List[str]], str, Dict[str, Any], gr.update]:
-    """
-    Handles the UI logic for creating a new chat.
+    if username not in all_chats_data:
+        all_chats_data[username] = {}
 
-    Sets the chat_id_state to a temporary "new_chat_id" and clears the chatbot.
-    The actual chat creation (with a real ID) happens when the first message is sent.
-    This function now only returns data/values, not interactive updates for individual components,
-    as interactivity is managed by app.py's _enable_chat_inputs_on_login.
-
-    Args:
-        username: The current username.
-        all_chats_data: Dictionary of all chat metadata and histories.
-
-    Returns:
-        A tuple containing the temporary chat ID, cleared chat history,
-        temporary rename input value, all_chats_data (unchanged here),
-        and an update for the chat selector.
-    """
-    new_chat_id_temp = "new_chat_id"
-
-    # Create a copy of all_chats_data to modify for the dropdown update
-    temp_all_chats_data = all_chats_data.copy()
-    # Add a temporary "New Chat" entry for immediate display in the dropdown
-    temp_all_chats_data[new_chat_id_temp] = {
-        "name": "New Chat",
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
+    all_chats_data[username][new_chat_id] = {
+        "chat_name": new_chat_name,
+        "history": [],
+        "creation_time": datetime.now().isoformat(),
+        "last_updated_time": datetime.now().isoformat(),
     }
 
-    updated_choices = sorted(
-        [(v["name"], k) for k, v in temp_all_chats_data.items()],
-        key=lambda item: temp_all_chats_data[item[1]].get(
-            "updated_at", datetime.min.isoformat()
-        ),
-        reverse=True,
+    # Update chat selector choices
+    chat_choices = [(v["chat_name"], k) for k, v in all_chats_data[username].items()]
+    chat_selector_update = gr.update(
+        choices=chat_choices, value=new_chat_id, interactive=True
     )
 
-    # Return updates for all relevant components
     return (
-        new_chat_id_temp,  # chat_id_state
-        [],  # chatbot (clear history)
-        "New Chat",  # rename_input (set placeholder name)
-        all_chats_data,  # all_chats_data_state (no change here, actual creation is on first message)
-        gr.update(
-            choices=updated_choices, value=new_chat_id_temp
-        ),  # chat_selector (update choices and select temp new chat)
+        chat_selector_update,
+        all_chats_data,  # Return updated all_chats_data_state
+        new_chat_id,  # Set current chat_id_state
+        [],  # Clear chat_history_state (Gradio messages format)
+        new_chat_name,  # Set the rename input to the new chat's name
+        datetime.now().isoformat(),  # Return current time for last_updated_time_state
     )
 
 
-# --- Main Chatbot UI Function ---
+async def _handle_send_message(
+    user_message: str,
+    chat_history: List[Dict[str, str]],  # Now expects Gradio messages format
+    username: str,
+    chat_id: str,
+    all_chats_data: Dict[str, Dict[str, Any]],
+) -> Tuple[
+    gr.Chatbot, gr.Textbox, gr.State, gr.State, gr.State
+]:  # Added last_updated_time_state output
+    """Handles sending a message to the chatbot and updating history."""
+    if not user_message:
+        yield (
+            chat_history,
+            "",
+            all_chats_data,
+            chat_history,
+            gr.update(),
+        )  # Return unchanged if empty message
+
+    if not username or not chat_id:
+        logger.warning("Attempted to send message without valid username or chat ID.")
+        yield (
+            chat_history,
+            "",
+            all_chats_data,
+            chat_history,
+            gr.update(),
+        )  # Return unchanged
+
+    # Update the internal all_chats_data structure
+    if username not in all_chats_data:
+        all_chats_data[username] = {}
+    if chat_id not in all_chats_data[username]:
+        all_chats_data[username][chat_id] = {
+            "chat_name": f"Chat {chat_id}",
+            "history": [],  # Backend stores pairs
+            "creation_time": datetime.now().isoformat(),
+            "last_updated_time": datetime.now().isoformat(),
+        }
+
+    # Add user message to history for display (Gradio format)
+    chat_history.append({"role": "user", "content": user_message})
+    chat_history.append(
+        {"role": "assistant", "content": ""}
+    )  # Placeholder for bot response
+
+    # Append the user message to the stored history with an empty bot response placeholder
+    all_chats_data[username][chat_id]["history"].append(
+        {"user": user_message, "bot": ""}
+    )
+    current_time = datetime.now().isoformat()
+    all_chats_data[username][chat_id]["last_updated_time"] = current_time
+
+    logger.info(f"Sending message for user {username}, chat {chat_id}: {user_message}")
+
+    try:
+        # Get response from backend chatbot
+        response_generator = get_chatbot_response(username, chat_id, user_message)
+        full_response = ""
+        async for chunk in response_generator:
+            full_response += chunk
+            # Update the content of the assistant message in the last entry
+            chat_history[-1]["content"] = full_response
+            yield (
+                chat_history,
+                gr.update(value=""),
+                all_chats_data,
+                chat_history,
+                current_time,
+            )  # Yield streamed response
+
+        # After streaming completes, update the stored history with the full bot response
+        all_chats_data[username][chat_id]["history"][-1]["bot"] = full_response
+        current_time = datetime.now().isoformat()
+        all_chats_data[username][chat_id]["last_updated_time"] = current_time
+
+        logger.info(
+            f"Received full response for user {username}, chat {chat_id}: {full_response[:50]}..."
+        )
+        # Final yield after all chunks are received and stored
+        yield (
+            chat_history,
+            gr.update(value=""),
+            all_chats_data,
+            chat_history,
+            current_time,
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Error getting chatbot response for {username}, chat {chat_id}: {e}",
+            exc_info=True,
+        )
+        error_message = f"Error: Could not get response ({e}). Please try again."
+        chat_history[-1]["content"] = error_message  # Show error in chatbot
+        yield (
+            chat_history,
+            gr.update(value=""),
+            all_chats_data,
+            chat_history,
+            gr.update(),
+        )
 
 
-import os
+async def _handle_clear_chat(
+    username: str,
+    chat_id: str,
+    all_chats_data: Dict[str, Dict[str, Any]],
+) -> Tuple[
+    gr.Chatbot, gr.State, gr.State, gr.Textbox, gr.State
+]:  # Added last_updated_time_state output
+    """Clears the current chat history for the specified chat ID."""
+    logger.info(f"Clearing chat for user: {username}, chat_id: {chat_id}")
+    if (
+        not username
+        or not chat_id
+        or username not in all_chats_data
+        or chat_id not in all_chats_data[username]
+    ):
+        logger.warning("Attempted to clear chat with invalid username or chat ID.")
+        return (
+            gr.update(value=[]),
+            all_chats_data,
+            None,
+            gr.update(),
+            gr.update(),
+        )  # Return unchanged
+
+    # Clear the history in the stored data
+    all_chats_data[username][chat_id]["history"] = []
+    current_time = datetime.now().isoformat()
+    all_chats_data[username][chat_id]["last_updated_time"] = current_time
+
+    # Clear the displayed chatbot history and reset chat_id_state
+    return (
+        gr.update(value=[]),  # Clear chatbot display
+        all_chats_data,  # Return updated all_chats_data_state
+        chat_id,  # Keep current chat ID, only clear history
+        gr.update(
+            value=all_chats_data[username][chat_id]["chat_name"]
+        ),  # Reset rename input
+        current_time,  # Return current time for last_updated_time_state
+    )
+
+
+async def _handle_rename_chat(
+    username: str,
+    chat_id: str,
+    new_chat_name: str,
+    all_chats_data: Dict[str, Dict[str, Any]],
+) -> Tuple[gr.Dropdown, gr.State, gr.State]:
+    """
+    Renames the current chat session, updating both the in-memory cache and the database.
+    """
+    if not username or not chat_id or not new_chat_name:
+        logger.warning("Attempted to rename chat with invalid inputs.")
+        return gr.update(), gr.State(all_chats_data), gr.update()  # Return unchanged
+
+    current_time = datetime.now().isoformat()
+
+    # 1. Update the in-memory cache
+    if username in all_chats_data and chat_id in all_chats_data[username]:
+        all_chats_data[username][chat_id]["chat_name"] = new_chat_name
+        # Use 'updated_at' key for consistency with database schema
+        all_chats_data[username][chat_id]["updated_at"] = current_time
+        logger.info(
+            f"In-memory cache updated: Chat {chat_id} renamed to '{new_chat_name}' for user {username}"
+        )
+    else:
+        logger.warning(
+            f"Chat {chat_id} not found in in-memory cache for user {username}."
+        )
+        # Continue to update DB, as cache might be out of sync.
+
+    # 2. Update the database
+    try:
+        db_update_result = await rename_chat(username, chat_id, new_chat_name)
+        if not db_update_result.get("success"):
+            logger.error(
+                f"Failed to rename chat in database for {chat_id} by {username}: "
+                f"{db_update_result.get('message', 'Unknown error')}"
+            )
+            # Potentially, you might want to revert the in-memory change here
+            # or add a UI notification if the database update fails.
+            # For simplicity, we log and proceed.
+        else:
+            logger.info(
+                f"Database updated: Chat {chat_id} renamed to '{new_chat_name}' in DB."
+            )
+    except Exception as e:
+        logger.error(f"Exception during database chat rename for {chat_id}: {e}")
+        # Handle unexpected errors during DB call
+
+    # Rebuild chat choices for the dropdown
+    chat_choices = [
+        (v["chat_name"], k) for k, v in all_chats_data.get(username, {}).items()
+    ]
+    # Sort by 'updated_at' to ensure the most recently updated chat appears first in the dropdown
+    chat_choices.sort(
+        key=lambda x: all_chats_data[username][x[1]].get("updated_at", ""), reverse=True
+    )
+
+    # Return updated Gradio components
+    return (
+        gr.update(choices=chat_choices, value=chat_id),
+        gr.State(all_chats_data),
+        gr.State(current_time),
+    )
+
+
+def initial_chat_setup(
+    username: str, all_chats_data: Dict[str, Dict[str, Any]]
+) -> Tuple[
+    gr.Dropdown,  # 1 chat_selector
+    gr.Textbox,  # 2 msg
+    gr.Button,  # 3 send_btn
+    gr.Button,  # 4 new_chat_btn_from_interface
+    gr.Button,  # 5 clear_chat_btn
+    gr.Textbox,  # 6 rename_input (gr.update with value and interactive)
+    gr.Button,  # 7 rename_btn
+    Dict[str, Dict[str, Any]],  # 8 all_chats_data_state
+    List[Dict[str, str]],  # 9 chat_history_state (now List[Dict])
+    str,  # 10 chat_id_state
+    str,  # 11 last_updated_time_state (new)
+]:
+    logger.info(f"Initial chat setup triggered for user: '{username}'")
+    if not username:
+        logger.info("No username provided. Skipping initial chat setup.")
+        # Return default disabled/empty states for all outputs
+        return (
+            gr.update(choices=[], value=None, interactive=False),  # 1 chat_selector
+            gr.update(value="", interactive=False),  # 2 msg
+            gr.update(interactive=False),  # 3 send_btn
+            gr.update(interactive=False),  # 4 new_chat_btn_from_interface
+            gr.update(interactive=False),  # 5 clear_chat_btn
+            gr.update(value="", interactive=False),  # 6 rename_input
+            gr.update(interactive=False),  # 7 rename_btn
+            {},  # 8 all_chats_data_state
+            [],  # 9 chat_history_state
+            None,  # 10 chat_id_state
+            "",  # 11 last_updated_time_state
+        )
+
+    # Initialize or load user's chat data
+    if username not in all_chats_data or not all_chats_data[username]:
+        # If no chats exist for the user, create a default first chat
+        logger.info(f"No existing chats for {username}. Creating initial chat.")
+        current_time_str = datetime.now().strftime("%Y%m%d%H%M%S")
+        initial_chat_id = f"chat_{current_time_str}"
+        initial_chat_name = "My First Chat"
+        all_chats_data[username] = {
+            initial_chat_id: {
+                "chat_name": initial_chat_name,
+                "history": [],
+                "creation_time": datetime.now().isoformat(),
+                "last_updated_time": datetime.now().isoformat(),
+            }
+        }
+        current_chat_id = initial_chat_id
+        current_chat_history_formatted = []  # Gradio messages format
+        current_rename_value = initial_chat_name
+        current_last_updated_time = datetime.now().isoformat()
+    else:
+        # Load the most recent chat if available, or the first one if sorting isn't implemented
+        # For now, just pick the most recently updated chat
+        sorted_chats = sorted(
+            all_chats_data[username].items(),
+            key=lambda item: item[1].get("last_updated_time", ""),
+            reverse=True,
+        )
+        current_chat_id = sorted_chats[0][0] if sorted_chats else None
+
+        current_chat_history_formatted = []
+        current_last_updated_time = "N/A"
+        if current_chat_id:
+            chat_data = all_chats_data[username][current_chat_id]
+            history = chat_data[
+                "history"
+            ]  # This is the stored [{"user": "", "bot": ""}, ...]
+            for entry in history:
+                if entry.get("user"):
+                    current_chat_history_formatted.append(
+                        {"role": "user", "content": entry["user"]}
+                    )
+                if entry.get("bot"):
+                    current_chat_history_formatted.append(
+                        {"role": "assistant", "content": entry["bot"]}
+                    )
+            current_rename_value = chat_data.get("chat_name", "")
+            current_last_updated_time = chat_data.get("last_updated_time", "N/A")
+        else:
+            current_rename_value = ""
+
+        logger.info(
+            f"Loaded existing chats for {username}. Current chat: {current_chat_id}"
+        )
+
+    # Prepare chat selector choices
+    chat_choices = [(v["chat_name"], k) for k, v in all_chats_data[username].items()]
+
+    return (
+        gr.update(
+            choices=chat_choices, value=current_chat_id, interactive=True
+        ),  # 1 chat_selector
+        gr.update(value="", interactive=True),  # 2 msg
+        gr.update(interactive=True),  # 3 send_btn
+        gr.update(interactive=True),  # 4 new_chat_btn_from_interface
+        gr.update(interactive=True),  # 5 clear_chat_btn
+        gr.update(
+            value=current_rename_value, interactive=True
+        ),  # 6 rename_input (value and interactivity)
+        gr.update(interactive=True),  # 7 rename_btn
+        all_chats_data,  # 8 all_chats_data_state
+        current_chat_history_formatted,  # 9 chat_history_state
+        current_chat_id,  # 10 chat_id_state
+        current_last_updated_time,  # 11 last_updated_time_state
+    )
 
 
 def chatbot_ui(
     username_state: gr.State,
+    all_chats_data_state: gr.State,
     chat_id_state: gr.State,
     chat_history_state: gr.State,
-    all_chats_data_state: gr.State,
     debug_info_state: gr.State,
-) -> Tuple[
-    gr.State,
-    gr.Chatbot,
-    gr.Textbox,
-    gr.Button,
-    gr.Textbox,
-    gr.Button,
-    gr.Markdown,
-    gr.Column,  # This will be the search_container
-    gr.Markdown,  # search_stats_md
-    gr.Markdown,  # debug_md
-    gr.Button,  # clear_chat_btn
-    gr.Markdown,  # clear_chat_status
-    gr.Button,  # new_chat_btn
-]:
+) -> gr.Blocks:
     """
-    Constructs the chatbot UI, integrating chat history, message input,
-    send functionality, chat selection, renaming, and clearing.
+    Constructs the main chatbot UI as a Gradio Blocks object.
     """
-    with gr.Column(elem_classes=["overall-chatbot-container"]):
-        debug_md = gr.Markdown(visible=False, value="Debug Info:")
-        with gr.Row(elem_classes=["chat-selection-row"]):
-            chat_selector = gr.Dropdown(
-                label="Select Chat",
-                choices=[],
-                interactive=False,
-                scale=2,
-                elem_classes=["chat-selector"],
-            )
-            new_chat_btn_from_interface = gr.Button(
-                "✨ New Chat", interactive=False, scale=0
-            )
-        with gr.Column(elem_classes=["chat-display-area"]):
-            chatbot = gr.Chatbot(
-                show_copy_button=True,
-                avatar_images=(
-                    "https://www.gravatar.com/avatar/?d=mp",
-                    "https://i.imgur.com/g0W45C8.png",
-                ),
-                elem_classes=["chatbot-display"],
-                render_markdown=True,
-                type="messages",
-            )
+    with gr.Blocks() as chatbot_block:
+        # New state to hold last updated time of the current chat
+        last_updated_time_state = gr.State("")
+
+        with gr.Row(elem_id="chatbot_header_row"):
+            gr.Markdown("## 💬 Chatbot", elem_id="chatbot_title")
+            with gr.Column(scale=1, min_width=200):
+                new_chat_btn_from_interface = gr.Button(
+                    "➕ New Chat", elem_id="new_chat_btn_interface", interactive=False
+                )
+            with gr.Column(scale=1, min_width=200):
+                clear_chat_btn = gr.Button("🗑️ Clear Chat", interactive=False)
+
+        with gr.Row(elem_id="chat_management_row"):
+            with gr.Column(scale=1):
+                chat_selector = gr.Dropdown(
+                    label="Select Chat",
+                    choices=[],
+                    value=None,
+                    interactive=False,
+                    elem_id="chat_selector",
+                )
+            with gr.Column(scale=2):
+                rename_input = gr.Textbox(
+                    placeholder="Chat Name",
+                    show_label=False,
+                    interactive=False,
+                    elem_id="rename_input",
+                )
+            with gr.Column(scale=0, min_width=100):
+                rename_btn = gr.Button("✏️ Rename", interactive=False)
+
+        chatbot = gr.Chatbot(
+            elem_id="chatbot",
+            label="NYP FYP Chatbot",
+            value=[],  # Initial empty state
+            layout="bubble",  # Use bubble layout for messages
+            avatar_images=(
+                None,  # No avatar for user messages
+                os.path.join(
+                    os.path.dirname(__file__), "bot_avatar.png"
+                ),  # Path to bot avatar
+            ),
+            type="messages",  # Set type to messages for OpenAI-style dictionaries
+        )
+        with gr.Row(elem_id="message_input_row"):
             msg = gr.Textbox(
                 show_label=False,
-                placeholder="Enter your message and press Enter or click Send",
+                placeholder="Enter your message...",
                 container=False,
-                elem_classes=["message-input"],
+                scale=7,
+                interactive=False,
+                elem_id="message_input",
             )
-            send_btn = gr.Button("Send", elem_classes=["send-button"])
-        with gr.Row(elem_classes=["chat-management-row"]):
-            rename_input = gr.Textbox(
-                label="Chat Name",
-                placeholder="Rename current chat",
+            send_btn = gr.Button(
+                "Send",
                 scale=1,
-                elem_classes=["rename-input"],
+                variant="primary",
+                interactive=False,
+                elem_id="send_btn",
             )
-            rename_btn = gr.Button(
-                "Rename Chat", scale=0, elem_classes=["rename-button"]
-            )
-            rename_status_md = gr.Markdown("")
-        from gradio_modules.search_interface import search_interface
 
-        (
-            search_container,
-            search_query,
-            search_btn_from_interface,
-            search_results_md,
-            search_stats_md,
-        ) = search_interface(
-            username_state,
-            chat_id_state,
-            chat_history_state,
-            all_chats_data_state,
-            debug_info_state,
-        )
-        with gr.Row(elem_classes=["chat-management-buttons"]):
-            new_chat_btn = new_chat_btn_from_interface
-            clear_chat_btn = gr.Button(
-                "🗑️ Clear Current Chat History", interactive=False
-            )
-            clear_chat_status = gr.Markdown("")
+        # Wire the components and their events
 
-    # Patch: In benchmark mode, skip all event setup and just return components
-    if os.environ.get("BENCHMARK_MODE"):
-        return (
-            chat_selector,
-            chatbot,
-            msg,
-            send_btn,
-            rename_input,
-            rename_btn,
-            rename_status_md,
-            search_container,
-            search_stats_md,
-            debug_md,
-            clear_chat_btn,
-            clear_chat_status,
-            new_chat_btn,
+        # Chat selection
+        chat_selector.change(
+            fn=_load_chat_by_id,
+            inputs=[chat_selector, username_state, all_chats_data_state],
+            outputs=[
+                chat_history_state,
+                chat_id_state,
+                rename_input,
+                last_updated_time_state,
+            ],  # Corrected outputs
+            queue=False,  # UI updates should not be queued
         )
 
-    # --- Enable interactivity for chat UI components after login ---
-    chat_selector.interactive = True
-    msg.interactive = True
-    send_btn.interactive = True
-    new_chat_btn_from_interface.interactive = True
-    clear_chat_btn.interactive = True
-
-    # --- Event Handlers ---
-
-    # 1. Load chat when chat_selector changes
-    def on_chat_selector_change(selected_chat_id, username, all_chats_data):
-        return _load_chat_by_id(selected_chat_id, username, all_chats_data)
-
-    chat_selector.change(
-        fn=on_chat_selector_change,
-        inputs=[chat_selector, username_state, all_chats_data_state],
-        outputs=[chat_history_state, chat_id_state, rename_input, debug_md],
-    )
-
-    # 2. Send message (on send_btn click or msg.submit)
-    async def on_send_message(message, history, username, chat_id, all_chats_data):
-        from backend.chat import get_chatbot_response
-
-        # Defensive: If chat_id is empty, create a new chat
-        if not chat_id or chat_id == "new_chat_id":
-            chat_id = "new_chat_id"
-        # Await backend response
-        result = await get_chatbot_response(message, history, username, chat_id)
-        # result: (empty_message, updated_history, current_chat_id, all_user_chats_data, debug_info)
-        (
-            empty_message,
-            updated_history,
-            current_chat_id,
-            all_user_chats_data,
-            debug_info,
-        ) = result
-        return (
-            updated_history,
-            current_chat_id,
-            all_user_chats_data,
-            "",  # Clear message input
-            debug_info,
+        # New chat button
+        new_chat_btn_from_interface.click(
+            fn=_handle_new_chat,
+            inputs=[username_state, all_chats_data_state],
+            outputs=[
+                chat_selector,
+                all_chats_data_state,
+                chat_id_state,
+                chat_history_state,
+                rename_input,
+                last_updated_time_state,  # Added output
+            ],
+            queue=True,
         )
 
-    send_btn.click(
-        fn=on_send_message,
-        inputs=[
-            msg,
-            chat_history_state,
-            username_state,
-            chat_id_state,
-            all_chats_data_state,
-        ],
-        outputs=[
-            chat_history_state,
-            chat_id_state,
-            all_chats_data_state,
-            msg,
-            debug_md,
-        ],
-        api_name="send_message",
-    )
-    msg.submit(
-        fn=on_send_message,
-        inputs=[
-            msg,
-            chat_history_state,
-            username_state,
-            chat_id_state,
-            all_chats_data_state,
-        ],
-        outputs=[
-            chat_history_state,
-            chat_id_state,
-            all_chats_data_state,
-            msg,
-            debug_md,
-        ],
-        api_name="send_message_submit",
-    )
+        # Send message
+        send_btn.click(
+            fn=_handle_send_message,
+            inputs=[
+                msg,
+                chat_history_state,
+                username_state,
+                chat_id_state,
+                all_chats_data_state,
+            ],
+            outputs=[
+                chatbot,
+                msg,
+                all_chats_data_state,
+                chat_history_state,
+                last_updated_time_state,
+            ],  # Added output
+            queue=True,  # Enable queuing for potentially long chatbot responses
+        )
+        msg.submit(
+            fn=_handle_send_message,
+            inputs=[
+                msg,
+                chat_history_state,
+                username_state,
+                chat_id_state,
+                all_chats_data_state,
+            ],
+            outputs=[
+                chatbot,
+                msg,
+                all_chats_data_state,
+                chat_history_state,
+                last_updated_time_state,
+            ],  # Added output
+            queue=True,  # Enable queuing for potentially long chatbot responses
+        )
 
-    # 3. New chat button
-    def on_new_chat(username, all_chats_data):
-        return _create_new_chat_ui_handler(username, all_chats_data)
+        # Clear chat
+        clear_chat_btn.click(
+            fn=_handle_clear_chat,
+            inputs=[username_state, chat_id_state, all_chats_data_state],
+            outputs=[
+                chatbot,
+                all_chats_data_state,
+                chat_id_state,
+                rename_input,
+                last_updated_time_state,
+            ],  # Added output
+            queue=True,
+        )
 
-    new_chat_btn_from_interface.click(
-        fn=on_new_chat,
-        inputs=[username_state, all_chats_data_state],
-        outputs=[
-            chat_id_state,
-            chat_history_state,
-            rename_input,
-            all_chats_data_state,
-            chat_selector,
-        ],
-    )
+        # Rename chat
+        rename_btn.click(
+            fn=_handle_rename_chat,
+            inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
+            outputs=[
+                chat_selector,
+                all_chats_data_state,
+                last_updated_time_state,
+            ],  # Added output
+            queue=True,
+        )
+        rename_input.submit(
+            fn=_handle_rename_chat,
+            inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
+            outputs=[
+                chat_selector,
+                all_chats_data_state,
+                last_updated_time_state,
+            ],  # Added output
+            queue=True,
+        )
 
-    # 4. Clear chat button
-    def on_clear_chat(chat_id, username):
-        return _clear_current_chat(chat_id, username)
+        # Update chatbot display when chat_history_state changes
+        chat_history_state.change(
+            fn=lambda history: history,
+            inputs=[chat_history_state],
+            outputs=[chatbot],
+            queue=False,
+        )
 
-    clear_chat_btn.click(
-        fn=on_clear_chat,
-        inputs=[chat_id_state, username_state],
-        outputs=[
-            chat_history_state,
-            chat_id_state,
-            clear_chat_status,
-            all_chats_data_state,
-            debug_md,
-        ],
-    )
+        # Trigger initial setup when the username_state changes (i.e., on login)
+        username_state.change(
+            fn=initial_chat_setup,
+            inputs=[username_state, all_chats_data_state],
+            outputs=[
+                chat_selector,
+                msg,
+                send_btn,
+                new_chat_btn_from_interface,
+                clear_chat_btn,
+                rename_input,
+                rename_btn,
+                all_chats_data_state,
+                chat_history_state,
+                chat_id_state,
+                last_updated_time_state,  # Added this
+            ],
+            queue=True,
+            show_progress="hidden",  # Don't show progress for this initial setup
+        )
 
-    # 5. Rename chat button
-    def on_rename_chat(chat_id, new_name, username, all_chats_data):
-        from backend.chat import rename_chat
-
-        status, updated_chats = rename_chat(chat_id, new_name, username, all_chats_data)
-        return status, updated_chats
-
-    rename_btn.click(
-        fn=on_rename_chat,
-        inputs=[chat_id_state, rename_input, username_state, all_chats_data_state],
-        outputs=[rename_status_md, all_chats_data_state],
-    )
-
-    return (
-        chat_selector,
-        chatbot,
-        msg,
-        send_btn,
-        rename_input,
-        rename_btn,
-        rename_status_md,
-        search_container,
-        search_stats_md,
-        debug_md,
-        clear_chat_btn,
-        clear_chat_status,
-        new_chat_btn,
-    )
+    return chatbot_block  # Return the entire Blocks object

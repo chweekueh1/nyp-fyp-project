@@ -8,31 +8,64 @@ Users can change their password through a modal popup with password visibility t
 
 import time
 from typing import Tuple
-
 import gradio as gr
+import logging
 
-from backend import change_password
+logger = logging.getLogger(__name__)
 
+from backend import (
+    change_password,
+)  # Assuming this is the backend function for password change
 
-import os
+# Global references for the button and state that app.py will manage
+# These need to be accessible from app.py to wire events.
+_global_change_password_btn = None
+_global_last_change_time_state = None
 
 
 def change_password_interface(
     username_state: gr.State, logged_in_state: gr.State, rate_limit_seconds: int = 60
-) -> Tuple[gr.Button, gr.Column, gr.State]:
-    change_password_btn = gr.Button(
-        "🔐 Change Password",
-        visible=False,
-        elem_id="main_change_password_btn",
-        size="sm",
-        variant="secondary",
-    )
-    with gr.Column(
+) -> gr.Blocks:
+    """
+    Creates the change password UI components and returns the Blocks object for the tab content.
+    The global button and last_change_time state are managed externally by app.py.
+
+    :param username_state: Gradio State for the current username.
+    :type username_state: gr.State
+    :param logged_in_state: Gradio State for the login status.
+    :type logged_in_state: gr.State
+    :param rate_limit_seconds: Seconds to wait between password change attempts.
+    :type rate_limit_seconds: int
+    :return: The Blocks object containing the password change popup UI.
+    :rtype: gr.Blocks
+    """
+    # Initialize global references if they haven't been already
+    global _global_change_password_btn, _global_last_change_time_state
+    if _global_change_password_btn is None:
+        _global_change_password_btn = gr.Button(
+            "🔐 Change Password",
+            visible=False,  # Initially hidden, made visible on login
+            elem_id="main_change_password_btn",
+            size="sm",
+            variant="secondary",
+        )
+    if _global_last_change_time_state is None:
+        _global_last_change_time_state = gr.State(0)
+
+    # The actual password change popup UI, wrapped in a gr.Blocks
+    # This Blocks object will be the content of the "Change Password" tab
+    with gr.Blocks(
         visible=False,
         elem_id="change_password_popup",
         elem_classes=["change-password-popup"],
     ) as change_password_popup:
         gr.Markdown("## 🔐 Change Password", elem_id="change_password_title")
+        gr.Markdown(
+            "Please enter your current password and new password.",
+            elem_id="change_password_instruction",
+        )
+
+        # Password fields with visibility toggles
         with gr.Row():
             old_password_input = gr.Textbox(
                 label="Current Password",
@@ -43,6 +76,7 @@ def change_password_interface(
             old_password_toggle = gr.Button(
                 "👁️", size="sm", elem_id="old_password_toggle"
             )
+
         with gr.Row():
             new_password_input = gr.Textbox(
                 label="New Password",
@@ -53,155 +87,113 @@ def change_password_interface(
             new_password_toggle = gr.Button(
                 "👁️", size="sm", elem_id="new_password_toggle"
             )
+
         with gr.Row():
             confirm_new_password_input = gr.Textbox(
                 label="Confirm New Password",
                 type="password",
-                elem_id="confirm_password_input",
+                elem_id="confirm_new_password_input",
                 placeholder="Confirm your new password",
             )
-            confirm_password_toggle = gr.Button(
-                "👁️", size="sm", elem_id="confirm_password_toggle"
+            confirm_new_password_toggle = gr.Button(
+                "👁️", size="sm", elem_id="confirm_new_password_toggle"
             )
+
+        # Password requirements markdown (now explicitly visible=True)
         gr.Markdown(
             """
             **Password Requirements:**
             - At least 8 characters long
-            - Contains uppercase and lowercase letters
-            - Contains at least one number
-            - Contains at least one special character (!@#$%^&*)
+            - Contains at least one uppercase letter
+            - Contains at least one lowercase letter
+            - Contains at least one digit
+            - Contains at least one special character (e.g., !@#$%^&*)
             """,
-            elem_id="password_requirements_info",
+            elem_id="password_requirements",
+            visible=True,  # <--- ADDED explicit visible=True
         )
+
+        # Message display for success/error
+        change_password_message = gr.Markdown(
+            "", visible=False, elem_id="change_password_message"
+        )
+
+        # Action buttons
         with gr.Row():
             submit_change_password_btn = gr.Button(
                 "Change Password",
                 variant="primary",
                 elem_id="submit_change_password_btn",
             )
-            cancel_btn = gr.Button(
+            cancel_change_password_btn = gr.Button(
                 "Cancel", variant="secondary", elem_id="cancel_change_password_btn"
             )
-        change_password_message = gr.Markdown(
-            visible=False, elem_id="change_password_message"
-        )
+
         loading_indicator = gr.HTML(
-            value="", visible=False, elem_id="change_password_loading"
+            value="", visible=False, elem_classes=["loading-indicator"]
         )
-    last_change_time = gr.State(0)
+
+    # Internal states for password visibility (these are local to this Blocks)
     old_password_visible = gr.State(False)
     new_password_visible = gr.State(False)
-    confirm_password_visible = gr.State(False)
+    confirm_new_password_visible = gr.State(False)
 
-    # Patch: In benchmark mode, skip event setup
-    if os.environ.get("BENCHMARK_MODE"):
-        return change_password_btn, change_password_popup, last_change_time
+    # --- Event Handlers ---
 
-    def toggle_old_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        # Toggle the visibility of the old password field.
-        #
-        # :param visible: Current visibility state
-        # :type visible: bool
-        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        # :rtype: Tuple[gr.update, str, bool]
-        if visible:
-            return gr.update(type="password"), "👁️", False
-        else:
-            return gr.update(type="text"), "🙈", True
-
-    def toggle_new_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        # Toggle the visibility of the new password field.
-        #
-        # :param visible: Current visibility state
-        # :type visible: bool
-        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        # :rtype: Tuple[gr.update, str, bool]
-        if visible:
-            return gr.update(type="password"), "👁️", False
-        else:
-            return gr.update(type="text"), "🙈", True
-
-    def toggle_confirm_password(visible: bool) -> Tuple[gr.update, str, bool]:
-        # Toggle the visibility of the confirm password field.
-        #
-        # :param visible: Current visibility state
-        # :type visible: bool
-        # :return: Tuple of gr.update for the textbox, button text, and the new visibility state
-        # :rtype: Tuple[gr.update, str, bool]
-        if visible:
-            return gr.update(type="password"), "👁️", False
-        else:
-            return gr.update(type="text"), "🙈", True
-
-    # Wire up password toggles
+    # Password visibility toggles
     old_password_toggle.click(
-        fn=toggle_old_password,
+        fn=lambda x: (not x, "🙈" if not x else "👁️"),
         inputs=[old_password_visible],
-        outputs=[old_password_input, old_password_toggle, old_password_visible],
+        outputs=[old_password_visible, old_password_toggle],
+        queue=False,
+    ).then(
+        fn=lambda x: gr.update(type="text" if x else "password"),
+        inputs=[old_password_visible],
+        outputs=[old_password_input],
+        queue=False,
     )
 
     new_password_toggle.click(
-        fn=toggle_new_password,
+        fn=lambda x: (not x, "🙈" if not x else "👁️"),
         inputs=[new_password_visible],
-        outputs=[new_password_input, new_password_toggle, new_password_visible],
+        outputs=[new_password_visible, new_password_toggle],
+        queue=False,
+    ).then(
+        fn=lambda x: gr.update(type="text" if x else "password"),
+        inputs=[new_password_visible],
+        outputs=[new_password_input],
+        queue=False,
     )
 
-    confirm_password_toggle.click(
-        fn=toggle_confirm_password,
-        inputs=[confirm_password_visible],
-        outputs=[
-            confirm_new_password_input,
-            confirm_password_toggle,
-            confirm_password_visible,
-        ],
+    confirm_new_password_toggle.click(
+        fn=lambda x: (not x, "🙈" if not x else "👁️"),
+        inputs=[confirm_new_password_visible],
+        outputs=[confirm_new_password_visible, confirm_new_password_toggle],
+        queue=False,
+    ).then(
+        fn=lambda x: gr.update(type="text" if x else "password"),
+        inputs=[confirm_new_password_visible],
+        outputs=[confirm_new_password_input],
+        queue=False,
     )
 
-    def close_popup() -> gr.update:
-        # Close the change password popup.
-        #
-        # :return: gr.update to hide the popup
-        # :rtype: gr.update
-        return gr.update(visible=False)
-
-    cancel_btn.click(fn=close_popup, outputs=[change_password_popup])
-
-    def show_change_password_popup() -> gr.update:
-        # Show the change password popup.
-        #
-        # :return: gr.update to show the popup
-        # :rtype: gr.update
-        return gr.update(visible=True)
-
-    change_password_btn.click(
-        fn=show_change_password_popup, outputs=[change_password_popup]
-    )
-
+    # Handle password change submission
     def show_loading() -> gr.update:
-        # Show loading indicator.
-        #
-        # :return: Loading indicator update
-        # :rtype: gr.update
         return gr.update(
             visible=True,
             value="""
-            <div style="text-align: center; padding: 10px;">
-                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <p style="margin-top: 5px; color: #666; font-size: 12px;">Changing password...</p>
-                <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                </style>
-            </div>
-            """,
+        <div style="text-align: center; padding: 20px;">
+            <style>
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: 0 auto; }
+            </style>
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+        """,
         )
 
     def hide_loading() -> gr.update:
-        # Hide loading indicator.
-        #
-        # :return: Loading indicator update
-        # :rtype: gr.update
         return gr.update(visible=False, value="")
 
     async def handle_change_password(
@@ -211,116 +203,74 @@ def change_password_interface(
         confirm_new_password: str,
         last_time: float,
     ) -> Tuple[gr.update, float, gr.update, bool, str, gr.update]:
-        # Handle the password change logic and UI updates.
-        #
-        # :param username: The username of the user changing password
-        # :type username: str
-        # :param old_password: The user's current password
-        # :type old_password: str
-        # :param new_password: The new password to set
-        # :type new_password: str
-        # :param confirm_new_password: Confirmation of the new password
-        # :type confirm_new_password: str
-        # :param last_time: The last time the password was changed (timestamp)
-        # :type last_time: float
-        # :return: Tuple containing message update, new timestamp, popup update, logout flag (True=keep logged in, False=logout), username, and loading update
-        # :rtype: Tuple[gr.update, float, gr.update, bool, str, gr.update]
-
-        now = time.time()
-        if now - last_time < rate_limit_seconds:
+        """Handles the password change request."""
+        logger.info(f"Change password attempt for user: {username}")
+        current_time = time.time()
+        if current_time - last_time < rate_limit_seconds:
+            remaining_time = int(rate_limit_seconds - (current_time - last_time))
             return (
                 gr.update(
                     visible=True,
-                    value=f"⏳ Please wait {int(rate_limit_seconds - (now - last_time))} seconds before changing password again.",
-                ),
-                now,
-                gr.update(visible=True),
-                True,  # Keep user logged in on rate limit
-                username,
-                hide_loading(),
-            )
-
-        # Frontend validation before calling backend
-        if not old_password or not new_password or not confirm_new_password:
-            return (
-                gr.update(visible=True, value="❌ All fields are required."),
-                last_time,
-                gr.update(visible=True),
-                True,  # Keep user logged in on validation failure
-                username,
-                hide_loading(),
-            )
-
-        if new_password != confirm_new_password:
-            return (
-                gr.update(visible=True, value="❌ New passwords do not match."),
-                last_time,
-                gr.update(visible=True),
-                True,  # Keep user logged in on validation failure
-                username,
-                hide_loading(),
-            )
-
-        # Additional frontend password complexity validation
-        import re
-
-        errors = []
-
-        if len(new_password) < 8:
-            errors.append("at least 8 characters long")
-
-        if not re.search(r"[A-Z]", new_password):
-            errors.append("at least one uppercase letter")
-
-        if not re.search(r"[a-z]", new_password):
-            errors.append("at least one lowercase letter")
-
-        if not re.search(r"\d", new_password):
-            errors.append("at least one number")
-
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', new_password):
-            errors.append('at least one special character (!@#$%^&*,.?":{}|<>)')
-
-        if errors:
-            return (
-                gr.update(
-                    visible=True,
-                    value=f"❌ Password must contain: {', '.join(errors)}.",
+                    value=f"⚠️ Please wait {remaining_time} seconds before trying again.",
                 ),
                 last_time,
                 gr.update(visible=True),
-                True,  # Keep user logged in on validation failure
+                True,  # Keep logged in on rate limit
+                username,
+                hide_loading(),
+            )
+
+        if not username:
+            return (
+                gr.update(visible=True, value="❌ Not logged in!"),
+                last_time,
+                gr.update(visible=True),
+                True,
                 username,
                 hide_loading(),
             )
 
         try:
-            result = await change_password(username, old_password, new_password)
-            if result.get("status") == "success":
+            # Call backend change_password function
+            result = await change_password(
+                username, old_password, new_password, confirm_new_password
+            )
+
+            if result.get("success"):
+                logger.info(f"Password changed successfully for user: {username}")
+                # On success, log out the user by setting logged_in_state to False
+                # This will trigger the app.py's logged_in_state.change handler
                 return (
                     gr.update(
                         visible=True,
-                        value="✅ Password changed successfully. You will be logged out.",
+                        value="✅ Password changed successfully! Please log in with your new password.",
                     ),
-                    now,
-                    gr.update(visible=False),
-                    False,  # Trigger logout by setting logged_in_state to False
-                    username,
+                    current_time,  # Update last_time on success
+                    gr.update(visible=False),  # Hide popup on success
+                    False,  # Log user out
+                    "",  # Clear username
                     hide_loading(),
                 )
             else:
+                logger.warning(
+                    f"Password change failed for user {username}: {result.get('message', 'Unknown error')}"
+                )
                 return (
                     gr.update(
                         visible=True,
                         value=f"❌ {result.get('message', 'Password change failed.')}",
                     ),
                     last_time,
-                    gr.update(visible=True),
+                    gr.update(visible=True),  # Keep popup visible on failure
                     True,  # Keep user logged in on backend failure
                     username,
                     hide_loading(),
                 )
         except Exception as e:
+            logger.error(
+                f"System error during password change for {username}: {e}",
+                exc_info=True,
+            )
             return (
                 gr.update(visible=True, value=f"❌ System error: {str(e)}"),
                 last_time,
@@ -334,6 +284,7 @@ def change_password_interface(
     submit_change_password_btn.click(
         fn=show_loading,
         outputs=[loading_indicator],
+        queue=False,  # Show loading immediately
     ).then(
         fn=handle_change_password,
         inputs=[
@@ -341,18 +292,55 @@ def change_password_interface(
             old_password_input,
             new_password_input,
             confirm_new_password_input,
-            last_change_time,
+            _global_last_change_time_state,  # Use the global state here
         ],
         outputs=[
             change_password_message,
-            last_change_time,
-            change_password_popup,
+            _global_last_change_time_state,  # Update the global state
+            change_password_popup,  # Control popup visibility
             logged_in_state,  # This will trigger logout only on success
             username_state,
-            loading_indicator,  # Hide loading indicator
+            loading_indicator,
         ],
         api_name="main_change_password",
-        queue=True,  # Enable queuing to prevent blocking
+        queue=True,
     )
 
-    return change_password_btn, change_password_popup, last_change_time
+    # Cancel button hides the popup and clears fields
+    cancel_change_password_btn.click(
+        fn=lambda: (
+            gr.update(visible=False),  # Hide popup
+            gr.update(value="", visible=False),  # Clear message
+            gr.update(value=""),  # Clear old password
+            gr.update(value=""),  # Clear new password
+            gr.update(value=""),  # Clear confirm password
+            gr.update(type="password"),  # Reset old password type
+            gr.update(type="password"),  # Reset new password type
+            gr.update(type="password"),  # Reset confirm password type
+            gr.update(value=False),  # Reset old_password_visible state
+            gr.update(value=False),  # Reset new_password_visible state
+            gr.update(value=False),  # Reset confirm_new_password_visible state
+            gr.update(value="👁️"),  # Reset old_password_toggle icon
+            gr.update(value="👁️"),  # Reset new_password_toggle icon
+            gr.update(value="👁️"),  # Reset confirm_new_password_toggle icon
+        ),
+        outputs=[
+            change_password_popup,
+            change_password_message,
+            old_password_input,
+            new_password_input,
+            confirm_new_password_input,
+            old_password_input,  # Output again to change type
+            new_password_input,  # Output again to change type
+            confirm_new_password_input,  # Output again to change type
+            old_password_visible,
+            new_password_visible,
+            confirm_new_password_visible,
+            old_password_toggle,
+            new_password_toggle,
+            confirm_new_password_toggle,
+        ],
+        queue=False,
+    )
+
+    return change_password_popup

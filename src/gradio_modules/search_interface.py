@@ -1,3 +1,4 @@
+# search_interface.py
 #!/usr/bin/env python3
 """
 Search interface module for chat history search functionality.
@@ -25,7 +26,7 @@ Features:
 - Automatic refresh when new messages are added
 """
 
-from typing import Tuple, Dict, Any  # noqa: F401
+from typing import Tuple, Dict, Any, List
 import gradio as gr
 import logging
 import sys
@@ -38,272 +39,178 @@ if str(parent_dir) not in sys.path:
 
 # Now import from parent directory
 from backend.chat import search_chat_history, format_search_results  # DO NOT RENAME
-from backend.markdown_formatter import format_markdown
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
-
-
-import os
 
 
 def search_interface(
     username_state: gr.State,
-    current_chat_id_state: gr.State,
-    chat_history_state: gr.State,
     all_chats_data_state: gr.State,
-    debug_info_state: gr.State,
-    audio_history_state: gr.State = None,
-) -> Tuple[gr.Column, gr.Textbox, gr.Button, gr.Markdown, gr.Markdown]:
-    logger.info(
-        "🔍 [SEARCH_UI] search_interface function called - initializing search components"
-    )
-    logger.info("🔍 [SEARCH_UI] Creating search container and components")
-    with gr.Column(
-        visible=False, elem_classes=["search-interface-container"]
-    ) as search_container:
-        with gr.Row(elem_classes=["search-header-row"]):
-            gr.Markdown("### 🔍 Search Chat History", elem_classes=["search-title"])
-        with gr.Row(elem_classes=["search-input-row"]):
+    audio_history_state: gr.State,
+    debug_info_state: gr.State,  # ADDED: To reflect state passed from app.py
+) -> gr.Blocks:
+    """
+    Constructs the search UI as a Gradio Blocks object.
+    """
+    logger.info("🔍 [SEARCH_UI] Initializing search interface...")
+
+    with gr.Blocks() as search_block:
+        # The visibility of this top-level container will be controlled by app.py
+        # based on login status and tab selection.
+        with gr.Column(elem_classes=["search-interface-container"]):
+            gr.Markdown("## 🔍 Chat History Search")
+            gr.Markdown(
+                "Search through your past chat messages and audio transcriptions."
+            )
+
             search_query = gr.Textbox(
-                label="",
-                placeholder="Enter your search query here...",
-                scale=4,
-                elem_classes=["search-input"],
-                show_label=False,
-                container=False,
+                label="Search Query",
+                placeholder="Enter keywords to search chat history...",
+                elem_id="search_query_input",
             )
-            search_btn = gr.Button(
-                "🔍 Search",
-                scale=1,
-                variant="primary",
-                elem_classes=["search-button"],
-                size="sm",
-            )
-            clear_search_btn = gr.Button(
-                "🗑️ Clear",
-                scale=0,
-                variant="secondary",
-                elem_classes=["clear-search-button"],
-                size="sm",
-            )
-        with gr.Row(elem_classes=["search-stats-row"]):
+
+            with gr.Row():
+                search_btn = gr.Button(
+                    "Search", variant="primary", elem_id="search_btn"
+                )
+                clear_search_btn = gr.Button(
+                    "Clear Search", variant="secondary", elem_id="clear_search_btn"
+                )
+
             search_stats = gr.Markdown(
-                "Ready to search...", elem_classes=["search-stats"], visible=False
+                "Enter a query and click 'Search' or press Enter to find results.",
+                elem_id="search_stats_md",
             )
-        search_results_md = gr.Markdown(
-            "Enter a search query above to find messages in your chat history.",
-            elem_classes=["search-results"],
-            elem_id="search_results",
-        )
-    logger.info("🔍 [SEARCH_UI] Search container and components created successfully")
-
-    # Patch: In benchmark mode, skip event setup
-    if os.environ.get("BENCHMARK_MODE"):
-        return (
-            search_container,
-            search_query,
-            search_btn,
-            search_results_md,
-            search_stats,
-        )
-
-    def _handle_search_query(
-        query: str, username: str, audio_history=None
-    ) -> tuple[str, str]:
-        # Handle a search query from the UI and return formatted results.
-        #
-        # This function calls the backend's `search_chat_history` and formats
-        # the results for display in a Markdown component.
-        #
-        # :param query: The search query string.
-        # :type query: str
-        # :param username: The current username.
-        # :type username: str
-        # :return: Tuple of (formatted markdown string, stats string).
-        # :rtype: tuple[str, str]
-        logger.info(
-            f"🔍 [SEARCH_UI] _handle_search_query called with query: '{query}', username: '{username}'"
-        )
-
-        if not query.strip() or not username:
-            logger.info("🔍 [SEARCH_UI] Empty query or username, returning early")
-            return "Please enter a search query.", ""
-
-        try:
-            logger.info("🔍 [SEARCH_UI] Calling backend search_chat_history...")
-            # Use backend's search_chat_history which returns (results, status_message)
-            found_results, status_message = search_chat_history(query.strip(), username)
-            logger.info(
-                f"🔍 [SEARCH_UI] Backend returned {len(found_results)} results, status: '{status_message}'"
+            search_results_md = gr.Markdown(
+                "Search results will appear here.", elem_id="search_results_md"
             )
 
-            # --- Audio history search ---
-            audio_results = []
-            if audio_history:
-                for item in audio_history:
-                    transcription = item.get("transcription", "")
-                    timestamp = item.get("timestamp", "")
-                    if query.lower() in transcription.lower():
-                        audio_results.append(
-                            {
-                                "type": "audio",
-                                "transcription": transcription,
-                                "timestamp": timestamp,
-                            }
-                        )
+            # --- Helper Functions for Search Interface ---
 
-            # Format results using backend's format_search_results
-            result_text = ""
-            if found_results:
-                result_text += format_search_results(
-                    found_results, query, include_similarity=True
-                )
-            if audio_results:
-                result_text += "\n\n---\n### 🎤 Audio History Results\n"
-                for i, item in enumerate(audio_results, 1):
-                    result_text += f"**Audio {i}** _{item['timestamp']}_\n- **Transcription:** {item['transcription'][:100]}{'...' if len(item['transcription']) > 100 else ''}\n\n"
-            if not found_results and not audio_results:
-                stats_text = f"❌ No results found for '{query}'"
-                result_text = f"**No results found for '{query}'**\n\n{status_message}. Try increasing the length of the query."
-                return format_markdown(result_text), stats_text
-
-            stats_text = f"✅ Found {len(found_results) + len(audio_results)} result{'s' if (len(found_results) + len(audio_results)) != 1 else ''} for '{query}'"
-            return format_markdown(result_text), stats_text
-        except Exception as e:
-            logger.error(f"Error handling search: {e}")
-            error_text = f"**Error occurred during search:** {str(e)}"
-            stats_text = "❌ Error occurred during search"
-            return error_text, stats_text
-
-    def _refresh_search_results_on_data_change(
-        current_query: str, username: str, all_chats_data: Dict[str, Any]
-    ) -> tuple[str, str]:
-        # Refresh search results when chat data changes (e.g., new messages added).
-        #
-        # This function is called automatically when all_chats_data_state changes,
-        # ensuring search results stay up-to-date with new messages.
-        #
-        # :param current_query: The current search query (if any).
-        # :type current_query: str
-        # :param username: The current username.
-        # :type username: str
-        # :param all_chats_data: The updated chat data.
-        # :type all_chats_data: Dict[str, Any]
-        # :return: Tuple of (updated search results, stats string).
-        # :rtype: tuple[str, str]
-        logger.info("🔍 [SEARCH_REFRESH] _refresh_search_results_on_data_change called")
-        logger.info(
-            f"🔍 [SEARCH_REFRESH] current_query: '{current_query}', username: '{username}'"
-        )
-        logger.info(
-            f"🔍 [SEARCH_REFRESH] all_chats_data has {len(all_chats_data)} chats"
-        )
-
-        # Only refresh if there's an active search query
-        if not current_query.strip() or not username:
-            logger.info(
-                "🔍 [SEARCH_REFRESH] No active query or username, returning default message"
-            )
-            return (
-                "Enter a search query above to find messages in your chat history.",
-                "",
-            )
-
-        try:
-            # Log the refresh attempt for debugging
-            logger.info(
-                f"Refreshing search for query '{current_query}' for user '{username}'"
-            )
-            logger.info(f"all_chats_data contains {len(all_chats_data)} chats")
-
-            # Use the all_chats_data parameter directly instead of internal cache
-            # This ensures we get the latest data that was just updated by the chatbot
-            if all_chats_data:
+            async def _handle_search_query(
+                query: str, username: str, audio_history: List[List[str]]
+            ) -> Tuple[str, str]:
                 logger.info(
-                    f"Using provided all_chats_data with {len(all_chats_data)} chats"
+                    f"🔍 [SEARCH_HANDLER] Search query received: '{query}' by user: {username}"
+                )
+                if not query:
+                    return gr.update(
+                        value="Please enter a search query.", visible=True
+                    ), gr.update(value="", visible=True)
+
+                try:
+                    results = []
+                    async for result in search_chat_history(
+                        username, query, audio_history
+                    ):
+                        results.append(result)
+
+                    if not results:
+                        return "No matching chats found.", ""
+
+                    formatted_results = format_search_results(results)
+
+                    if not formatted_results:
+                        return gr.update(
+                            value="No matching results found.", visible=True
+                        ), gr.update(value="0 results", visible=True)
+
+                    num_results = len(results)
+                    return gr.update(value=formatted_results, visible=True), gr.update(
+                        value=f"{num_results} results found", visible=True
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"🔍 [SEARCH_HANDLER] Error during search for '{username}': {e}",
+                        exc_info=True,
+                    )
+                    return gr.update(
+                        value=f"An error occurred during search: {str(e)}", visible=True
+                    ), gr.update(value="", visible=True)
+
+            async def _clear_search_results() -> Tuple[str, str]:
+                logger.info("🔍 [SEARCH_HANDLER] Clearing search results.")
+                return gr.update(
+                    value="Search results will appear here.", visible=True
+                ), gr.update(
+                    value="Enter a query and click 'Search' or press Enter to find results.",
+                    visible=True,
                 )
 
-                # Log some details about the chats for debugging
-                for chat_id, chat_data in all_chats_data.items():
-                    history_length = len(chat_data.get("history", []))
-                    logger.info(f"Chat {chat_id}: {history_length} messages")
-            else:
-                logger.warning(f"No all_chats_data provided for user {username}")
+            async def _refresh_search_results_on_data_change(
+                current_query: str,
+                username: str,
+                all_chats_data: Dict[str, Dict[str, Any]],  # Use the gr.State directly
+                audio_history: List[List[str]],  # Use the gr.State directly
+            ) -> Tuple[gr.update, gr.update]:
+                """Refreshes search results if the chat data or audio history changes and a query exists."""
+                logger.info(
+                    f"🔍 [SEARCH_HANDLER] Data change detected. Refreshing search for user: {username}"
+                )
+                if current_query:
+                    # Re-run the search if there's an active query
+                    return await _handle_search_query(
+                        current_query, username, audio_history
+                    )
+                return gr.update(), gr.update()  # No change if no query
 
-            # Re-run the search with the current query and username
-            found_results, status_message = search_chat_history(
-                current_query.strip(), username
+            # --- Event Wiring ---
+            logger.info("🔍 [SEARCH_UI] Binding search events...")
+
+            search_query.submit(
+                fn=_handle_search_query,
+                inputs=[
+                    search_query,
+                    username_state,
+                    audio_history_state,
+                ],  # Pass the gr.State directly
+                outputs=[search_results_md, search_stats],
+                queue=True,
             )
-            if not found_results:
-                stats_text = f"❌ No results found for '{current_query}'"
-                result_text = f"**No results found for '{current_query}'**\n\n{status_message}. Try increasing the length of the query."
-                return result_text, stats_text
-
-            result_text = format_search_results(
-                found_results, current_query, include_similarity=True
+            search_btn.click(
+                fn=_handle_search_query,
+                inputs=[
+                    search_query,
+                    username_state,
+                    audio_history_state,
+                ],  # Pass the gr.State directly
+                outputs=[search_results_md, search_stats],
+                queue=True,
             )
-            stats_text = f"✅ Found {len(found_results)} result{'s' if len(found_results) != 1 else ''} for '{current_query}'"
-            return format_markdown(result_text), stats_text
-        except Exception as e:
-            logger.error(f"Error refreshing search results: {e}")
-            error_text = f"**Error occurred during search refresh:** {str(e)}"
-            stats_text = "❌ Error occurred during search refresh"
-            return error_text, stats_text
+            logger.info("🔍 [SEARCH_UI] Search events bound successfully")
 
-    def _clear_search_results() -> tuple[str, str]:
-        """
-        Clear search results and reset the markdown.
+            # Add clear search functionality
+            clear_search_btn.click(
+                fn=_clear_search_results,
+                outputs=[search_results_md, search_stats],
+                queue=False,
+            )
 
-        :return: Tuple of (cleared message, empty stats).
-        :rtype: tuple[str, str]
-        """
-        return "Enter a search query above to find messages in your chat history.", ""
+            # Add automatic refresh when chat data changes
+            # This ensures search results are updated when new messages are added
+            logger.info(
+                "🔍 [SEARCH_UI] Setting up automatic refresh on all_chats_data_state.change"
+            )
+            all_chats_data_state.change(
+                fn=_refresh_search_results_on_data_change,
+                inputs=[
+                    search_query,
+                    username_state,
+                    all_chats_data_state,
+                    audio_history_state,
+                ],  # Pass the gr.State directly
+                outputs=[search_results_md, search_stats],
+                queue=False,  # Don't queue this to avoid delays
+            )
 
-    # Bind events
-    logger.info("🔍 [SEARCH_UI] Binding search events")
+            # Note: Message sending functionality is handled by the main chat input in chatbot_ui
+            # The search interface focuses only on search functionality
 
-    # Helper to build inputs list
-    def _inputs_with_audio(*args):
-        if audio_history_state is not None:
-            return [*args, audio_history_state]
-        return list(args)
-
-    search_query.submit(
-        fn=lambda q, u, *rest: _handle_search_query(q, u, rest[0] if rest else None),
-        inputs=_inputs_with_audio(search_query, username_state),
-        outputs=[search_results_md, search_stats],
-    )
-    search_btn.click(
-        fn=lambda q, u, *rest: _handle_search_query(q, u, rest[0] if rest else None),
-        inputs=_inputs_with_audio(search_query, username_state),
-        outputs=[search_results_md, search_stats],
-    )
-    logger.info("🔍 [SEARCH_UI] Search events bound successfully")
-
-    # Add clear search functionality
-    clear_search_btn.click(
-        fn=_clear_search_results,
-        outputs=[search_results_md, search_stats],
-    )
-
-    # Add automatic refresh when chat data changes
-    # This ensures search results are updated when new messages are added
-    logger.info(
-        "🔍 [SEARCH_UI] Setting up automatic refresh on all_chats_data_state.change"
-    )
-    all_chats_data_state.change(
-        fn=_refresh_search_results_on_data_change,
-        inputs=[search_query, username_state, all_chats_data_state],
-        outputs=[search_results_md, search_stats],
-        queue=False,  # Don't queue this to avoid delays
-    )
-
-    # Note: Message sending functionality is handled by the main chat input in chatbot_ui
-    # The search interface focuses only on search functionality
-
-    logger.info(
-        "🔍 [SEARCH_UI] Returning search components: container, query, btn, results_md, stats"
-    )
-    return search_container, search_query, search_btn, search_results_md, search_stats
+            logger.info(
+                "🔍 [SEARCH_UI] Returning search components: container, query, btn, results_md, stats"
+            )
+    return search_block  # Return the entire Blocks object
