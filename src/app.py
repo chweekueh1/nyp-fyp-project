@@ -39,9 +39,7 @@ from performance_utils import (
     apply_all_optimizations,
     get_optimized_launch_config,
 )
-from backend import (
-    init_backend,
-)  # This imports the async init_backend from backend/main.py
+from backend.main import init_backend
 
 
 def load_custom_css():
@@ -68,12 +66,26 @@ def toggle_password_visibility(
 
 async def main():
     start_app_startup_tracking()
+    # Optional: Add a milestone for entering main function
+    # mark_startup_milestone("app.py: start_main")
 
     logger.info("Initializing backend...")
-    await init_backend()
-    mark_startup_milestone("backend_initialized")
-    logger.info("Backend initialized.")
+    apply_all_optimizations()
+    mark_startup_milestone("optimizations_applied")
 
+    try:
+        # Directly await the backend initialization
+        await init_backend()
+        mark_startup_milestone("app.py: after backend init")
+        logger.info("Backend initialized.")
+    except Exception as e:
+        mark_startup_milestone(f"app.py: backend init failed ({e})")
+        logger.error(f"Backend initialization failed: {e}")
+        # Optionally, raise the exception or handle it more gracefully for the user
+        raise
+
+    # --- Gradio App UI ---
+    print("✅ Backend initialized. Launching Gradio app...")
     logger.info("Creating Gradio UI components...")
     with gr.Blocks(
         theme=flexcyon_theme,

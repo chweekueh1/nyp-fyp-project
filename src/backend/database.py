@@ -45,16 +45,21 @@ class DuckDBVectorStore:
         logger = logging.getLogger(__name__)
         # Ensure db_path is absolute and inside Docker volume
         base_dir = get_chatbot_dir()
-        abs_db_path = os.path.join(base_dir, "data", "vector_store", "duck_db.db")
-        os.makedirs(abs_db_path, exist_ok=True)
-        self.db_path = abs_db_path
+        # The db_path parameter is intended to be the base directory for DuckDB files
+        # A specific collection will create its own .db file within this base directory
+        self.base_db_dir = os.path.join(
+            base_dir, "data", "vector_store", "duckdb_collections"
+        )  # Changed this line
+        create_folders(self.base_db_dir)  # Ensure the base directory exists
+
         self.collection_name = collection_name
         self.embedding_model = embedding_model
 
         # Create collection-specific database file in subdirectory
-        collection_dir = os.path.join(self.db_path, collection_name)
-        create_folders(collection_dir)
-        self.db_file = os.path.join(collection_dir, f"{collection_name}.db")
+        # self.db_path (the parameter) is now the base directory for all DuckDB instances
+        self.db_file = os.path.join(
+            self.base_db_dir, f"{collection_name}.db"
+        )  # Changed this line
 
         logger.info(
             f"🔍 [DuckDBVectorStore] Initializing vector DB for collection '{collection_name}' at '{self.db_file}'"
@@ -114,6 +119,7 @@ class DuckDBVectorStore:
             f"INSERT OR REPLACE INTO {self.collection_name} (id, content, embedding, metadata, {cols}) VALUES ({placeholders})",
             to_insert,
         )
+        self.conn.commit()
 
     def query(
         self, query_text: str, k: int = 5, keyword_filter: Optional[List[str]] = None
@@ -274,26 +280,22 @@ class DuckDBRetriever(BaseRetriever):
 
 # --- Lazy loading for collections ---
 def get_duckdb_collection(collection_name: str) -> DuckDBVectorStore:
-    """Lazy load DuckDB vector store collection.
-
-    :param collection_name: Name of the collection to load.
-    :type collection_name: str
-    :return: DuckDBVectorStore instance for the specified collection.
-    :rtype: DuckDBVectorStore
-    """
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.info(
-        f"🔍 [get_duckdb_collection] Loading DuckDB vector store for collection '{collection_name}'"
-    )
-    # Always use the Docker volume path for DuckDB
+    """Helper to get a DuckDBVectorStore instance."""
+    # The actual path where DuckDB files for collections will be stored.
+    # This should be the same base path used in DuckDBVectorStore's __init__
     base_dir = get_chatbot_dir()
-    db_path = os.path.join(base_dir, "data", "vector_store", "duck_db.db")
-    os.makedirs(db_path, exist_ok=True)
+    duckdb_base_path = os.path.join(
+        base_dir, "data", "vector_store", "duckdb_collections"
+    )
+
+    # Pass the base_db_dir as the db_path to DuckDBVectorStore
     return lazy_loader.load_module(
         f"duckdb_{collection_name}",
-        lambda: DuckDBVectorStore(db_path, collection_name, EMBEDDING_MODEL),
+        lambda: DuckDBVectorStore(
+            db_path=duckdb_base_path,  # Pass the correct base directory
+            collection_name=collection_name,
+            embedding_model=EMBEDDING_MODEL,
+        ),
     )
 
 

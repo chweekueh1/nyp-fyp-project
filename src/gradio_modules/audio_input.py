@@ -14,7 +14,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-from backend import transcribe_audio
+from backend.audio import transcribe_audio
 from backend.chat import (
     get_chatbot_response,
 )  # Assuming this is the correct import for chatbot response

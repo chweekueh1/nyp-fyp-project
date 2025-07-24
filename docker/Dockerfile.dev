@@ -81,33 +81,27 @@ RUN addgroup -g 1001 -S appgroup && \
     mkdir -p /app/data/memory_persistence && \
     mkdir -p /app/data/keyword && \
     mkdir -p /app/data/chat_sessions && \
-    chmod -R 777 /app/data/memory_persistence && \
-    chmod -R 777 /app/data/keyword && \
-    chmod -R 777 /app/data/chat_sessions && \
-    chmod -R 777 /home/appuser/.nypai-chatbot/data/memory_persistence && \
-    chmod -R 777 /home/appuser/.nypai-chatbot/data/chat_sessions && \
+    mkdir -p /app/data/reports && \
     mkdir -p /app/docs/modules /app/docs/modules/src && \
     mkdir -p /tmp/nypai-chatbot/sqlite && \
     chown -R appuser:appgroup /app && \
     chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
     chown -R appuser:appgroup /tmp/nypai-chatbot && \
-    chown -R appuser:appgroup /app/data && \
-    chown -R appuser:appgroup /app/data/memory_persistence && \
-    chown -R appuser:appgroup /app/data/keyword && \
-    chown -R appuser:appgroup /app/data/chat_sessions && \
-    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data && \
-    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data/memory_persistence && \
-    chown -R appuser:appgroup /home/appuser/.nypai-chatbot/data/chat_sessions && \
-    chmod -R 755 /home/appuser/.nypai-chatbot && \
-    chmod -R 755 /app && \
-    chmod -R 777 /tmp/nypai-chatbot/sqlite && \
+    # Explicitly set read/write/execute permissions for the owner (appuser) on data directories
+    # This ensures appuser has full control over these directories.
     chmod -R 777 /app/data && \
     chmod -R 777 /app/data/memory_persistence && \
     chmod -R 777 /app/data/keyword && \
     chmod -R 777 /app/data/chat_sessions && \
+    chmod -R 777 /app/data/reports && \
     chmod -R 777 /home/appuser/.nypai-chatbot/data && \
     chmod -R 777 /home/appuser/.nypai-chatbot/data/memory_persistence && \
-    chmod -R 777 /home/appuser/.nypai-chatbot/data/chat_sessions
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/chat_sessions && \
+    chmod -R 777 /tmp/nypai-chatbot/sqlite && \
+    # Set more general permissions for /app and /home/appuser/.nypai-chatbot
+    # (rwx for owner, rx for group/others for directories; rw for owner, r for group/others for files)
+    chmod -R 777 /app && \
+    chmod -R 777 /home/appuser/.nypai-chatbot
 
 # Switch to non-root user
 USER appuser

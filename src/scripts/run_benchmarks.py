@@ -265,7 +265,7 @@ def main():
         ),
         (
             "Database Initialization",
-            "python -c 'from backend.consolidated_database import get_user_database; db = get_user_database(); db.execute_query(\"SELECT 1\")'",
+            "python -c 'from backend.consolidated_database import get_user_database; db = get_conslidated_database(); db.execute_query(\"SELECT 1\")'",
             5,
         ),
         (

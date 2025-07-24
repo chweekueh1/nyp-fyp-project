@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Import specific backend functions
 from backend.chat import (
     get_chatbot_response,  # This is now assumed to be an async generator
-    rename_chat,
+    rename_chat_session,
 )
 
 # --- Helper functions for chatbot_ui (these handle overall chat session management) ---
@@ -261,7 +261,7 @@ async def _handle_clear_chat(
     )
 
 
-async def _handle_rename_chat(
+async def _handle_rename_chat_session(
     username: str,
     chat_id: str,
     new_chat_name: str,
@@ -292,7 +292,7 @@ async def _handle_rename_chat(
 
     # 2. Update the database
     try:
-        db_update_result = await rename_chat(username, chat_id, new_chat_name)
+        db_update_result = await rename_chat_session(username, chat_id, new_chat_name)
         if not db_update_result.get("success"):
             logger.error(
                 f"Failed to rename chat in database for {chat_id} by {username}: "
@@ -591,7 +591,7 @@ def chatbot_ui(
 
         # Rename chat
         rename_btn.click(
-            fn=_handle_rename_chat,
+            fn=_handle_rename_chat_session,
             inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
             outputs=[
                 chat_selector,
@@ -601,7 +601,7 @@ def chatbot_ui(
             queue=True,
         )
         rename_input.submit(
-            fn=_handle_rename_chat,
+            fn=_handle_rename_chat_session,
             inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
             outputs=[
                 chat_selector,

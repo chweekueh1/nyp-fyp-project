@@ -10,12 +10,9 @@ import time
 from typing import Tuple
 import gradio as gr
 import logging
+from backend.auth import change_password
 
 logger = logging.getLogger(__name__)
-
-from backend import (
-    change_password,
-)  # Assuming this is the backend function for password change
 
 # Global references for the button and state that app.py will manage
 # These need to be accessible from app.py to wire events.

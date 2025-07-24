@@ -15,8 +15,21 @@ functions to support different deployment scenarios.
 
 import logging
 from .utils import _ensure_db_and_folders_async
-from .database import get_llm_functions, get_chat_db
+from .database import (
+    get_llm_functions,
+    get_chat_db,
+    get_data_processing,
+    get_classification,
+    get_classification_db,  # Added to ensure classification_db from database.py is checked
+)
 from performance_utils import perf_monitor
+from . import (
+    timezone_utils,
+)  # Import timezone_utils to ensure it's loaded and initialized
+from typing import Dict, Any
+from .consolidated_database import (
+    get_consolidated_database,
+)  # New: Import consolidated database
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -30,152 +43,176 @@ async def init_backend() -> None:
     - Database and folder structure
     - LLM functions and database connections
     - DuckDB vector store
+    - Data processing module
+    - Classification module
+    - Timezone utilities (by importing)
 
     Raises:
         Exception: If any component fails to initialize
     """
     try:
         logger.info("🚀 Initializing backend...")
+        perf_monitor.start_timer("backend_init_total")
 
         # Ensure database and folders exist
+        perf_monitor.start_timer("db_and_folders_init")
         await _ensure_db_and_folders_async()
+        perf_monitor.end_timer("db_and_folders_init")
+        logger.info("✅ Database and folders ensured.")
 
         # Initialize LLM functions and LLM/DB directly (no lazy loading)
         try:
+            perf_monitor.start_timer("llm_functions_init")
             llm_funcs = get_llm_functions()
             if llm_funcs:
                 logger.info("✅ LLM functions initialized")
-                # Explicitly initialize LLM and DB
-                await llm_funcs["initialize_llm_and_db"]()
-                logger.info("✅ LLM and DB initialized after backend startup")
+                # Explicitly call LLM initialization if it has such a method
+                if "initialize_llm_and_db" in llm_funcs:
+                    await llm_funcs["initialize_llm_and_db"]()
+                    logger.info("✅ LLM model and associated DB initialized.")
+                else:
+                    logger.warning("LLM initialization function not found.")
             else:
-                logger.warning("⚠️ LLM functions not available")
+                logger.warning("LLM functions could not be initialized.")
+            perf_monitor.end_timer("llm_functions_init")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize LLM and DB: {e}")
+            logger.error(f"Error initializing LLM functions: {e}")
+            raise
 
-        # Initialize DuckDB vector store
+        # Initialize DuckDB chat vector store
         try:
-            db = get_chat_db()  # Use DuckDB chat collection directly
-            if db:
-                logger.info("✅ DuckDB vector store initialized")
-            else:
-                logger.warning("⚠️ DuckDB vector store not available")
+            perf_monitor.start_timer("duckdb_chat_init")
+            chat_duck_db = get_chat_db()
+            if chat_duck_db:
+                logger.info("✅ DuckDB chat vector database initialized.")
+            perf_monitor.end_timer("duckdb_chat_init")
         except Exception as e:
-            logger.error(f"❌ Error initializing DuckDB vector store: {e}")
+            logger.error(f"Error initializing DuckDB chat vector database: {e}")
+            raise
 
-        logger.info("✅ Backend initialization completed")
+        # Initialize DuckDB classification vector store
+        try:
+            perf_monitor.start_timer("duckdb_classification_init")
+            classification_duck_db = get_classification_db()
+            if classification_duck_db:
+                logger.info("✅ DuckDB classification vector database initialized.")
+            perf_monitor.end_timer("duckdb_classification_init")
+        except Exception as e:
+            logger.error(
+                f"Error initializing DuckDB classification vector database: {e}"
+            )
+            raise
 
+        # Initialize consolidated SQLite database
+        try:
+            perf_monitor.start_timer("consolidated_sqlite_db_init")
+            consolidated_sqlite_db = get_consolidated_database()
+            if consolidated_sqlite_db:
+                logger.info("✅ Consolidated SQLite database initialized.")
+            perf_monitor.end_timer("consolidated_sqlite_db_init")
+        except Exception as e:
+            logger.error(f"Error initializing consolidated SQLite database: {e}")
+            raise
+
+        # Initialize data processing module
+        try:
+            perf_monitor.start_timer("data_processing_init")
+            data_proc = get_data_processing()
+            if data_proc:
+                logger.info("✅ Data processing module initialized.")
+            perf_monitor.end_timer("data_processing_init")
+        except Exception as e:
+            logger.error(f"Error initializing data processing module: {e}")
+            raise
+
+        # Initialize classification module (separate from classification_db if it's just the module)
+        try:
+            perf_monitor.start_timer("classification_module_init")
+            classification_module = get_classification()
+            if classification_module:
+                logger.info("✅ Classification module initialized.")
+            perf_monitor.end_timer("classification_module_init")
+        except Exception as e:
+            logger.error(f"Error initializing classification module: {e}")
+            raise
+
+        # Timezone utilities are implicitly initialized by import.
+        # Add a quick check to ensure they are accessible.
+        try:
+            perf_monitor.start_timer("timezone_utils_check")
+            _ = timezone_utils.get_app_timezone()
+            logger.info("✅ Timezone utilities available.")
+            perf_monitor.end_timer("timezone_utils_check")
+        except Exception as e:
+            logger.error(f"Error checking timezone utilities: {e}")
+            raise
+
+        perf_monitor.end_timer("backend_init_total")
+        logger.info("🚀 Backend initialization complete.")
     except Exception as e:
-        logger.error(f"❌ Backend initialization failed: {e}")
+        logger.critical(f"🔥 Backend initialization failed: {e}", exc_info=True)
         raise
 
 
-async def init_backend_async_internal() -> None:
+def get_backend_status() -> Dict[str, Any]:
     """
-    Internal async initialization function.
+    Check the status of various backend components.
 
-    Performs comprehensive backend initialization with performance monitoring.
-    This function is called internally and includes detailed logging and
-    performance tracking for each component.
-
-    Raises:
-        Exception: If any component fails to initialize
+    :return: A dictionary containing the status of each component.
+    :rtype: Dict[str, Any]
     """
+    logger.info("Checking backend status...")
+    status = {"backend_initialized": True, "components": {}}
+
     try:
-        logger.info("🔄 Starting internal backend initialization...")
-
-        # Ensure database and folders exist
-        await _ensure_db_and_folders_async()
-
-        # Initialize LLM functions with performance monitoring
-        with perf_monitor("llm_initialization"):
-            llm_funcs = get_llm_functions()
-            if llm_funcs:
-                logger.info("✅ LLM functions initialized successfully")
-            else:
-                logger.warning("⚠️ LLM functions initialization failed")
-
-        # Initialize DuckDB vector store with performance monitoring
-        with perf_monitor("duckdb_initialization"):
-            try:
-                db = get_chat_db()  # Use DuckDB chat collection directly
-                if db:
-                    logger.info("✅ DuckDB vector store initialized successfully")
-                else:
-                    logger.warning("⚠️ DuckDB vector store initialization failed")
-            except Exception as e:
-                logger.error(f"❌ DuckDB vector store initialization error: {e}")
-
-        # Initialize data processing functions
-        with perf_monitor("data_processing_initialization"):
-            try:
-                from .database import get_data_processing
-
-                data_processing = get_data_processing()
-                if data_processing:
-                    logger.info("✅ Data processing functions initialized")
-                else:
-                    logger.warning("⚠️ Data processing functions not available")
-            except Exception as e:
-                logger.error(f"❌ Data processing initialization error: {e}")
-
-        # Initialize classification functions
-        with perf_monitor("classification_initialization"):
-            try:
-                from .database import get_classification
-
-                classification = get_classification()
-                if classification:
-                    logger.info("✅ Classification functions initialized")
-                else:
-                    logger.warning("⚠️ Classification functions not available")
-            except Exception as e:
-                logger.error(f"❌ Classification initialization error: {e}")
-
-        logger.info("✅ Internal backend initialization completed successfully")
-
-    except Exception as e:
-        logger.error(f"❌ Internal backend initialization failed: {e}")
-        raise
-
-
-def get_backend_status() -> dict:
-    """
-    Get the current status of the backend components.
-
-    :return: Dictionary containing backend status information.
-    :rtype: dict
-    """
-    try:
-        status = {"backend_initialized": True, "components": {}}
-
         # Check LLM functions
         try:
             llm_funcs = get_llm_functions()
-            status["components"]["llm_functions"] = {
-                "available": llm_funcs is not None,
-                "ready": llm_funcs["is_llm_ready"]() if llm_funcs else False,
-            }
+            status["components"]["llm_functions"] = {"available": llm_funcs is not None}
         except Exception as e:
             status["components"]["llm_functions"] = {
                 "available": False,
                 "error": str(e),
             }
 
-        # Check DuckDB vector store
+        # Check Consolidated SQLite Database
         try:
-            db = get_chat_db()  # Use DuckDB chat collection directly
-            status["components"]["duckdb_vectorstore"] = {"available": db is not None}
+            consolidated_db = get_consolidated_database()
+            status["components"]["consolidated_sqlite_db"] = {
+                "available": consolidated_db is not None
+            }
         except Exception as e:
-            status["components"]["duckdb_vectorstore"] = {
+            status["components"]["consolidated_sqlite_db"] = {
+                "available": False,
+                "error": str(e),
+            }
+
+        # Check DuckDB chat database
+        try:
+            chat_duck_db = get_chat_db()
+            status["components"]["duckdb_chat_db"] = {
+                "available": chat_duck_db is not None
+            }
+        except Exception as e:
+            status["components"]["duckdb_chat_db"] = {
+                "available": False,
+                "error": str(e),
+            }
+
+        # Check DuckDB classification database
+        try:
+            classification_duck_db = get_classification_db()
+            status["components"]["duckdb_classification_db"] = {
+                "available": classification_duck_db is not None
+            }
+        except Exception as e:
+            status["components"]["duckdb_classification_db"] = {
                 "available": False,
                 "error": str(e),
             }
 
         # Check data processing
         try:
-            from .database import get_data_processing
-
             data_processing = get_data_processing()
             status["components"]["data_processing"] = {
                 "available": data_processing is not None
@@ -186,16 +223,25 @@ def get_backend_status() -> dict:
                 "error": str(e),
             }
 
-        # Check classification
+        # Check classification module
         try:
-            from .database import get_classification
-
             classification = get_classification()
-            status["components"]["classification"] = {
+            status["components"]["classification_module"] = {
                 "available": classification is not None
             }
         except Exception as e:
-            status["components"]["classification"] = {
+            status["components"]["classification_module"] = {
+                "available": False,
+                "error": str(e),
+            }
+
+        # Check timezone utilities
+        try:
+            # Simply checking if the module can be accessed
+            _ = timezone_utils.get_app_timezone()
+            status["components"]["timezone_utils"] = {"available": True}
+        except Exception as e:
+            status["components"]["timezone_utils"] = {
                 "available": False,
                 "error": str(e),
             }

@@ -31,7 +31,7 @@ from gradio_modules.classification_formatter import (
     format_classification_response,
 )
 
-from backend import data_classification
+from backend.file_handling import data_classification
 
 # Hardcoded list of allowed file extensions
 ALLOWED_EXTENSIONS = [

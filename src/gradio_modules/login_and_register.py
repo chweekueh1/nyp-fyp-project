@@ -301,21 +301,12 @@ async def handle_primary_btn_click(
 
     allowed_domains = ALLOWED_EMAILS
 
-    if mode and "@" in username_val:
-        return (
-            gr.update(
-                value="Username cannot be an email address during registration.",
-                visible=True,
-            ),
-            gr.update(value=logged_in_state.value),  # Keep current value
-            gr.update(value=username_state.value),  # Keep current value
-        )
-
+    # Common validation
     if not username_val or not password_val:
         return (
             gr.update(value="Username and password are required.", visible=True),
-            gr.update(value=logged_in_state.value),
-            gr.update(value=username_state.value),
+            gr.update(value=logged_in_state),
+            gr.update(value=username_state),
         )
 
     if mode:  # Register mode
@@ -324,8 +315,15 @@ async def handle_primary_btn_click(
                 gr.update(
                     value="Valid email is required for registration.", visible=True
                 ),
-                gr.update(value=logged_in_state.value),
-                gr.update(value=username_state.value),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
+            )
+
+        if "@" in username_val:
+            return (
+                gr.update(value="Username cannot be an email address.", visible=True),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
             )
 
         email_domain = email_val.split("@")[1].lower()
@@ -335,29 +333,51 @@ async def handle_primary_btn_click(
                     value=f"Email domain '{email_domain}' is not authorized. Allowed domains: {', '.join(allowed_domains)}",
                     visible=True,
                 ),
-                gr.update(value=logged_in_state.value),
-                gr.update(value=username_state.value),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
             )
 
         if password_val != confirm_password_val:
             return (
                 gr.update(value="Passwords do not match.", visible=True),
-                gr.update(value=logged_in_state.value),
-                gr.update(value=username_state.value),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
             )
 
-        register_result = await do_register(username_val, email_val, password_val)
-        if register_result["status"] == "success":
-            return (gr.update(""), True, register_result["username"])
-        else:
-            return (gr.update(value=register_result["message"]), False, "")
-    else:  # Login mode
-        login_result = await do_login(username_val, password_val)
-        if login_result["status"] == "success":
+        # Call the do_register function
+        register_result = await do_register(username_val, password_val, email_val)
+        if register_result["success"]:
+            # On successful registration, we do not log the user in.
+            # We display a success message and keep the login state as-is.
             return (
-                gr.update(value=""),  # Clear error message
-                True,
-                login_result["username"],
+                gr.update(
+                    value="Registration successful! Please log in.", visible=True
+                ),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
             )
         else:
-            return (gr.update(value=login_result["message"]), False, "")
+            return (
+                gr.update(value=register_result["message"], visible=True),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
+            )
+
+    else:  # Login mode
+        login_result = await do_login(username_val, password_val)
+        if login_result["success"]:
+            # On successful login, we update the logged_in_state to True
+            # and the username_state to the logged-in username.
+            # Assuming do_login returns the username on success.
+            return (
+                gr.update(value=login_result["message"], visible=True),
+                gr.update(value=True),
+                gr.update(value=username_val),
+            )
+        else:
+            # On failed login, we display the error message and keep the states as-is.
+            return (
+                gr.update(value=login_result["message"], visible=True),
+                gr.update(value=logged_in_state),
+                gr.update(value=username_state),
+            )

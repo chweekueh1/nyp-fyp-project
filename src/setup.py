@@ -76,9 +76,15 @@ def fix_nypai_chatbot_permissions():
     # --- Memory persistence directory fix for Docker/dev ---
     # Only attempt if running on Linux and the directory exists
     mem_persist_host = os.path.join(os.getcwd(), "data", "memory_persistence")
+    mem_persist_host2 = os.path.join(os.getcwd(), "data", "reports")
     if os.path.exists(mem_persist_host):
         try:
             fix_memory_persistence_permissions(mem_persist_host)
+        except Exception as e:
+            print(f"Warning: Could not fix memory_persistence permissions: {e}")
+    if os.path.exists(mem_persist_host2):
+        try:
+            fix_memory_persistence_permissions(mem_persist_host2)
         except Exception as e:
             print(f"Warning: Could not fix memory_persistence permissions: {e}")
 

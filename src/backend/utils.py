@@ -7,11 +7,11 @@ Contains helper functions and utilities.
 import os
 import html
 import re
-import json
-from typing import Dict, Any, Union  # noqa: F401
+import asyncio
+from typing import Dict, Any, Union
 from infra_utils import setup_logging, ensure_chatbot_dir_exists
 from .config import CHAT_DATA_PATH, CHAT_SESSIONS_PATH
-from .timezone_utils import get_utc_timestamp
+from .consolidated_database import get_consolidated_database  # Updated import
 
 # Set up logging
 logger = setup_logging()
@@ -36,7 +36,7 @@ def sanitize_input(input_text: str) -> str:
     cleaned = html.escape(cleaned)
 
     # Remove potentially dangerous characters
-    cleaned = re.sub(r'[<>"\']', "", cleaned)
+    cleaned = re.sub(r'[<>"\\\']', "", cleaned)
 
     # Handle arrow characters to prevent them from being interpreted as HTML entities
     # Use temporary placeholders to avoid conflicts with HTML entity escaping
@@ -44,157 +44,67 @@ def sanitize_input(input_text: str) -> str:
     cleaned = cleaned.replace("-.->", "ARROWDOTTEDPLACEHOLDER")
     cleaned = cleaned.replace("==>", "ARROWTHICKPLACEHOLDER")
     cleaned = cleaned.replace("=>", "ARROWFATPLACEHOLDER")
-    cleaned = cleaned.replace("->", "ARROWSHORTPLACEHOLDER")
+    cleaned = cleaned.replace("<-", "ARROWLEFTPLACEHOLDER")
+    cleaned = cleaned.replace("<->", "ARROWDOUBLEPLACEHOLDER")
 
-    # Restore placeholders with proper escaping
-    cleaned = cleaned.replace("ARROWLONGPLACEHOLDER", "\\-\\-\\>")
-    cleaned = cleaned.replace("ARROWDOTTEDPLACEHOLDER", "\\-\\.\\-\\>")
-    cleaned = cleaned.replace("ARROWTHICKPLACEHOLDER", "\\=\\=\\>")
-    cleaned = cleaned.replace("ARROWFATPLACEHOLDER", "\\=\\>")
-    cleaned = cleaned.replace("ARROWSHORTPLACEHOLDER", "\\-\\>")
+    # Replace placeholders with desired rendering (e.g., Markdown compatible arrows)
+    # This step is crucial if the output is later rendered as Markdown.
+    cleaned = cleaned.replace("ARROWLONGPLACEHOLDER", "-->")
+    cleaned = cleaned.replace("ARROWDOTTEDPLACEHOLDER", "-.->")
+    cleaned = cleaned.replace("ARROWTHICKPLACEHOLDER", "==>")
+    cleaned = cleaned.replace("ARROWFATPLACEHOLDER", "=>")
+    cleaned = cleaned.replace("ARROWLEFTPLACEHOLDER", "<-")
+    cleaned = cleaned.replace("ARROWDOUBLEPLACEHOLDER", "<->")
 
-    # Limit length
-    if len(cleaned) > 50000:
-        cleaned = cleaned[:50000]
-
-    # Strip whitespace but preserve non-whitespace content
-    cleaned = cleaned.strip()
-
-    # If the result is empty after stripping, return the original input
-    # This prevents short queries like "hi" from becoming empty
-    return input_text.strip() if not cleaned and input_text.strip() else cleaned
+    return cleaned
 
 
 async def _ensure_db_and_folders_async() -> None:
     """
-    Ensure all necessary directories and files exist.
-
-    Raises:
-        Exception: If directory or file creation fails.
+    Asynchronously ensure that the database and necessary folders exist.
     """
+    # Ensure base chatbot data directory exists
+    await asyncio.to_thread(ensure_chatbot_dir_exists)
+    logger.info("Chatbot base directory ensured.")
+
+    # Ensure chat data and session paths exist
+    os.makedirs(CHAT_DATA_PATH, exist_ok=True)
+    os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
+    logger.info("Chat data and session directories ensured.")
+
+    # Initialize the consolidated SQLite database
     try:
-        # Ensure chatbot directory exists
-        ensure_chatbot_dir_exists()
-
-        # Ensure chat data directory exists
-        os.makedirs(CHAT_DATA_PATH, exist_ok=True)
-
-        # Ensure chat sessions directory exists
-        os.makedirs(CHAT_SESSIONS_PATH, exist_ok=True)
-
-        # Ensure SQLite database directory exists (managed by sqlite_database.py)
-        from .sqlite_database import get_sqlite_db_path
-
-        sqlite_dir = os.path.dirname(get_sqlite_db_path("users"))
-        os.makedirs(sqlite_dir, exist_ok=True)
-
-        logger.info("Database and folders ensured successfully")
-
+        db = get_consolidated_database()  # Use the consolidated database
+        logger.info(f"Consolidated SQLite database initialized at {db.db_path}.")
     except Exception as e:
-        logger.error(f"Error ensuring database and folders: {e}")
-        raise
+        logger.critical(
+            f"Failed to initialize consolidated SQLite database: {e}", exc_info=True
+        )
+        raise  # Re-raise to halt startup if database cannot be initialized
 
 
-async def ensure_user_folder_file_exists_async(username: str, chat_id: str) -> str:
+def health_check() -> Dict[str, Any]:
     """
-    Ensure user folder and chat file exist.
+    Performs a health check on the backend components.
 
-    :param username: Username for the folder.
-    :type username: str
-    :param chat_id: Chat ID for the file.
-    :type chat_id: str
-    :return: Path to the chat file.
-    :rtype: str
-    :raises Exception: If folder or file creation fails.
+    :return: Dictionary containing the health status.
+    :rtype: Dict[str, Any]
     """
     try:
-        user_folder = os.path.join(CHAT_DATA_PATH, username)
-        os.makedirs(user_folder, exist_ok=True)
+        # Check file system health
+        if not os.path.exists(CHAT_DATA_PATH) or not os.path.exists(CHAT_SESSIONS_PATH):
+            return {"status": "error", "message": "File system paths missing"}
 
-        chat_file = os.path.join(user_folder, f"{chat_id}.json")
-        if not os.path.exists(chat_file):
-            with open(chat_file, "w") as f:
-                json.dump({"messages": []}, f)
-
-        return chat_file
-    except Exception as e:
-        logger.error(f"Error ensuring user folder/file exists: {e}")
-        raise
-
-
-async def save_message_async(
-    username: str, chat_id: str, message: Dict[str, Any]
-) -> None:
-    """
-    Save a message to the user's chat file.
-
-    :param username: Username for the message.
-    :type username: str
-    :param chat_id: Chat ID for the message.
-    :type chat_id: str
-    :param message: Message data to save.
-    :type message: Dict[str, Any]
-    :raises Exception: If message saving fails.
-    """
-    try:
-        chat_file = await ensure_user_folder_file_exists_async(username, chat_id)
-
-        with open(chat_file, "r") as f:
-            chat_data = json.load(f)
-
-        # Add timestamp to message (store in UTC for consistency)
-        message_with_timestamp = {
-            **message,
-            "timestamp": get_utc_timestamp(),
-        }
-
-        chat_data["messages"].append(message_with_timestamp)
-
-        with open(chat_file, "w") as f:
-            json.dump(chat_data, f, indent=2)
-
-        logger.info(f"Message saved for user {username} in chat {chat_id}")
-
-    except Exception as e:
-        logger.error(f"Error saving message: {e}")
-        raise
-
-
-async def check_health() -> dict[str, str]:
-    """
-    Check the health of the backend system.
-
-    :return: Dictionary containing health status and message.
-    :rtype: dict[str, str]
-    """
-    try:
-        # Check if essential directories exist
-        dirs_to_check = [
-            CHAT_DATA_PATH,
-            CHAT_SESSIONS_PATH,
-        ]
-
-        for dir_path in dirs_to_check:
-            if not os.path.exists(dir_path):
-                return {
-                    "status": "error",
-                    "message": f"Directory {dir_path} does not exist",
-                }
-
-        # Check if SQLite database is accessible
+        # Check SQLite database connection
         try:
-            from .sqlite_database import get_user_database
-
-            db = get_user_database()
-            # Try a simple query to test database connectivity
-            test_result = db.execute_query("SELECT 1")
-            if not test_result:
-                return {
-                    "status": "error",
-                    "message": "SQLite database is not responding",
-                }
-        except Exception as e:
-            return {"status": "error", "message": f"SQLite database error: {e}"}
+            db = get_consolidated_database()  # Use the consolidated database
+            # Attempt a simple query to verify connection
+            db.execute_query("SELECT 1")
+        except Exception:
+            return {
+                "status": "error",
+                "message": "SQLite database is not responding",
+            }
 
         return {"status": "healthy", "message": "All systems operational"}
 
@@ -225,6 +135,10 @@ def get_completion(
     try:
         from .config import client
 
+        if client is None:
+            logger.error("OpenAI client is not initialized.")
+            return {"error": "OpenAI client not available."}
+
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -238,5 +152,5 @@ def get_completion(
             return {"error": "No response from model"}
 
     except Exception as e:
-        logger.error(f"Error getting completion: {e}")
-        return {"error": str(e)}
+        logger.error(f"Error getting completion from OpenAI: {e}")
+        return {"error": f"Failed to get completion: {e}"}
