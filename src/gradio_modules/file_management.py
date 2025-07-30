@@ -26,14 +26,9 @@ def combined_file_interfaces_ui(
     Combines file upload and file classification UIs into a single Gradio Blocks.
     Uses internal tabs to separate the two functionalities.
     """
-    with gr.Blocks() as combined_file_block:
-        with gr.Tabs(
-            selected=0, elem_id="file_management_tabs"
-        ):  # Use tabs within this block for separation
+    with gr.Blocks() as file_management_block:
+        with gr.Tabs(selected=0, elem_id="file_management_tabs"):
             with gr.TabItem("⬆️ Upload File", id="upload_tab"):
-                # Call file_upload_ui, passing all necessary states
-                # Note: file_upload_ui expects all_chats_data_state, debug_info_state,
-                # chat_id_state, and chat_history_state which are now explicitly passed.
                 file_upload_ui(
                     username_state=username_state,
                     all_chats_data_state=all_chats_data_state,
@@ -41,13 +36,10 @@ def combined_file_interfaces_ui(
                     chat_id_state=chat_id_state,
                     chat_history_state=chat_history_state,
                 )
-
             with gr.TabItem("📂 Classify Files", id="classify_tab"):
-                # Call file_classification_interface, passing necessary states
                 file_classification_interface(
                     username_state=username_state,
                     logged_in_state=logged_in_state,
                     debug_info_state=debug_info_state,
                 )
-
-    return combined_file_block
+    return file_management_block

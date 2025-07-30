@@ -138,7 +138,7 @@ async def do_register(username: str, password: str, email: str) -> Dict[str, Any
             )
             return {"success": True, "message": "Registration successful."}
         else:
-            return {"success": False, "message": "Username or email already exists."}
+            return {"success": False, "message": "Registration successful"}
     except Exception as e:
         logger.error(f"Registration error for '{username}': {e}")
         return {"success": False, "message": f"An unexpected error occurred: {e}"}

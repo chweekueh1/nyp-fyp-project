@@ -49,12 +49,9 @@ def change_password_interface(
     if _global_last_change_time_state is None:
         _global_last_change_time_state = gr.State(0)
 
-    # The actual password change popup UI, wrapped in a gr.Blocks
-    # This Blocks object will be the content of the "Change Password" tab
+    # The actual password change popup UI, returned as a Blocks fragment for the tab
     with gr.Blocks(
-        visible=False,
-        elem_id="change_password_popup",
-        elem_classes=["change-password-popup"],
+        elem_id="change_password_popup", elem_classes=["change-password-popup"]
     ) as change_password_popup:
         gr.Markdown("## 🔐 Change Password", elem_id="change_password_title")
         gr.Markdown(

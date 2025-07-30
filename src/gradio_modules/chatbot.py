@@ -477,38 +477,37 @@ def chatbot_ui(
             with gr.Column(scale=0, min_width=100):
                 rename_btn = gr.Button("✏️ Rename", interactive=False)
 
-        chatbot = gr.Chatbot(
-            elem_id="chatbot",
-            label="NYP FYP Chatbot",
-            value=[],  # Initial empty state
-            layout="bubble",  # Use bubble layout for messages
-            avatar_images=(
-                None,  # No avatar for user messages
-                os.path.join(
-                    os.path.dirname(__file__), "bot_avatar.png"
-                ),  # Path to bot avatar
-            ),
-            type="messages",  # Set type to messages for OpenAI-style dictionaries
-        )
-        with gr.Row(elem_id="message_input_row"):
-            msg = gr.Textbox(
-                show_label=False,
-                placeholder="Enter your message...",
-                container=False,
-                scale=7,
-                interactive=False,
-                elem_id="message_input",
+            chatbot = gr.Chatbot(
+                elem_id="chatbot",
+                label="NYP FYP Chatbot",
+                value=[],  # Initial empty state
+                layout="bubble",  # Use bubble layout for messages
+                avatar_images=(
+                    None,  # No avatar for user messages
+                    os.path.join(
+                        os.path.dirname(__file__), "bot_avatar.png"
+                    ),  # Path to bot avatar
+                ),
+                type="messages",  # Set type to messages for OpenAI-style dictionaries
             )
-            send_btn = gr.Button(
-                "Send",
-                scale=1,
-                variant="primary",
-                interactive=False,
-                elem_id="send_btn",
-            )
+            with gr.Row(elem_id="message_input_row"):
+                msg = gr.Textbox(
+                    show_label=False,
+                    placeholder="Enter your message...",
+                    container=False,
+                    scale=7,
+                    interactive=False,
+                    elem_id="message_input",
+                )
+                send_btn = gr.Button(
+                    "Send",
+                    scale=1,
+                    variant="primary",
+                    interactive=False,
+                    elem_id="send_btn",
+                )
 
         # Wire the components and their events
-
         # Chat selection
         chat_selector.change(
             fn=_load_chat_by_id,
@@ -640,4 +639,4 @@ def chatbot_ui(
             show_progress="hidden",  # Don't show progress for this initial setup
         )
 
-    return chatbot_block  # Return the entire Blocks object
+    return chatbot_block  # Return the main UI fragment

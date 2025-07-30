@@ -25,77 +25,75 @@ def login_interface(
     password_visible = gr.State(False)
     confirm_password_visible = gr.State(False)
 
-    # Create all components individually within a Column context
-    with gr.Column(elem_id="login_register_container") as main_container:
-        gr.Markdown("# 🚀 NYP FYP Chatbot", elem_id="auth_title")
-        header_subtitle = gr.Markdown(
-            "## 🔐 Login", elem_id="auth_subtitle"
-        )  # Default to Login
-        header_instruction = gr.Markdown(
-            "Please log in to access the chatbot.", elem_id="auth_instruction"
-        )  # Default to Login
+    # Create all components individually (no top-level container)
+    gr.Markdown("# 🚀 NYP FYP Chatbot", elem_id="auth_title")
+    header_subtitle = gr.Markdown(
+        "## 🔐 Login", elem_id="auth_subtitle"
+    )  # Default to Login
+    header_instruction = gr.Markdown(
+        "Please log in to access the chatbot.", elem_id="auth_instruction"
+    )  # Default to Login
 
-        error_message = gr.Markdown("", elem_id="auth_error_message", visible=True)
+    error_message = gr.Markdown("", elem_id="auth_error_message", visible=True)
 
-        username_input = gr.Textbox(
-            label="Username",
-            placeholder="Enter your username",
-            elem_id="username_input",
-        )
-        email_input = gr.Textbox(
-            label="Email",
-            placeholder="Enter your authorized email address",
-            elem_id="email_input",
-            visible=False,  # Initially hidden for login mode
-        )
-        email_info = gr.Markdown(
-            f"**Note:** Only emails from `{', '.join(ALLOWED_EMAILS)}` are allowed for registration.",
-            elem_id="email_info",
-            visible=False,  # Initially hidden for login mode
-        )
-        password_input = gr.Textbox(
-            label="Password",
-            placeholder="Enter your password",
-            type="password",
-            elem_id="password_input",
-        )
-        show_password_btn = gr.Button("👁️", elem_id="show_password_btn", size="sm")
+    username_input = gr.Textbox(
+        label="Username",
+        placeholder="Enter your username",
+        elem_id="username_input",
+    )
+    email_input = gr.Textbox(
+        label="Email",
+        placeholder="Enter your authorized email address",
+        elem_id="email_input",
+        visible=False,  # Initially hidden for login mode
+    )
+    email_info = gr.Markdown(
+        f"**Note:** Only emails from `{', '.join(ALLOWED_EMAILS)}` are allowed for registration.",
+        elem_id="email_info",
+        visible=False,  # Initially hidden for login mode
+    )
+    password_input = gr.Textbox(
+        label="Password",
+        placeholder="Enter your password",
+        type="password",
+        elem_id="password_input",
+    )
+    show_password_btn = gr.Button("👁️", elem_id="show_password_btn", size="sm")
 
-        confirm_password_input = gr.Textbox(
-            label="Confirm Password",
-            placeholder="Confirm your password",
-            type="password",
-            visible=False,  # Initially hidden for login mode
-            elem_id="confirm_password_input",
-        )
-        show_confirm_btn = gr.Button(
-            "👁️", elem_id="show_confirm_btn", size="sm", visible=False
-        )  # Initially hidden for login mode
+    confirm_password_input = gr.Textbox(
+        label="Confirm Password",
+        placeholder="Confirm your password",
+        type="password",
+        visible=False,  # Initially hidden for login mode
+        elem_id="confirm_password_input",
+    )
+    show_confirm_btn = gr.Button(
+        "👁️", elem_id="show_confirm_btn", size="sm", visible=False
+    )  # Initially hidden for login mode
 
-        password_requirements = gr.Markdown(
-            """
-        **Password Requirements:**
-        <ul style="margin-top: 5px; margin-bottom: 5px;">
-            <li>Minimum 8 characters</li>
-            <li>At least one uppercase letter</li>
-            <li>At least one lowercase letter</li>
-            <li>At least one digit</li>
-        </ul>
-        """,
-            visible=False,  # Initially hidden for login mode
-            elem_id="password_requirements",
-        )
+    password_requirements = gr.Markdown(
+        """
+    **Password Requirements:**
+    <ul style="margin-top: 5px; margin-bottom: 5px;">
+        <li>Minimum 8 characters</li>
+        <li>At least one uppercase letter</li>
+        <li>At least one lowercase letter</li>
+        <li>At least one digit</li>
+    </ul>
+    """,
+        visible=False,  # Initially hidden for login mode
+        elem_id="password_requirements",
+    )
 
-        primary_btn = gr.Button(
-            "Login", variant="primary", elem_id="primary_auth_btn"
-        )  # Default to Login
-        secondary_btn = gr.Button(
-            "Don't have an account? Register",
-            variant="secondary",
-            elem_id="secondary_auth_btn",
-        )  # Default to Register prompt
+    primary_btn = gr.Button(
+        "Login", variant="primary", elem_id="primary_auth_btn"
+    )  # Default to Login
+    secondary_btn = gr.Button(
+        "Don't have an account? Register",
+        variant="secondary",
+        elem_id="secondary_auth_btn",
+    )  # Default to Register prompt
 
-    # Event handlers (restored from older version, adapted for passed-in states)
     # Password toggle handlers
     def toggle_password(is_visible: bool) -> tuple:
         """Toggle password visibility."""
@@ -168,24 +166,7 @@ def login_interface(
             ),  # error_message (clear any previous errors)
         )
 
-    # Wire up password toggle events
-    show_password_btn.click(
-        fn=toggle_password,
-        inputs=[password_visible],
-        outputs=[password_input, show_password_btn, password_visible],
-        queue=False,  # UI responsiveness
-    )
-
-    show_confirm_btn.click(
-        fn=toggle_confirm_password,
-        inputs=[confirm_password_visible],
-        outputs=[
-            confirm_password_input,
-            show_confirm_btn,
-            confirm_password_visible,
-        ],
-        queue=False,  # UI responsiveness
-    )
+    # Password toggle event wiring is handled in app.py for consistency
 
     # Wire up form switching events
     def handle_secondary_btn_click_logic(current_is_register_mode_val: bool) -> tuple:
@@ -268,15 +249,14 @@ def login_interface(
     )
 
     return (
-        main_container,  # 1
-        error_message,  # 2
-        username_input,  # 3
-        email_input,  # 4
-        password_input,  # 5
-        confirm_password_input,  # 6
-        primary_btn,  # 7
-        secondary_btn,  # 8
-        show_password_btn,  # 9
+        error_message,  # 1
+        username_input,  # 2
+        email_input,  # 3
+        password_input,  # 4
+        confirm_password_input,  # 5
+        primary_btn,  # 6
+        secondary_btn,  # 7
+        show_password_btn,  # 8
         show_confirm_btn,  # 10
         password_visible,  # 11
         confirm_password_visible,  # 12
@@ -305,8 +285,8 @@ async def handle_primary_btn_click(
     if not username_val or not password_val:
         return (
             gr.update(value="Username and password are required.", visible=True),
-            gr.update(value=logged_in_state),
-            gr.update(value=username_state),
+            False,
+            "",
         )
 
     if mode:  # Register mode
@@ -315,15 +295,15 @@ async def handle_primary_btn_click(
                 gr.update(
                     value="Valid email is required for registration.", visible=True
                 ),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )
 
         if "@" in username_val:
             return (
                 gr.update(value="Username cannot be an email address.", visible=True),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )
 
         email_domain = email_val.split("@")[1].lower()
@@ -333,51 +313,45 @@ async def handle_primary_btn_click(
                     value=f"Email domain '{email_domain}' is not authorized. Allowed domains: {', '.join(allowed_domains)}",
                     visible=True,
                 ),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )
 
         if password_val != confirm_password_val:
             return (
                 gr.update(value="Passwords do not match.", visible=True),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )
 
         # Call the do_register function
         register_result = await do_register(username_val, password_val, email_val)
         if register_result["success"]:
-            # On successful registration, we do not log the user in.
-            # We display a success message and keep the login state as-is.
             return (
-                gr.update(
-                    value="Registration successful! Please log in.", visible=True
-                ),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                gr.update(value=register_result["message"], visible=True),
+                True,
+                username_val,
             )
         else:
             return (
                 gr.update(value=register_result["message"], visible=True),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )
 
     else:  # Login mode
         login_result = await do_login(username_val, password_val)
         if login_result["success"]:
-            # On successful login, we update the logged_in_state to True
-            # and the username_state to the logged-in username.
-            # Assuming do_login returns the username on success.
             return (
                 gr.update(value=login_result["message"], visible=True),
-                gr.update(value=True),
-                gr.update(value=username_val),
+                True,
+                login_result["username"]
+                if "username" in login_result
+                else username_val,
             )
         else:
-            # On failed login, we display the error message and keep the states as-is.
             return (
                 gr.update(value=login_result["message"], visible=True),
-                gr.update(value=logged_in_state),
-                gr.update(value=username_state),
+                False,
+                "",
             )

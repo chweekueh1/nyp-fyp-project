@@ -1,128 +1,33 @@
 # app.py
+
 import os
 import asyncio
 import gradio as gr
-import logging
-from typing import Tuple
-
-# Set up basic logging for the main application
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-# Import necessary modules
 from gradio_modules.login_and_register import login_interface, handle_primary_btn_click
-from gradio_modules.chatbot import chatbot_ui
-from gradio_modules.file_management import (
-    combined_file_interfaces_ui,
-)  # Combined file interface
-from gradio_modules.audio_input import (
-    audio_interface,
-)  # This now returns a gr.Blocks object
-from gradio_modules.change_password import (
-    change_password_interface,
-)  # Change password interface
-from gradio_modules.stats_interface import (
-    create_stats_interface,
-)  # Import stats interface
-from gradio_modules.search_interface import search_interface  # Import search interface
-
-
-# Import theme and utility functions
-from flexcyon_theme import flexcyon_theme
-from performance_utils import (
-    start_app_startup_tracking,
-    mark_startup_milestone,
-    complete_app_startup_tracking,
-    get_total_startup_time,
-    apply_all_optimizations,
-    get_optimized_launch_config,
-)
 from backend.main import init_backend
 
 
 def load_custom_css():
-    """Loads custom CSS from the styles directory."""
     css = ""
     styles_dir = "styles"
-    for filename in os.listdir(styles_dir):
-        if filename.endswith(".css"):
-            with open(os.path.join(styles_dir, filename), "r") as f:
-                css += f.read() + "\n"
+    if os.path.isdir(styles_dir):
+        for filename in os.listdir(styles_dir):
+            if filename.endswith(".css"):
+                with open(os.path.join(styles_dir, filename), "r") as f:
+                    css += f.read() + "\n"
     return css
 
 
-# Function to toggle password visibility
-def toggle_password_visibility(
-    current_type: str, current_visibility_state: bool
-) -> Tuple[str, bool, str]:
-    """Toggles the visibility of a password input field and its button icon."""
-    new_type = "text" if current_type == "password" else "password"
-    new_visibility_state = not current_visibility_state
-    new_icon = "🙈" if new_visibility_state else "👁️"
-    return gr.update(type=new_type), new_visibility_state, gr.update(value=new_icon)
-
-
 async def main():
-    start_app_startup_tracking()
-    # Optional: Add a milestone for entering main function
-    # mark_startup_milestone("app.py: start_main")
-
-    logger.info("Initializing backend...")
-    apply_all_optimizations()
-    mark_startup_milestone("optimizations_applied")
-
-    try:
-        # Directly await the backend initialization
-        await init_backend()
-        mark_startup_milestone("app.py: after backend init")
-        logger.info("Backend initialized.")
-    except Exception as e:
-        mark_startup_milestone(f"app.py: backend init failed ({e})")
-        logger.error(f"Backend initialization failed: {e}")
-        # Optionally, raise the exception or handle it more gracefully for the user
-        raise
-
-    # --- Gradio App UI ---
-    print("✅ Backend initialized. Launching Gradio app...")
-    logger.info("Creating Gradio UI components...")
-    with gr.Blocks(
-        theme=flexcyon_theme,
-        css=load_custom_css(),
-        title="NYP FYP Chatbot",
-    ) as app:
-        # Global state variables shared across the application
+    await init_backend()
+    with gr.Blocks(title="NYP FYP Chatbot", css=load_custom_css()) as app:
         logged_in_state = gr.State(False)
         username_state = gr.State("")
-        all_chats_data_state = gr.State({})  # Keep track of all chats data
-        chat_id_state = gr.State(None)  # Current chat ID
-        chat_history_state = gr.State([])  # Current chat history
-        debug_info_state = gr.State("")  # For displaying debug info
-        audio_history_state = gr.State([])  # For displaying audio history
-        is_register_mode_state = gr.State(
-            False
-        )  # Track which form is active in login/register
+        is_register_mode_state = gr.State(False)
 
-        # Global UI components that need to be accessible for visibility/content updates
-        user_info_display = gr.Markdown(
-            value="", visible=False, elem_id="user_info_display"
-        )
-        logout_btn_global = gr.Button(
-            "Logout", elem_id="logout_btn_global", visible=False
-        )
-        change_password_btn_global = gr.Button(
-            "Change Password", elem_id="change_password_btn_global", visible=False
-        )
-
-        # Define containers for login and main application views
-        with gr.Column(
-            elem_id="login_register_container", visible=True
-        ) as login_view_container:
-            # Pass the top-level states to login_interface
-            # Ensure 16 variables are unpacked to match login_interface's return
+        # Login/Register container (wrap all login/register UI in a column for visibility toggling)
+        with gr.Column(visible=True) as login_container:
             (
-                login_main_container,
                 error_message,
                 username_input,
                 email_input,
@@ -141,268 +46,221 @@ async def main():
             ) = login_interface(
                 logged_in_state,
                 username_state,
-                is_register_mode_state,  # Pass is_register_mode_state
+                is_register_mode_state,
             )
 
-            # Wire the secondary_btn to toggle the mode state
-            secondary_btn.click(
-                fn=lambda is_reg: not is_reg,
-                inputs=[is_register_mode_state],
-                outputs=[is_register_mode_state],
-                queue=False,
+        # Wire secondary_btn to toggle register/login mode
+        def toggle_register_mode(current_mode):
+            return not current_mode
+
+        secondary_btn.click(
+            fn=toggle_register_mode,
+            inputs=[is_register_mode_state],
+            outputs=[is_register_mode_state],
+            queue=False,
+        )
+
+        # Update UI elements when mode changes
+        def update_auth_ui(is_reg):
+            return (
+                gr.update(
+                    value="Register Account" if is_reg else "Login"
+                ),  # primary_btn
+                gr.update(
+                    value="Back to Login"
+                    if is_reg
+                    else "Don't have an account? Register"
+                ),  # secondary_btn
+                gr.update(visible=is_reg),  # email_input
+                gr.update(visible=is_reg),  # confirm_password_input
+                gr.update(visible=is_reg),  # show_confirm_btn
+                gr.update(visible=is_reg),  # password_requirements
+                gr.update(visible=is_reg),  # email_info
+                gr.update(
+                    value="## 📝 Register" if is_reg else "## 🔐 Login"
+                ),  # header_subtitle
+                gr.update(
+                    value="Create a new account to access the chatbot."
+                    if is_reg
+                    else "Please log in to access the chatbot."
+                ),  # header_instruction
+                gr.update(value=""),  # error_message (clear)
             )
 
-            # Wire is_register_mode_state.change to update UI elements
-            is_register_mode_state.change(
-                fn=lambda is_reg: (
-                    gr.update(value="Register" if is_reg else "Login"),  # primary_btn
-                    gr.update(
-                        value="Already have an account?"
-                        if is_reg
-                        else "Don't have an account?"
-                    ),  # secondary_btn
-                    gr.update(visible=is_reg),  # email_input
-                    gr.update(visible=is_reg),  # confirm_password_input
-                    gr.update(visible=is_reg),  # show_confirm_btn
-                    gr.update(visible=not is_reg),  # email_info
-                    gr.update(visible=is_reg),  # password_requirements
-                    gr.update(
-                        value="## 📝 Register" if is_reg else "## 🔐 Login"
-                    ),  # header_subtitle
-                    gr.update(
-                        value="Please register to create an account."
-                        if is_reg
-                        else "Please log in to access the chatbot."
-                    ),  # header_instruction
-                    gr.update(value=""),  # Clear username/email input
-                    gr.update(value=""),  # Clear password input
-                    gr.update(value=""),  # Clear confirm password input
-                    gr.update(
-                        value="", visible=False
-                    ),  # Clear error message and hide it
-                ),
-                inputs=[is_register_mode_state],
-                outputs=[
-                    primary_btn,
-                    secondary_btn,
-                    email_input,
-                    confirm_password_input,
-                    show_confirm_btn,  # Added to outputs for update
-                    email_info,
-                    password_requirements,
-                    header_subtitle,  # Added to outputs for update
-                    header_instruction,  # Added to outputs for update
-                    username_input,  # Added for clearing
-                    password_input,  # Added for clearing
-                    confirm_password_input,  # Added for clearing
-                    error_message,  # Added for clearing
-                ],
-                queue=False,
+        is_register_mode_state.change(
+            fn=update_auth_ui,
+            inputs=[is_register_mode_state],
+            outputs=[
+                primary_btn,
+                secondary_btn,
+                email_input,
+                confirm_password_input,
+                show_confirm_btn,
+                password_requirements,
+                email_info,
+                header_subtitle,
+                header_instruction,
+                error_message,
+            ],
+            queue=False,
+        )
+
+        # Main app container (TabbedInterface + Logout)
+        with gr.Column(visible=False) as main_container:
+            # Only instantiate interfaces when main_container is visible
+            hello_world = gr.Interface(lambda name: "Hello " + name, "text", "text")
+            bye_world = gr.Interface(lambda name: "Bye " + name, "text", "text")
+            chat = gr.ChatInterface(lambda *args: "Hello " + args[0])
+            # Logout tab as Blocks
+            with gr.Blocks() as logout_tab:
+                gr.Markdown("## Logout")
+                gr.Markdown("Click the button below to log out of your account.")
+                logout_btn = gr.Button("Logout", variant="secondary")
+
+                def do_logout():
+                    return gr.update(value=False), gr.update(value="")
+
+                logout_btn.click(
+                    fn=do_logout,
+                    outputs=[logged_in_state, username_state],
+                    queue=False,
+                )
+            # TabbedInterface with logout tab
+            demo_tabs = gr.TabbedInterface(
+                [hello_world, bye_world, chat, logout_tab],
+                ["Hello World", "Bye World", "Chat", "Logout"],
             )
+            demo_tabs
 
-            # Wire password visibility toggles
-            show_password_btn.click(
-                fn=toggle_password_visibility,
-                inputs=[password_input, password_visible],
-                outputs=[password_input, password_visible, show_password_btn],
-                queue=False,
+        # Show/hide containers after login/logout
+        def handle_login_state(logged_in, username):
+            print(
+                f"[DEBUG] handle_login_state called: logged_in={logged_in}, username={username}"
             )
-            show_confirm_btn.click(
-                fn=toggle_password_visibility,
-                inputs=[confirm_password_input, confirm_password_visible],
-                outputs=[
-                    confirm_password_input,
-                    confirm_password_visible,
-                    show_confirm_btn,
-                ],
-                queue=False,
+            # Hide login/register UI and show main app container after login
+            result = (
+                gr.update(visible=not logged_in),  # login_container
+                gr.update(visible=logged_in),  # main_container
             )
-
-            # Wire primary button click for login/registration
-            primary_btn.click(
-                fn=handle_primary_btn_click,
-                inputs=[
-                    is_register_mode_state,  # Pass the gr.State object, its value will be used
-                    username_input,
-                    email_input,
-                    password_input,
-                    confirm_password_input,
-                    logged_in_state,
-                    username_state,
-                ],
-                outputs=[error_message, logged_in_state, username_state],
-                queue=True,
+            print(
+                f"[DEBUG] handle_login_state result: login_container.visible={not logged_in}, main_container.visible={logged_in}"
             )
+            return result
 
-            # Add Enter key support for login/registration
-            password_input.submit(
-                fn=handle_primary_btn_click,
-                inputs=[
-                    is_register_mode_state,
-                    username_input,
-                    email_input,
-                    password_input,
-                    confirm_password_input,
-                    logged_in_state,
-                    username_state,
-                ],
-                outputs=[error_message, logged_in_state, username_state],
-                queue=True,
-            )
-
-            confirm_password_input.submit(
-                fn=handle_primary_btn_click,
-                inputs=[
-                    is_register_mode_state,
-                    username_input,
-                    email_input,
-                    password_input,
-                    confirm_password_input,
-                    logged_in_state,
-                    username_state,
-                ],
-                outputs=[error_message, logged_in_state, username_state],
-                queue=True,
-            )
-
-        with gr.Column(
-            elem_id="main_app_view_container", visible=False
-        ) as main_app_view_container:
-            with gr.Row(elem_id="header_row"):
-                with gr.Column(scale=1):
-                    user_info_display  # Removed .render()
-                with gr.Column(scale=1, elem_id="header_buttons_container"):
-                    with gr.Row():
-                        change_password_btn_global  # Removed .render()
-                        logout_btn_global  # Removed .render()
-
-            # Main tabbed interface for the application
-            with gr.Tabs(
-                selected="💬 Chatbot", elem_id="main_tabs"
-            ) as main_tabs_interface:
-                with gr.TabItem("💬 Chatbot", id="chatbot_tab"):
-                    chatbot_ui(
-                        username_state,
-                        all_chats_data_state,
-                        chat_id_state,
-                        chat_history_state,
-                        debug_info_state,
-                    )
-                with gr.TabItem("📁 File Management", id="file_management_tab"):
-                    combined_file_interfaces_ui(
-                        username_state,
-                        logged_in_state,
-                        debug_info_state,
-                        all_chats_data_state,
-                        chat_id_state,
-                        chat_history_state,
-                    )
-                with gr.TabItem("🎤 Audio Input", id="audio_input_tab"):
-                    audio_interface(
-                        username_state, audio_history_state, debug_info_state
-                    )
-                with gr.TabItem("📊 Statistics", id="stats_tab"):
-                    create_stats_interface(
-                        username_state, logged_in_state, debug_info_state
-                    )
-                with gr.TabItem("🔍 Search", id="search_tab"):
-                    search_interface(
-                        username_state, logged_in_state, debug_info_state, chat_id_state
-                    )
-                with gr.TabItem("🔑 Change Password", id="change_password_tab"):
-                    # The change password interface is displayed directly as content for this tab
-                    change_password_interface(username_state, logged_in_state)
-
-        # --- Event Handlers for Global State and View Management ---
-        logger.info("Wiring global event handlers...")
         logged_in_state.change(
-            fn=lambda logged_in, username: (
-                gr.update(visible=not logged_in),  # login_view_container visibility
-                gr.update(visible=logged_in),  # main_app_view_container visibility
-                gr.update(
-                    value=f"Logged in as: {username}", visible=logged_in
-                ),  # user_info_display
-                gr.update(visible=logged_in),  # logout_btn_global
-                gr.update(visible=logged_in),  # change_password_btn_global
-                gr.update(
-                    selected="💬 Chatbot" if logged_in else None
-                ),  # Set default tab on login
-            ),
+            fn=handle_login_state,
             inputs=[logged_in_state, username_state],
-            outputs=[
-                login_view_container,
-                main_app_view_container,
-                user_info_display,
-                logout_btn_global,
-                change_password_btn_global,
-                main_tabs_interface,  # Also update the tabbed interface on login/logout
-            ],
-            queue=False,  # UI updates should not be queued
+            outputs=[login_container, main_container],
+            queue=False,
         )
 
-        # Initial visibility setup when the app loads
         app.load(
-            fn=lambda logged_in, username: (
-                gr.update(visible=not logged_in),
-                gr.update(visible=logged_in),
-                gr.update(value=f"Logged in as: {username}", visible=logged_in),
-                gr.update(visible=logged_in),
-                gr.update(visible=logged_in),
-                gr.update(
-                    selected="💬 Chatbot" if logged_in else None
-                ),  # Set default tab on login
-            ),
+            fn=handle_login_state,
             inputs=[logged_in_state, username_state],
+            outputs=[login_container, main_container],
+            queue=False,
+        )
+
+        # The logout button logic is now handled within the logout interface
+
+        # Toggle password visibility
+        show_password_btn.click(
+            fn=lambda current_type, current_visibility_state: (
+                gr.update(type="text" if not current_visibility_state else "password"),
+                not current_visibility_state,
+                gr.update(value="🙈" if not current_visibility_state else "👁️"),
+            ),
+            inputs=[password_input, password_visible],
+            outputs=[password_input, password_visible, show_password_btn],
+            queue=False,
+        )
+        show_confirm_btn.click(
+            fn=lambda current_type, current_visibility_state: (
+                gr.update(type="text" if not current_visibility_state else "password"),
+                not current_visibility_state,
+                gr.update(value="🙈" if not current_visibility_state else "👁️"),
+            ),
+            inputs=[confirm_password_input, confirm_password_visible],
             outputs=[
-                login_view_container,
-                main_app_view_container,
-                user_info_display,
-                logout_btn_global,
-                change_password_btn_global,
-                main_tabs_interface,  # Also update the tabbed interface on load
+                confirm_password_input,
+                confirm_password_visible,
+                show_confirm_btn,
             ],
             queue=False,
-            show_progress="hidden",
         )
 
-        # --- Global Logout Button ---
-        logout_btn_global.click(
-            fn=lambda: [
-                False,
-                "",
-            ],  # Set logged_in_state to False, username_state to empty
-            outputs=[logged_in_state, username_state],
-            queue=False,
+        # Login/Register button logic (ensure handle_primary_btn_click is always called)
+        def call_handle_primary_btn_click(*args):
+            # Always call the async handle_primary_btn_click
+            return asyncio.run(handle_primary_btn_click(*args))
+
+        # Wrap handle_primary_btn_click to ensure UI state is updated after login/register
+        async def handle_and_update(*args):
+            error_msg, logged_in, username_val = await handle_primary_btn_click(*args)
+            print(
+                f"[DEBUG] handle_and_update: logged_in={logged_in}, username_val={username_val}"
+            )
+            # If login was successful, update states to trigger UI change
+            if logged_in is True:
+                print("[DEBUG] Login successful, updating states to True and username.")
+                return (
+                    error_msg,
+                    True,  # Update logged_in_state to True
+                    username_val.value
+                    if hasattr(username_val, "value")
+                    else username_val,  # Update username_state
+                )
+            else:
+                print("[DEBUG] Login failed, keeping login_container visible.")
+                return error_msg, False, ""
+
+        primary_btn.click(
+            fn=handle_and_update,
+            inputs=[
+                is_register_mode_state,
+                username_input,
+                email_input,
+                password_input,
+                confirm_password_input,
+                logged_in_state,
+                username_state,
+            ],
+            outputs=[error_message, logged_in_state, username_state],
+            queue=True,
         )
 
-        # Wire global change password button to select its tab
-        change_password_btn_global.click(
-            fn=lambda: gr.update(
-                selected="🔑 Change Password"  # Use 'selected' with the tab title string
-            ),
-            outputs=[main_tabs_interface],  # Target the TabbedInterface to change tab
-            queue=False,
+        password_input.submit(
+            fn=handle_and_update,
+            inputs=[
+                is_register_mode_state,
+                username_input,
+                email_input,
+                password_input,
+                confirm_password_input,
+                logged_in_state,
+                username_state,
+            ],
+            outputs=[error_message, logged_in_state, username_state],
+            queue=True,
         )
 
-    # Apply performance optimizations (ensure this runs AFTER all components are defined)
-    apply_all_optimizations()
-    mark_startup_milestone("optimizations_applied")
-    logger.info("Performance optimizations applied.")
+        confirm_password_input.submit(
+            fn=handle_and_update,
+            inputs=[
+                is_register_mode_state,
+                username_input,
+                email_input,
+                password_input,
+                confirm_password_input,
+                logged_in_state,
+                username_state,
+            ],
+            outputs=[error_message, logged_in_state, username_state],
+            queue=True,
+        )
 
-    # Initialize the queue for backend operations
-    app.queue()  # This should set up the queueing system fully
-    mark_startup_milestone("queue_initialized")
-    logger.info("Gradio queue initialized.")
-
-    # Use optimized Gradio launch config
-    launch_config = get_optimized_launch_config()
-
-    complete_app_startup_tracking()
-    total_startup_time = get_total_startup_time()
-    logger.info(f"APP STARTUP COMPLETED IN {total_startup_time:.2f}s")
-    logger.info("🚀 Launching application...")
-
-    app.launch(**launch_config)
+    app.queue()
+    app.launch()
 
 
 if __name__ == "__main__":
