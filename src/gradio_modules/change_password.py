@@ -14,11 +14,6 @@ from backend.auth import change_password
 
 logger = logging.getLogger(__name__)
 
-# Global references for the button and state that app.py will manage
-# These need to be accessible from app.py to wire events.
-_global_change_password_btn = None
-_global_last_change_time_state = None
-
 
 def change_password_interface(
     username_state: gr.State, logged_in_state: gr.State, rate_limit_seconds: int = 60
@@ -36,18 +31,8 @@ def change_password_interface(
     :return: The Blocks object containing the password change popup UI.
     :rtype: gr.Blocks
     """
-    # Initialize global references if they haven't been already
-    global _global_change_password_btn, _global_last_change_time_state
-    if _global_change_password_btn is None:
-        _global_change_password_btn = gr.Button(
-            "🔐 Change Password",
-            visible=False,  # Initially hidden, made visible on login
-            elem_id="main_change_password_btn",
-            size="sm",
-            variant="secondary",
-        )
-    if _global_last_change_time_state is None:
-        _global_last_change_time_state = gr.State(0)
+
+    last_change_time_state = gr.State(0)
 
     # The actual password change popup UI, returned as a Blocks fragment for the tab
     with gr.Blocks(
@@ -286,11 +271,11 @@ def change_password_interface(
             old_password_input,
             new_password_input,
             confirm_new_password_input,
-            _global_last_change_time_state,  # Use the global state here
+            last_change_time_state,  # Use the local state here
         ],
         outputs=[
             change_password_message,
-            _global_last_change_time_state,  # Update the global state
+            last_change_time_state,  # Update the local state
             change_password_popup,  # Control popup visibility
             logged_in_state,  # This will trigger logout only on success
             username_state,

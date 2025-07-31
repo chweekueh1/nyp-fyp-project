@@ -269,7 +269,7 @@ class StatsInterface:
         return display_text
 
 
-def create_stats_interface(username_state, logged_in_state, debug_info_state):
+def stats_interface(username_state, logged_in_state, debug_info_state):
     """
     Creates the Gradio Blocks interface for statistics, accepting external state variables.
     """

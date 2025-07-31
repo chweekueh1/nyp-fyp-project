@@ -107,11 +107,22 @@ async def main():
 
         # Main app container (TabbedInterface + Logout)
         with gr.Column(visible=False) as main_container:
-            # Only instantiate interfaces when main_container is visible
-            hello_world = gr.Interface(lambda name: "Hello " + name, "text", "text")
-            bye_world = gr.Interface(lambda name: "Bye " + name, "text", "text")
-            chat = gr.ChatInterface(lambda *args: "Hello " + args[0])
-            # Logout tab as Blocks
+            # State objects for interfaces
+            all_chats_data_state = gr.State({})
+            chat_id_state = gr.State("")
+            chat_history_state = gr.State([])
+            debug_info_state = gr.State("")
+            audio_history_state = gr.State([])
+
+            # Import actual interfaces
+            from gradio_modules.chatbot import chatbot_ui
+            from gradio_modules.stats_interface import stats_interface
+            from gradio_modules.search_interface import search_interface
+            from gradio_modules.change_password import change_password_interface
+            from gradio_modules.file_management import combined_file_interfaces_ui
+            from gradio_modules.audio_input import audio_interface
+
+            # Logout tab as a Blocks
             with gr.Blocks() as logout_tab:
                 gr.Markdown("## Logout")
                 gr.Markdown("Click the button below to log out of your account.")
@@ -125,10 +136,47 @@ async def main():
                     outputs=[logged_in_state, username_state],
                     queue=False,
                 )
-            # TabbedInterface with logout tab
+
+            # Build actual tabs
             demo_tabs = gr.TabbedInterface(
-                [hello_world, bye_world, chat, logout_tab],
-                ["Hello World", "Bye World", "Chat", "Logout"],
+                [
+                    chatbot_ui(
+                        username_state,
+                        all_chats_data_state,
+                        chat_id_state,
+                        chat_history_state,
+                        debug_info_state,
+                    ),
+                    combined_file_interfaces_ui(
+                        username_state,
+                        logged_in_state,
+                        debug_info_state,
+                        all_chats_data_state,
+                        chat_id_state,
+                        chat_history_state,
+                    ),
+                    audio_interface(
+                        username_state, audio_history_state, debug_info_state
+                    ),
+                    search_interface(
+                        username_state,
+                        all_chats_data_state,
+                        audio_history_state,
+                        debug_info_state,
+                    ),
+                    stats_interface(username_state, logged_in_state, debug_info_state),
+                    change_password_interface(username_state, logged_in_state),
+                    logout_tab,
+                ],
+                [
+                    "Chat",
+                    "Files",
+                    "Audio",
+                    "Search",
+                    "Stats",
+                    "Change Password",
+                    "Logout",
+                ],
             )
             demo_tabs
 

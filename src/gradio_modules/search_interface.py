@@ -1,21 +1,57 @@
 def _handle_search_query(search_query, username_state, audio_history_state):
-    """Stub: Handle search query submission."""
-    # TODO: Implement actual logic
-    return None, None
+    """Handle search query submission: fuzzy search across all user chats and audio history."""
+    import difflib
+    from backend.chat import search_chat_history
+
+    results_md = ""
+    stats_md = ""
+    username = username_state
+    query = search_query.strip()
+    if not username or not query:
+        return "Please enter a search query and log in.", "No results."
+
+    # Search chat history using backend
+    try:
+        chat_results = search_chat_history(username, query)
+        # Optionally, search audio history if provided
+        audio_results = []
+        if audio_history_state and isinstance(audio_history_state, list):
+            for entry in audio_history_state:
+                transcript = entry.get("transcript", "")
+                if transcript:
+                    score = difflib.SequenceMatcher(None, transcript, query).ratio()
+                    if score > 0.3:
+                        audio_results.append(
+                            (transcript, score, entry.get("audio", ""))
+                        )
+        # Format results
+        results_md = "### Chat Results\n"
+        if chat_results:
+            for msg in chat_results:
+                results_md += f"- **Chat:** {msg.get('chat_id', 'N/A')}<br>**Message:** {msg.get('content', '')}<br>**Score:** {msg.get('score', 0):.2f}\n"
+        else:
+            results_md += "No chat results found.\n"
+        if audio_results:
+            results_md += "\n### Audio Results\n"
+            for transcript, score, audio_file in audio_results:
+                results_md += f"- **Audio:** {audio_file}<br>**Transcript:** {transcript}<br>**Score:** {score:.2f}\n"
+        stats_md = f"Found {len(chat_results)} chat results, {len(audio_results)} audio results."
+        return results_md, stats_md
+    except Exception as e:
+        return f"Error during search: {e}", "No results."
 
 
 def _clear_search_results():
-    """Stub: Clear search results display."""
-    # TODO: Implement actual logic
-    return None, None
+    """Clear search results display."""
+    return "", "Results cleared."
 
 
 def _refresh_search_results_on_data_change(
     search_query, username_state, all_chats_data_state, audio_history_state
 ):
-    """Stub: Refresh search results when chat data changes."""
-    # TODO: Implement actual logic
-    return None, None
+    """Refresh search results when chat data changes."""
+    # Just re-run the search query
+    return _handle_search_query(search_query, username_state, audio_history_state)
 
 
 # search_interface.py
@@ -73,12 +109,13 @@ def search_interface(
 ) -> gr.Blocks:
     """
     Constructs the search UI as a Gradio Blocks object.
+    All UI logic is scoped inside this function.
     """
     logger.info("🔍 [SEARCH_UI] Initializing search interface...")
 
     with gr.Blocks() as search_block:
         with gr.Column(elem_classes=["search-interface-container"]):
-            gr.Markdown("## 50d Chat History Search")
+            gr.Markdown("## 🔍 Chat History Search")
             gr.Markdown(
                 "Search through your past chat messages and audio transcriptions."
             )
@@ -95,7 +132,6 @@ def search_interface(
                 clear_search_btn = gr.Button(
                     "Clear Search", variant="secondary", elem_id="clear_search_btn"
                 )
-            # ...existing code...
             search_stats = gr.Markdown(
                 "Enter a query and click 'Search' or press Enter to find results.",
                 elem_id="search_stats_md",
@@ -133,4 +169,4 @@ def search_interface(
             outputs=[search_results_md, search_stats],
             queue=False,
         )
-        return search_block
+    return search_block
