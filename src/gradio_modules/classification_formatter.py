@@ -8,6 +8,13 @@ import json
 from typing import Dict, Any, List  # noqa: F401
 from datetime import datetime  # noqa: F401
 import ast  # Required for literal_eval, use with caution for untrusted inputs
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info(
+    "[DEBUG] Initializing Classification Formatter (format_classification_response)"
+)
+print("[DEBUG] Rendering Classification Formatter (format_classification_response)")
 
 
 def format_classification_response(

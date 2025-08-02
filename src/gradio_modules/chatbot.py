@@ -17,7 +17,6 @@ The module integrates with Gradio to provide a web-based chat interface with:
 from typing import Tuple, Dict, Any, List
 import gradio as gr
 import logging
-import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -126,22 +125,37 @@ async def _handle_send_message(
     gr.Chatbot, gr.Textbox, gr.State, gr.State, gr.State
 ]:  # Added last_updated_time_state output
     """Handles sending a message to the chatbot and updating history."""
+
+    def to_gradio_pairs(history):
+        # Convert a list of dicts (with 'role' and 'content') to list of [user, bot] pairs
+        pairs = []
+        last_user = None
+        for entry in history:
+            if entry.get("role") == "user":
+                last_user = entry.get("content", "")
+            elif entry.get("role") == "assistant" and last_user is not None:
+                pairs.append([last_user, entry.get("content", "")])
+                last_user = None
+        if last_user is not None:
+            pairs.append([last_user, ""])
+        return pairs
+
     if not user_message:
         yield (
-            chat_history,
+            to_gradio_pairs(chat_history),
             "",
             all_chats_data,
-            chat_history,
+            to_gradio_pairs(chat_history),
             gr.update(),
         )  # Return unchanged if empty message
 
     if not username or not chat_id:
         logger.warning("Attempted to send message without valid username or chat ID.")
         yield (
-            chat_history,
+            to_gradio_pairs(chat_history),
             "",
             all_chats_data,
-            chat_history,
+            to_gradio_pairs(chat_history),
             gr.update(),
         )  # Return unchanged
 
@@ -180,10 +194,10 @@ async def _handle_send_message(
             # Update the content of the assistant message in the last entry
             chat_history[-1]["content"] = full_response
             yield (
-                chat_history,
+                to_gradio_pairs(chat_history),
                 gr.update(value=""),
                 all_chats_data,
-                chat_history,
+                to_gradio_pairs(chat_history),
                 current_time,
             )  # Yield streamed response
 
@@ -197,10 +211,10 @@ async def _handle_send_message(
         )
         # Final yield after all chunks are received and stored
         yield (
-            chat_history,
+            to_gradio_pairs(chat_history),
             gr.update(value=""),
             all_chats_data,
-            chat_history,
+            to_gradio_pairs(chat_history),
             current_time,
         )
 
@@ -212,10 +226,10 @@ async def _handle_send_message(
         error_message = f"Error: Could not get response ({e}). Please try again."
         chat_history[-1]["content"] = error_message  # Show error in chatbot
         yield (
-            chat_history,
+            to_gradio_pairs(chat_history),
             gr.update(value=""),
             all_chats_data,
-            chat_history,
+            to_gradio_pairs(chat_history),
             gr.update(),
         )
 
@@ -433,210 +447,3 @@ def initial_chat_setup(
         current_chat_id,  # 10 chat_id_state
         current_last_updated_time,  # 11 last_updated_time_state
     )
-
-
-def chatbot_ui(
-    username_state: gr.State,
-    all_chats_data_state: gr.State,
-    chat_id_state: gr.State,
-    chat_history_state: gr.State,
-    debug_info_state: gr.State,
-) -> gr.Blocks:
-    """
-    Constructs the main chatbot UI as a Gradio Blocks object.
-    """
-    with gr.Blocks() as chatbot_block:
-        # New state to hold last updated time of the current chat
-        last_updated_time_state = gr.State("")
-
-        with gr.Row(elem_id="chatbot_header_row"):
-            gr.Markdown("## 💬 Chatbot", elem_id="chatbot_title")
-            with gr.Column(scale=1, min_width=200):
-                new_chat_btn_from_interface = gr.Button(
-                    "➕ New Chat", elem_id="new_chat_btn_interface", interactive=False
-                )
-            with gr.Column(scale=1, min_width=200):
-                clear_chat_btn = gr.Button("🗑️ Clear Chat", interactive=False)
-
-        with gr.Row(elem_id="chat_management_row"):
-            with gr.Column(scale=1):
-                chat_selector = gr.Dropdown(
-                    label="Select Chat",
-                    choices=[],
-                    value=None,
-                    interactive=False,
-                    elem_id="chat_selector",
-                )
-            with gr.Column(scale=2):
-                rename_input = gr.Textbox(
-                    placeholder="Chat Name",
-                    show_label=False,
-                    interactive=False,
-                    elem_id="rename_input",
-                )
-            with gr.Column(scale=0, min_width=100):
-                rename_btn = gr.Button("✏️ Rename", interactive=False)
-
-            chatbot = gr.Chatbot(
-                elem_id="chatbot",
-                label="NYP FYP Chatbot",
-                value=[],  # Initial empty state
-                layout="bubble",  # Use bubble layout for messages
-                avatar_images=(
-                    None,  # No avatar for user messages
-                    os.path.join(
-                        os.path.dirname(__file__), "bot_avatar.png"
-                    ),  # Path to bot avatar
-                ),
-                type="messages",  # Set type to messages for OpenAI-style dictionaries
-            )
-            with gr.Row(elem_id="message_input_row"):
-                msg = gr.Textbox(
-                    show_label=False,
-                    placeholder="Enter your message...",
-                    container=False,
-                    scale=7,
-                    interactive=False,
-                    elem_id="message_input",
-                )
-                send_btn = gr.Button(
-                    "Send",
-                    scale=1,
-                    variant="primary",
-                    interactive=False,
-                    elem_id="send_btn",
-                )
-
-        # Wire the components and their events
-        # Chat selection
-        chat_selector.change(
-            fn=_load_chat_by_id,
-            inputs=[chat_selector, username_state, all_chats_data_state],
-            outputs=[
-                chat_history_state,
-                chat_id_state,
-                rename_input,
-                last_updated_time_state,
-            ],  # Corrected outputs
-            queue=False,  # UI updates should not be queued
-        )
-
-        # New chat button
-        new_chat_btn_from_interface.click(
-            fn=_handle_new_chat,
-            inputs=[username_state, all_chats_data_state],
-            outputs=[
-                chat_selector,
-                all_chats_data_state,
-                chat_id_state,
-                chat_history_state,
-                rename_input,
-                last_updated_time_state,  # Added output
-            ],
-            queue=True,
-        )
-
-        # Send message
-        send_btn.click(
-            fn=_handle_send_message,
-            inputs=[
-                msg,
-                chat_history_state,
-                username_state,
-                chat_id_state,
-                all_chats_data_state,
-            ],
-            outputs=[
-                chatbot,
-                msg,
-                all_chats_data_state,
-                chat_history_state,
-                last_updated_time_state,
-            ],  # Added output
-            queue=True,  # Enable queuing for potentially long chatbot responses
-        )
-        msg.submit(
-            fn=_handle_send_message,
-            inputs=[
-                msg,
-                chat_history_state,
-                username_state,
-                chat_id_state,
-                all_chats_data_state,
-            ],
-            outputs=[
-                chatbot,
-                msg,
-                all_chats_data_state,
-                chat_history_state,
-                last_updated_time_state,
-            ],  # Added output
-            queue=True,  # Enable queuing for potentially long chatbot responses
-        )
-
-        # Clear chat
-        clear_chat_btn.click(
-            fn=_handle_clear_chat,
-            inputs=[username_state, chat_id_state, all_chats_data_state],
-            outputs=[
-                chatbot,
-                all_chats_data_state,
-                chat_id_state,
-                rename_input,
-                last_updated_time_state,
-            ],  # Added output
-            queue=True,
-        )
-
-        # Rename chat
-        rename_btn.click(
-            fn=_handle_rename_chat_session,
-            inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
-            outputs=[
-                chat_selector,
-                all_chats_data_state,
-                last_updated_time_state,
-            ],  # Added output
-            queue=True,
-        )
-        rename_input.submit(
-            fn=_handle_rename_chat_session,
-            inputs=[username_state, chat_id_state, rename_input, all_chats_data_state],
-            outputs=[
-                chat_selector,
-                all_chats_data_state,
-                last_updated_time_state,
-            ],  # Added output
-            queue=True,
-        )
-
-        # Update chatbot display when chat_history_state changes
-        chat_history_state.change(
-            fn=lambda history: history,
-            inputs=[chat_history_state],
-            outputs=[chatbot],
-            queue=False,
-        )
-
-        # Trigger initial setup when the username_state changes (i.e., on login)
-        username_state.change(
-            fn=initial_chat_setup,
-            inputs=[username_state, all_chats_data_state],
-            outputs=[
-                chat_selector,
-                msg,
-                send_btn,
-                new_chat_btn_from_interface,
-                clear_chat_btn,
-                rename_input,
-                rename_btn,
-                all_chats_data_state,
-                chat_history_state,
-                chat_id_state,
-                last_updated_time_state,  # Added this
-            ],
-            queue=True,
-            show_progress="hidden",  # Don't show progress for this initial setup
-        )
-
-    return chatbot_block  # Return the main UI fragment

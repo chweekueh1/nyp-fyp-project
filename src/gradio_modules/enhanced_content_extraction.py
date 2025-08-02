@@ -1,6 +1,5 @@
 """
 Enhanced Content Extraction Module for NYP FYP Chatbot
-
 This module provides advanced file content extraction, cleaning, and keyword filtering utilities for the chatbot's file classification and search features. It supports parallel processing, integration with LLM keyword cache, and robust handling of various file types.
 """
 
@@ -14,6 +13,13 @@ import logging
 import shutil
 import concurrent.futures
 import re
+
+logger = logging.getLogger(__name__)
+logger.info(
+    "[DEBUG] Initializing Enhanced Content Extraction (enhanced_content_extraction)"
+)
+print("[DEBUG] Rendering Enhanced Content Extraction (enhanced_content_extraction)")
+
 
 # Import keyword filtering functionality
 try:

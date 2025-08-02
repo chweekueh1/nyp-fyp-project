@@ -116,13 +116,13 @@ class StatsInterface:
             api_summary = self.db.get_api_call_summary(username=sanitized_username)
             stats["api_call_summary"] = api_summary
 
-            # Fetch chat statistics
+            # Fetch chat statistics (fix: use correct queries)
             total_sessions_result = self.db.execute_query(
                 "SELECT COUNT(*) FROM chat_sessions WHERE username = ?",
                 (sanitized_username,),
             )
             total_messages_result = self.db.execute_query(
-                "SELECT COUNT(*) FROM chat_messages WHERE username = ?",
+                "SELECT COUNT(*) FROM chat_messages WHERE session_id IN (SELECT session_id FROM chat_sessions WHERE username = ?)",
                 (sanitized_username,),
             )
             stats["chat_statistics"] = {
@@ -160,11 +160,20 @@ class StatsInterface:
                     "max_startup_time": 0.0,
                 }
 
-            # Generate Mermaid flowchart
-            mermaid_chart = self._generate_mermaid_flowchart(stats)
+            # Generate Mermaid flowchart and format with markdown formatter
+            from backend.markdown_formatter import format_markdown
 
-            # Generate PDF report
-            pdf_report_path = self._generate_pdf_report(username, stats)
+            raw_mermaid_chart = self._generate_mermaid_flowchart(stats)
+            mermaid_chart = format_markdown(
+                f"""```mermaid\n\n{raw_mermaid_chart}\n\n```"""
+            )
+
+            # Generate PDF report using consolidated database function
+            try:
+                pdf_report_path = self.db.generate_pdf_report(sanitized_username, stats)
+            except Exception as pdf_exc:
+                logger.error(f"PDF generation failed: {pdf_exc}")
+                pdf_report_path = None
 
             status_message = f"Statistics for {username} loaded successfully."
             return (
@@ -267,86 +276,3 @@ class StatsInterface:
             display_text += "#### Recent File Classifications\n- No file classification data available.\n\n"
 
         return display_text
-
-
-def stats_interface(username_state, logged_in_state, debug_info_state):
-    """
-    Creates the Gradio Blocks interface for statistics, accepting external state variables.
-    """
-    stats_instance = StatsInterface()
-
-    with gr.Blocks() as stats_block:
-        gr.Markdown("## 📊 User & System Statistics")
-        gr.Markdown(
-            "View detailed performance metrics and usage statistics for the chatbot."
-        )
-
-        status_message = gr.Markdown("Please log in to view your statistics.")
-
-        with gr.Tab("Summary Dashboard"):
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("### Performance Visualizations (Mermaid Flowchart)")
-                    performance_visualizations = gr.Markdown(
-                        "```mermaid\ngraph TD\n    A[Loading...]\n```",
-                        elem_id="mermaid-chart",
-                    )
-                with gr.Column():
-                    gr.Markdown("### Detailed Statistics")
-                    statistics_tables = gr.Markdown(
-                        "Statistics will appear here...",
-                        elem_classes="scrollable-markdown",
-                    )
-
-            with gr.Row():
-                raw_stats_json = gr.Json(
-                    label="Raw Statistics JSON",
-                    visible=False,
-                    elem_classes="scrollable-json",
-                )
-
-            with gr.Row():
-                with gr.Column():
-                    refresh_stats_btn = gr.Button(
-                        "🔄 Refresh Statistics",
-                        size="lg",
-                        elem_id="stats_refresh_btn",
-                    )
-                    pdf_report_file = gr.File(
-                        label="Download PDF Report",
-                        file_count="single",
-                        elem_id="stats_pdf_report",
-                        visible=False,
-                    )
-
-        # When the username_state changes, fetch user statistics
-        username_state.change(
-            fn=stats_instance.get_user_statistics,
-            inputs=[username_state],
-            outputs=[
-                status_message,
-                raw_stats_json,
-                performance_visualizations,
-                statistics_tables,
-                pdf_report_file,
-            ],
-            queue=True,
-            show_progress="full",
-        )
-
-        # Allow manual refreshing of statistics
-        refresh_stats_btn.click(
-            fn=stats_instance.get_user_statistics,
-            inputs=[username_state],
-            outputs=[
-                status_message,
-                raw_stats_json,
-                performance_visualizations,
-                statistics_tables,
-                pdf_report_file,
-            ],
-            queue=True,
-            show_progress="full",
-        )
-
-    return stats_block

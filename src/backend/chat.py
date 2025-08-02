@@ -18,12 +18,11 @@ both synchronous and asynchronous interfaces for chat operations.
 """
 
 import os
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Optional
 from pathlib import Path
-from datetime import datetime
 
 from .config import CHAT_SESSIONS_PATH
-from .rate_limiting import chat_rate_limiter  # Ensure chat_rate_limiter is imported
+from .rate_limiting import check_rate_limit  # Import check_rate_limit async function
 from .utils import (
     sanitize_input,
 )
@@ -260,15 +259,14 @@ async def get_chat_history(
     sanitized_chat_id = InputSanitizer.sanitize_string(chat_id)
     sanitized_username = InputSanitizer.sanitize_username(username)
 
-    async with perf_monitor.track_performance_async("db_get_chat_history"):
-        query = """
-            SELECT role, content, timestamp
-            FROM chat_messages
-            WHERE session_id = ? AND username = ?
-            ORDER BY timestamp ASC
-            LIMIT ?
-        """
-        rows = db.execute_query(query, (sanitized_chat_id, sanitized_username, limit))
+    query = """
+        SELECT role, content, timestamp
+        FROM chat_messages
+        WHERE session_id = ? AND username = ?
+        ORDER BY timestamp ASC
+        LIMIT ?
+    """
+    rows = db.execute_query(query, (sanitized_chat_id, sanitized_username, limit))
 
     history = [
         {"role": row["role"], "content": row["content"], "timestamp": row["timestamp"]}
@@ -278,7 +276,19 @@ async def get_chat_history(
     logger.info(
         f"Loaded {len(history)} messages for chat_id {chat_id} from database into cache."
     )
-    return history
+    # Convert to Gradio-compatible format: list of [user, bot] pairs (as lists of length 2)
+    formatted_history = []
+    last_user = None
+    for entry in history:
+        if entry["role"] == "user":
+            last_user = entry["content"]
+        elif entry["role"] == "assistant" and last_user is not None:
+            formatted_history.append([last_user, entry["content"]])
+            last_user = None
+    # If the last message was from the user and no assistant reply yet, show it with empty bot reply
+    if last_user is not None:
+        formatted_history.append([last_user, ""])
+    return formatted_history
 
 
 async def get_chat_metadata(username: str) -> Dict[str, Dict[str, Any]]:
@@ -289,149 +299,47 @@ async def get_chat_metadata(username: str) -> Dict[str, Dict[str, Any]]:
     return _get_chat_metadata_cache(username)
 
 
-async def get_chatbot_response(
-    message: str, chat_id: str, ui_state: Dict[str, Any]
-) -> Tuple[str, List[Dict[str, str]], str, Dict[str, Any], str]:
+async def get_chatbot_response(username: str, chat_id: str, message: str):
+    """
+    Async generator for chatbot response streaming.
+    Yields response chunks for Gradio async for streaming.
+    """
     """
     Main function to get a chatbot response.
     Handles chat history, LLM interaction, and rate limiting.
     """
-    username = ui_state.get("username")
+    # username is already passed as an argument
     if not username:
-        return (
-            "",
-            [],
-            chat_id,
-            {},
-            "Error: User not logged in. Please log in to chat.",
-        )
+        yield "Error: User not logged in. Please log in to chat."
+        return
 
-    # Use the chat_rate_limiter specifically for chat operations
-    if not chat_rate_limiter.check_rate_limit(username):
+    # Use the async check_rate_limit function for chat operations
+    rate_limit_result = await check_rate_limit(username, "chat")
+    if not rate_limit_result["allowed"]:
         logger.warning(f"Chat rate limit hit for user: {username}")
-        error_response = (
-            "Rate limit exceeded. Please wait a moment before sending another message."
-        )
-        # Update history with rate limit message
-        updated_history = await _update_chat_history(
-            chat_id, username, message, error_response
-        )
-        user_chats_after_update = _get_chat_metadata_cache(username)
-        return (
-            "",
-            updated_history,
-            chat_id,
-            user_chats_after_update,
-            "Rate limit exceeded.",
-        )
+        yield "Rate limit exceeded. Please wait a moment before sending another message."
+        return
 
     # Delayed import to avoid circular dependency
     from llm import chatModel
 
     if not chatModel.is_llm_ready():
-        error_response = "[Error] LLM is not ready. Please try again later."
-        updated_history = await _update_chat_history(
-            chat_id, username, message, error_response
-        )
-        user_chats_after_update = _get_chat_metadata_cache(username)  # Refresh cache
-        return (
-            "",
-            updated_history,
-            chat_id,
-            user_chats_after_update,
-            "LLM not ready.",
-        )
+        yield "[Error] LLM is not ready. Please try again later."
+        return
 
     sanitized_message = sanitize_input(message)
-    current_history = await get_chat_history(chat_id, username)
+    # current_history = await get_chat_history(chat_id, username)
 
     try:
-        async with perf_monitor.track_performance_async("llm_get_convo_hist_answer"):
-            answer_text = await chatModel.get_convo_hist_answer(
-                sanitized_message, chat_id, username, current_history
-            )
-
-        if answer_text and not answer_text.startswith("[Error]"):
-            formatted_answer = format_markdown(answer_text)
-            updated_history = await _update_chat_history(
-                chat_id, username, message, formatted_answer
-            )
-            user_chats_after_update = _get_chat_metadata_cache(
-                username
-            )  # Refresh cache after update
-
-            # If this is a new chat, generate a name based on the first user message
-            if (
-                len(updated_history) == 2
-                and chat_id not in _chat_metadata_cache[username]
-            ):  # First user message and LLM response
-                new_session_name = (
-                    message[:50] + "..." if len(message) > 50 else message
-                )
-                await rename_chat_session(chat_id, new_session_name, username)
-                user_chats_after_update = _get_chat_metadata_cache(
-                    username
-                )  # Re-refresh to get new name
-
-            # Determine the final chat_id to return. If it was a new chat, ensure it's propagated.
-            # This logic needs to consider if a new chat_id was actually created/assigned.
-            # In our current consolidated DB setup, chat_id is passed in and used.
-            # The 'new session' logic is handled by _update_chat_history.
-            final_chat_id = chat_id
-            if not user_chats_after_update.get(
-                chat_id
-            ):  # This means it was a brand new chat, and the cache was updated.
-                # Find the actual chat_id that was just created if it wasn't the one passed in
-                # This logic assumes _update_chat_history creates an entry if not exists
-                # and uses the provided chat_id. So final_chat_id remains the same.
-                # The primary way to get a 'new' chat_id is from the UI generating a UUID.
-                pass  # final_chat_id remains chat_id.
-
-            # Ensure the current chat_id is the most recently updated one in the UI
-            if user_chats_after_update.get(chat_id):
-                # This ensures the active chat in the UI is always the one just updated.
-                # It finds the chat with the latest updated_at timestamp.
-                final_chat_id = max(
-                    user_chats_after_update,
-                    key=lambda k: user_chats_after_update[k].get(
-                        "updated_at", datetime.min.isoformat()
-                    ),
-                    default=chat_id,
-                )
-            debug_info = "Message processed and LLM response obtained."
-        else:
-            error_response = answer_text
-            updated_history = await _update_chat_history(
-                chat_id, username, message, error_response
-            )
-            user_chats_after_update = _get_chat_metadata_cache(
-                username
-            )  # Refresh cache
-            final_chat_id = chat_id
-            debug_info = f"Error from LLM: {answer_text}"
-
-        return (
-            "",
-            updated_history,
-            final_chat_id,
-            user_chats_after_update,
-            debug_info,
-        )
+        # chatModel.get_convo_hist_answer expects (question, thread_id)
+        result = await chatModel.get_convo_hist_answer(sanitized_message, chat_id)
+        answer = result.get("answer", "[No answer generated]")
+        yield format_markdown(answer)
+        return
     except Exception as e:
         logger.error(f"Error in get_chatbot_response: {e}")
-        error_response = f"[Error] An unexpected error occurred in backend: {e}"
-        updated_history = await _update_chat_history(
-            chat_id, username, message, error_response
-        )
-        user_chats_after_update = _get_chat_metadata_cache(username)  # Refresh cache
-        final_chat_id = chat_id
-        return (
-            "",
-            updated_history,
-            final_chat_id,
-            user_chats_after_update,
-            f"Unexpected error in get_chatbot_response: {e}",
-        )
+        yield f"[Error] An unexpected error occurred in backend: {e}"
+        return
 
 
 async def delete_chat_history_for_user(username: str) -> bool:
@@ -512,44 +420,43 @@ async def rename_chat_session(
     sanitized_username = InputSanitizer.sanitize_username(username)
     timestamp = get_utc_timestamp()
 
-    async with perf_monitor.track_performance_async("db_rename_chat_session_session"):
-        try:
-            query = """
-                UPDATE chat_sessions
-                SET session_name = ?, updated_at = ?
-                WHERE session_id = ? AND username = ?
-            """
-            rows_affected = db.execute_update(
-                query,
-                (sanitized_new_name, timestamp, sanitized_chat_id, sanitized_username),
-            )
+    try:
+        query = """
+            UPDATE chat_sessions
+            SET session_name = ?, updated_at = ?
+            WHERE session_id = ? AND username = ?
+        """
+        rows_affected = db.execute_update(
+            query,
+            (sanitized_new_name, timestamp, sanitized_chat_id, sanitized_username),
+        )
 
-            if rows_affected > 0:
-                # Update cache
-                if (
-                    username in _chat_metadata_cache
-                    and chat_id in _chat_metadata_cache[username]
-                ):
-                    _chat_metadata_cache[username][chat_id]["session_name"] = (
-                        sanitized_new_name
-                    )
-                    _chat_metadata_cache[username][chat_id]["updated_at"] = timestamp
-                logger.info(
-                    f"Renamed chat session {chat_id} to '{sanitized_new_name}' for user {username}"
+        if rows_affected > 0:
+            # Update cache
+            if (
+                username in _chat_metadata_cache
+                and chat_id in _chat_metadata_cache[username]
+            ):
+                _chat_metadata_cache[username][chat_id]["session_name"] = (
+                    sanitized_new_name
                 )
-                return {
-                    "session_id": chat_id,
-                    "session_name": sanitized_new_name,
-                    "updated_at": timestamp,
-                }
-            else:
-                logger.warning(
-                    f"Could not find chat session {chat_id} for user {username} to rename."
-                )
-                return None
-        except Exception as e:
-            logger.error(f"Error renaming chat session {chat_id}: {e}")
+                _chat_metadata_cache[username][chat_id]["updated_at"] = timestamp
+            logger.info(
+                f"Renamed chat session {chat_id} to '{sanitized_new_name}' for user {username}"
+            )
+            return {
+                "session_id": chat_id,
+                "session_name": sanitized_new_name,
+                "updated_at": timestamp,
+            }
+        else:
+            logger.warning(
+                f"Could not find chat session {chat_id} for user {username} to rename."
+            )
             return None
+    except Exception as e:
+        logger.error(f"Error renaming chat session {chat_id}: {e}")
+        return None
 
 
 async def save_message_async(
@@ -567,80 +474,81 @@ async def save_message_async(
     sanitized_content = InputSanitizer.sanitize_text(content)
     timestamp = get_utc_timestamp()
 
-    async with perf_monitor.track_performance_async("db_save_message_async"):
-        try:
-            # Ensure session exists or create it (similar to _update_chat_history)
-            session_exists_query = "SELECT COUNT(*) FROM chat_sessions WHERE session_id = ? AND username = ?"
-            exists = db.fetch_one(
-                session_exists_query, (sanitized_chat_id, sanitized_username)
-            )[0]
+    try:
+        # Ensure session exists or create it (similar to _update_chat_history)
+        session_exists_query = (
+            "SELECT COUNT(*) FROM chat_sessions WHERE session_id = ? AND username = ?"
+        )
+        exists = db.fetch_one(
+            session_exists_query, (sanitized_chat_id, sanitized_username)
+        )[0]
 
-            if exists == 0:
-                new_session_name = (
-                    (content[:50] + "..." if len(content) > 50 else content)
-                    if role == "user"
-                    else f"Chat {chat_id[:8]}"
-                )
-                sanitized_session_name = InputSanitizer.sanitize_text(new_session_name)
-                create_session_query = """
-                    INSERT INTO chat_sessions (session_id, username, session_name, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """
-                db.execute_update(
-                    create_session_query,
-                    (
-                        sanitized_chat_id,
-                        sanitized_username,
-                        sanitized_session_name,
-                        timestamp,
-                        timestamp,
-                    ),
-                )
-            else:
-                # Update existing session's updated_at timestamp
-                update_session_query = """
-                    UPDATE chat_sessions SET updated_at = ? WHERE session_id = ? AND username = ?
-                """
-                db.execute_update(
-                    update_session_query,
-                    (timestamp, sanitized_chat_id, sanitized_username),
-                )
-
-            query = """
-                INSERT INTO chat_messages (session_id, username, role, content, timestamp)
+        if exists == 0:
+            new_session_name = (
+                (content[:50] + "..." if len(content) > 50 else content)
+                if role == "user"
+                else f"Chat {chat_id[:8]}"
+            )
+            sanitized_session_name = InputSanitizer.sanitize_text(new_session_name)
+            create_session_query = """
+                INSERT INTO chat_sessions (session_id, username, session_name, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?)
             """
             db.execute_update(
-                query,
+                create_session_query,
                 (
                     sanitized_chat_id,
                     sanitized_username,
-                    sanitized_role,
-                    sanitized_content,
+                    sanitized_session_name,
+                    timestamp,
                     timestamp,
                 ),
             )
+        else:
+            # Update existing session's updated_at timestamp
+            update_session_query = """
+                UPDATE chat_sessions SET updated_at = ? WHERE session_id = ? AND username = ?
+            """
+            db.execute_update(
+                update_session_query,
+                (timestamp, sanitized_chat_id, sanitized_username),
+            )
 
-            # Update cache: this function is less about direct UI update, more about backend consistency
-            # If the chat history is not already in cache or is stale, it will be loaded on next get_chat_history call.
-            # For simplicity, we just add the new message to the existing cache if the chat_id is present.
-            if chat_id in _chat_history_cache:
-                _chat_history_cache[chat_id].append(
-                    {"role": role, "content": content, "timestamp": timestamp}
-                )
+        query = """
+            INSERT INTO chat_messages (session_id, username, role, content, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        db.execute_update(
+            query,
+            (
+                sanitized_chat_id,
+                sanitized_username,
+                sanitized_role,
+                sanitized_content,
+                timestamp,
+            ),
+        )
 
-            # Also update metadata cache for updated_at
-            if (
-                username in _chat_metadata_cache
-                and chat_id in _chat_metadata_cache[username]
-            ):
-                _chat_metadata_cache[username][chat_id]["updated_at"] = timestamp
+        # Update cache: this function is less about direct UI update, more about backend consistency
+        # If the chat history is not already in cache or is stale, it will be loaded on next get_chat_history call.
+        # For simplicity, we just add the new message to the existing cache if the chat_id is present.
+        if chat_id in _chat_history_cache:
+            _chat_history_cache[chat_id].append(
+                {"role": role, "content": content, "timestamp": timestamp}
+            )
 
-            logger.debug(f"Saved message to DB for chat_id {chat_id}, role {role}")
-            return True
-        except Exception as e:
-            logger.error(f"Error saving message for chat_id {chat_id}: {e}")
-            return False
+        # Also update metadata cache for updated_at
+        if (
+            username in _chat_metadata_cache
+            and chat_id in _chat_metadata_cache[username]
+        ):
+            _chat_metadata_cache[username][chat_id]["updated_at"] = timestamp
+
+        logger.debug(f"Saved message to DB for chat_id {chat_id}, role {role}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving message for chat_id {chat_id}: {e}")
+        return False
 
 
 async def search_chat_history(username: str, search_query: str) -> List[Dict[str, Any]]:
@@ -656,19 +564,18 @@ async def search_chat_history(username: str, search_query: str) -> List[Dict[str
 
     results: List[Dict[str, Any]] = []
 
-    async with perf_monitor.track_performance_async("db_search_chat_history"):
-        # Search in chat messages
-        message_query = """
-            SELECT cm.session_id, cs.session_name, cm.role, cm.content, cm.timestamp
-            FROM chat_messages cm
-            JOIN chat_sessions cs ON cm.session_id = cs.session_id AND cm.username = cs.username
-            WHERE cm.username = ? AND cm.content LIKE ?
-            ORDER BY cm.timestamp DESC
-            LIMIT 100
-        """
-        message_results = db.execute_query(
-            message_query, (sanitized_username, search_pattern)
-        )
+    # Search in chat messages
+    message_query = """
+        SELECT cm.session_id, cs.session_name, cm.role, cm.content, cm.timestamp
+        FROM chat_messages cm
+        JOIN chat_sessions cs ON cm.session_id = cs.session_id AND cm.username = cs.username
+        WHERE cm.username = ? AND cm.content LIKE ?
+        ORDER BY cm.timestamp DESC
+        LIMIT 100
+    """
+    message_results = db.execute_query(
+        message_query, (sanitized_username, search_pattern)
+    )
 
     for row in message_results:
         results.append(

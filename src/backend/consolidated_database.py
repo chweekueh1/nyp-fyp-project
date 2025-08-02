@@ -179,6 +179,13 @@ class InputSanitizer:
 
 
 class ConsolidatedDatabase:
+    def generate_pdf_report(self, username, stats):
+        """
+        Placeholder for PDF report generation. Returns a dummy file path.
+        """
+        # TODO: Implement actual PDF generation logic
+        return None
+
     """
     Consolidated SQLite database handler.
 
@@ -271,6 +278,7 @@ class ConsolidatedDatabase:
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
                     message_index INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
@@ -280,6 +288,10 @@ class ConsolidatedDatabase:
                     metadata TEXT, -- For any extra info
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
                 )
+            """)
+            # Add index for (session_id, username) for efficient lookups
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_username ON chat_messages (session_id, username)
             """)
 
             # --- Classifications Table (from both consolidated_database.py and sqlite_database.py) ---
@@ -904,6 +916,63 @@ class ConsolidatedDatabase:
             sanitized_error_message,
         )
         return self.execute_update(query, params)
+
+    def get_llm_performance_summary(self, username: Optional[str] = None) -> list:
+        """Returns LLM performance summary for a user or all users."""
+        logger.info(
+            f"[DEBUG] get_llm_performance_summary called for username={username}"
+        )
+        query = """
+            SELECT model_used as model_name, COUNT(*) as total_calls, SUM(total_tokens) as total_tokens,
+                   AVG(julianday(end_time) - julianday(start_time)) * 86400.0 as avg_latency_ms
+            FROM llm_sessions
+            {where_clause}
+            GROUP BY model_used
+        """
+        where_clause = "WHERE username = ?" if username else ""
+        final_query = query.format(where_clause=where_clause)
+        params = (username,) if username else ()
+        results = self.execute_query(final_query, params)
+        return [dict(row) for row in results]
+
+    def get_api_call_summary(self, username: Optional[str] = None) -> list:
+        """Returns API call performance summary for a user or all users."""
+        logger.info(f"[DEBUG] get_api_call_summary called for username={username}")
+        query = """
+            SELECT endpoint, method, COUNT(*) as total_calls,
+                   AVG(duration_ms) as avg_duration_ms,
+                   SUM(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END) as successful_calls,
+                   SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as failed_calls
+            FROM api_calls
+            {where_clause}
+            GROUP BY endpoint, method
+        """
+        where_clause = "WHERE username = ?" if username else ""
+        final_query = query.format(where_clause=where_clause)
+        params = (username,) if username else ()
+        results = self.execute_query(final_query, params)
+        return [dict(row) for row in results]
+
+    def get_document_classifications_by_user(
+        self, username: str, limit: int = 10
+    ) -> list:
+        """Returns recent file classification results for a user."""
+        logger.info(
+            f"[DEBUG] get_document_classifications_by_user called for username={username}"
+        )
+        return self.get_classifications_by_username(username, limit)
+
+    def get_app_startup_records(self, limit: int = 100) -> list:
+        """Returns recent app startup records."""
+        logger.info(f"[DEBUG] get_app_startup_records called with limit={limit}")
+        query = """
+            SELECT *, (duration_ms / 1000.0) as startup_time_seconds
+            FROM app_startups
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+        results = self.execute_query(query, (limit,))
+        return [dict(row) for row in results]
 
     def add_database_operation_record(
         self,

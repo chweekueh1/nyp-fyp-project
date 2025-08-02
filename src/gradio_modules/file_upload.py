@@ -20,6 +20,8 @@ def file_upload_ui(
     """
     Constructs the file upload UI as a Gradio Blocks object.
     """
+    logger.info("[DEBUG] Initializing File Upload Interface (file_upload_ui)")
+    print("[DEBUG] Rendering File Upload Interface (file_upload_ui)")
     with gr.Blocks() as file_upload_block:
         gr.Markdown("## 📁 Generic File Upload")
         gr.Markdown(

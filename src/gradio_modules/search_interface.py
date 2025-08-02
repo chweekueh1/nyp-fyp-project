@@ -82,38 +82,30 @@ Features:
 - Automatic refresh when new messages are added
 """
 
+
+#!/usr/bin/env python3
+"""
+Search interface module for chat history search functionality.
+
+This module provides a Gradio UI component specifically for searching
+through a user's chat history and displaying the results.
+Only the search_interface function is exported. All UI initialization is handled in app.py.
+"""
+
 import gradio as gr
-import logging
-import sys
-from pathlib import Path
-
-# Add parent directory to path for imports
-parent_dir = Path(__file__).parent.parent
-if str(parent_dir) not in sys.path:
-    sys.path.insert(0, str(parent_dir))
-
-# Now import from parent directory
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
 
 
 def search_interface(
     username_state: gr.State,
     all_chats_data_state: gr.State,
     audio_history_state: gr.State,
-    debug_info_state: gr.State,  # ADDED: To reflect state passed from app.py
+    debug_info_state: gr.State,
 ) -> gr.Blocks:
     """
     Constructs the search UI as a Gradio Blocks object.
     All UI logic is scoped inside this function.
     """
-    logger.info("🔍 [SEARCH_UI] Initializing search interface...")
-
-    with gr.Blocks() as search_block:
+    with gr.Blocks():
         with gr.Column(elem_classes=["search-interface-container"]):
             gr.Markdown("## 🔍 Chat History Search")
             gr.Markdown(
@@ -158,15 +150,3 @@ def search_interface(
             outputs=[search_results_md, search_stats],
             queue=False,
         )
-        all_chats_data_state.change(
-            fn=_refresh_search_results_on_data_change,
-            inputs=[
-                search_query,
-                username_state,
-                all_chats_data_state,
-                audio_history_state,
-            ],
-            outputs=[search_results_md, search_stats],
-            queue=False,
-        )
-    return search_block
