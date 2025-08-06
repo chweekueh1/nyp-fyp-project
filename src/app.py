@@ -145,12 +145,11 @@ async def main():
                             for k, v in metadata.items()
                         ]
                         values = list(metadata.keys())
-                        # Map display to chat_id
                         dropdown_map = dict(zip(choices, values))
                         chat_dropdown.dropdown_map = dropdown_map
-                        return gr.update(
-                            choices=choices, value=choices[0] if choices else None
-                        )
+                        # Default to the most recent chat (first in metadata)
+                        value = choices[0] if choices else None
+                        return gr.update(choices=choices, value=value)
 
                     username_state.change(
                         fn=load_chat_sessions,
@@ -176,12 +175,34 @@ async def main():
 
                     # New chat button logic
                     async def start_new_chat(username):
+                        from backend.chat import (
+                            get_chat_metadata,
+                            _update_chat_history,
+                            get_chat_history,
+                        )
                         import uuid
 
-                        chat_id = str(uuid.uuid4())
-                        chat_id_state.value = chat_id
-                        # Optionally, create a new session in the backend here
-                        return [], gr.update(value=None)
+                        if not username:
+                            return [], gr.update()
+                        chat_id = f"chat_{uuid.uuid4().hex[:8]}"
+                        # Actually create the new chat session in backend (empty message, empty response)
+                        await _update_chat_history(chat_id, username, "", "")
+                        # Reload metadata and dropdown
+                        metadata = await get_chat_metadata(username)
+                        choices = [
+                            f"{v['session_name']} ({k[:8]})"
+                            for k, v in metadata.items()
+                        ]
+                        values = list(metadata.keys())
+                        dropdown_map = dict(zip(choices, values))
+                        chat_dropdown.dropdown_map = dropdown_map
+                        # Set dropdown to new chat
+                        new_choice = [
+                            c for c, k in dropdown_map.items() if k == chat_id
+                        ][0]
+                        # Load empty history for new chat
+                        history = await get_chat_history(chat_id, username)
+                        return history, gr.update(choices=choices, value=new_choice)
 
                     new_chat_btn.click(
                         fn=start_new_chat,

@@ -1,3 +1,34 @@
+# --- New Chat Session Creation ---
+import uuid
+from typing import Optional
+
+
+def create_new_chat_session(username: str, session_name: Optional[str] = None) -> str:
+    """
+    Creates and persists a new chat session (with no messages) in both the database and in-memory cache.
+    Returns the new chat_id.
+    """
+    db = _get_chat_db_manager()
+    sanitized_username = InputSanitizer.sanitize_username(username)
+    chat_id = f"chat_{uuid.uuid4().hex[:8]}"
+    timestamp = get_utc_timestamp()
+    session_name = session_name or f"Chat {chat_id[:8]}"
+    # Persist in DB
+    db.create_chat_session(sanitized_username, chat_id, session_name)
+    # Update in-memory metadata cache
+    _chat_metadata_cache.setdefault(username, {})[chat_id] = {
+        "session_name": session_name,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+    # No messages in history yet
+    _chat_history_cache[chat_id] = []
+    logger.info(
+        f"Created new chat session: {session_name} for user {sanitized_username}"
+    )
+    return chat_id
+
+
 # backend/chat.py
 #!/usr/bin/env python3
 """
@@ -33,7 +64,6 @@ from .consolidated_database import (
     get_consolidated_database,  # Now importing only the consolidated function
     InputSanitizer,  # Added for general sanitization
 )
-from performance_utils import perf_monitor
 
 # (Delayed import of llm.chatModel to avoid circular import)
 
@@ -162,78 +192,40 @@ async def _update_chat_history(
     sanitized_llm_response = InputSanitizer.sanitize_text(llm_response)
     timestamp = get_utc_timestamp()
 
-    async with perf_monitor.track_performance_async("db_update_chat_history"):
-        # Check if chat session exists, if not, create it
-        session_exists_query = (
-            "SELECT COUNT(*) FROM chat_sessions WHERE session_id = ? AND username = ?"
+    # Check if chat session exists, if not, create it using ConsolidatedDatabase
+    session = db.get_chat_session(sanitized_chat_id)
+    new_session_name = None
+    if session is None:
+        # New session: derive a name from the first message
+        new_session_name = (
+            user_message[:50] + "..."
+            if user_message and len(user_message) > 50
+            else user_message or f"Chat {sanitized_chat_id[:8]}"
         )
-        exists = db.fetch_one(
-            session_exists_query, (sanitized_chat_id, sanitized_username)
-        )[0]
-
-        new_session_name = None
-        if exists == 0:
-            # New session: derive a name from the first message
-            new_session_name = (
-                user_message[:50] + "..." if len(user_message) > 50 else user_message
-            )
-            sanitized_session_name = InputSanitizer.sanitize_text(new_session_name)
-            create_session_query = """
-                INSERT INTO chat_sessions (session_id, username, session_name, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            """
-            db.execute_update(
-                create_session_query,
-                (
-                    sanitized_chat_id,
-                    sanitized_username,
-                    sanitized_session_name,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            logger.info(
-                f"Created new chat session: {sanitized_session_name} for user {sanitized_username}"
-            )
-        else:
-            # Update existing session's updated_at timestamp
-            update_session_query = """
-                UPDATE chat_sessions SET updated_at = ? WHERE session_id = ? AND username = ?
-            """
-            db.execute_update(
-                update_session_query, (timestamp, sanitized_chat_id, sanitized_username)
-            )
-
-        # Insert user message
-        user_message_query = """
-            INSERT INTO chat_messages (session_id, username, role, content, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """
-        db.execute_update(
-            user_message_query,
-            (
-                sanitized_chat_id,
-                sanitized_username,
-                "user",
-                sanitized_user_message,
-                timestamp,
-            ),
+        db.create_chat_session(sanitized_username, sanitized_chat_id, new_session_name)
+        logger.info(
+            f"Created new chat session: {new_session_name} for user {sanitized_username}"
         )
+    else:
+        db.update_chat_session_timestamp(sanitized_chat_id)
 
-        # Insert LLM response
-        llm_response_query = """
-            INSERT INTO chat_messages (session_id, username, role, content, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """
-        db.execute_update(
-            llm_response_query,
-            (
-                sanitized_chat_id,
-                sanitized_username,
-                "assistant",
-                sanitized_llm_response,
-                timestamp,
-            ),
+    # Insert user message if not empty
+    if user_message:
+        db.add_chat_message(
+            sanitized_chat_id,
+            0,  # message_index is not used in schema, pass 0
+            "user",
+            sanitized_user_message,
+            None,
+        )
+    # Insert LLM response if not empty
+    if llm_response:
+        db.add_chat_message(
+            sanitized_chat_id,
+            0,
+            "assistant",
+            sanitized_llm_response,
+            None,
         )
 
     await _update_chat_history_cache(
@@ -251,9 +243,24 @@ async def get_chat_history(
     Retrieves the chat history for a given chat ID and username.
     Prioritizes in-memory cache, then falls back to database.
     """
+    # Always return a list of [user, bot] pairs (list of lists of length 2)
     if chat_id in _chat_history_cache:
         logger.debug(f"Returning chat history for {chat_id} from cache.")
-        return _chat_history_cache[chat_id]
+        history = _chat_history_cache[chat_id]
+        if not history:
+            # New chat, no messages
+            return []
+        formatted_history = []
+        last_user = None
+        for entry in history:
+            if entry["role"] == "user":
+                last_user = entry["content"]
+            elif entry["role"] == "assistant" and last_user is not None:
+                formatted_history.append([last_user, format_markdown(entry["content"])])
+                last_user = None
+        if last_user is not None:
+            formatted_history.append([last_user, ""])
+        return formatted_history
 
     db = _get_chat_db_manager()
     sanitized_chat_id = InputSanitizer.sanitize_string(chat_id)
@@ -276,18 +283,17 @@ async def get_chat_history(
     logger.info(
         f"Loaded {len(history)} messages for chat_id {chat_id} from database into cache."
     )
-    # Convert to Gradio-compatible format: list of [user, bot] pairs (as lists of length 2)
     formatted_history = []
     last_user = None
     for entry in history:
         if entry["role"] == "user":
             last_user = entry["content"]
         elif entry["role"] == "assistant" and last_user is not None:
-            formatted_history.append([last_user, entry["content"]])
+            formatted_history.append([last_user, format_markdown(entry["content"])])
             last_user = None
-    # If the last message was from the user and no assistant reply yet, show it with empty bot reply
     if last_user is not None:
         formatted_history.append([last_user, ""])
+    # If there are no messages at all, return an empty list (valid for Gradio)
     return formatted_history
 
 
@@ -349,32 +355,31 @@ async def delete_chat_history_for_user(username: str) -> bool:
     db = _get_chat_db_manager()
     sanitized_username = InputSanitizer.sanitize_username(username)
 
-    async with perf_monitor.track_performance_async("db_delete_all_chat_history"):
-        try:
-            # Delete messages first
-            db.execute_update(
-                "DELETE FROM chat_messages WHERE username = ?", (sanitized_username,)
-            )
-            # Then delete sessions
-            db.execute_update(
-                "DELETE FROM chat_sessions WHERE username = ?", (sanitized_username,)
-            )
+    try:
+        # Delete messages first
+        db.execute_update(
+            "DELETE FROM chat_messages WHERE username = ?", (sanitized_username,)
+        )
+        # Then delete sessions
+        db.execute_update(
+            "DELETE FROM chat_sessions WHERE username = ?", (sanitized_username,)
+        )
 
-            # Clear cache for the user
-            _chat_metadata_cache.pop(username, None)
-            # Clear relevant chat histories from cache
-            for chat_id in list(_chat_history_cache.keys()):
-                # This is a bit inefficient, assuming chat_id might not directly map to user.
-                # A better cache structure might be {username: {chat_id: history}}
-                # For now, we'll just clear all.
-                # TODO: Implement a more granular history cache invalidation.
-                _chat_history_cache.pop(chat_id, None)
+        # Clear cache for the user
+        _chat_metadata_cache.pop(username, None)
+        # Clear relevant chat histories from cache
+        for chat_id in list(_chat_history_cache.keys()):
+            # This is a bit inefficient, assuming chat_id might not directly map to user.
+            # A better cache structure might be {username: {chat_id: history}}
+            # For now, we'll just clear all.
+            # TODO: Implement a more granular history cache invalidation.
+            _chat_history_cache.pop(chat_id, None)
 
-            logger.info(f"Deleted all chat history for user: {username}")
-            return True
-        except Exception as e:
-            logger.error(f"Error deleting chat history for user {username}: {e}")
-            return False
+        logger.info(f"Deleted all chat history for user: {username}")
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting chat history for user {username}: {e}")
+        return False
 
 
 async def delete_single_chat_session(chat_id: str, username: str) -> bool:
@@ -383,31 +388,28 @@ async def delete_single_chat_session(chat_id: str, username: str) -> bool:
     sanitized_chat_id = InputSanitizer.sanitize_string(chat_id)
     sanitized_username = InputSanitizer.sanitize_username(username)
 
-    async with perf_monitor.track_performance_async("db_delete_single_chat_session"):
-        try:
-            # Delete messages first
-            db.execute_update(
-                "DELETE FROM chat_messages WHERE session_id = ? AND username = ?",
-                (sanitized_chat_id, sanitized_username),
-            )
-            # Then delete the session
-            db.execute_update(
-                "DELETE FROM chat_sessions WHERE session_id = ? AND username = ?",
-                (sanitized_chat_id, sanitized_username),
-            )
+    try:
+        # Delete messages first
+        db.execute_update(
+            "DELETE FROM chat_messages WHERE session_id = ? AND username = ?",
+            (sanitized_chat_id, sanitized_username),
+        )
+        # Then delete the session
+        db.execute_update(
+            "DELETE FROM chat_sessions WHERE session_id = ? AND username = ?",
+            (sanitized_chat_id, sanitized_username),
+        )
 
-            if username in _chat_metadata_cache:
-                if chat_id in _chat_metadata_cache[username]:
-                    del _chat_metadata_cache[username][chat_id]
-            _chat_history_cache.pop(chat_id, None)  # Remove from history cache
+        if username in _chat_metadata_cache:
+            if chat_id in _chat_metadata_cache[username]:
+                del _chat_metadata_cache[username][chat_id]
+        _chat_history_cache.pop(chat_id, None)  # Remove from history cache
 
-            logger.info(f"Deleted chat session {chat_id} for user {username}.")
-            return True
-        except Exception as e:
-            logger.error(
-                f"Error deleting chat session {chat_id} for user {username}: {e}"
-            )
-            return False
+        logger.info(f"Deleted chat session {chat_id} for user {username}.")
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting chat session {chat_id} for user {username}: {e}")
+        return False
 
 
 async def rename_chat_session(
