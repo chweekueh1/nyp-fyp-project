@@ -21,16 +21,12 @@ and provides detailed performance insights for each user.
 """
 
 import gradio as gr
-import json
 from typing import Dict, Any, Tuple, Optional
 
 from backend.consolidated_database import (
-    get_consolidated_database,  # Corrected import
+    get_consolidated_database,
     InputSanitizer,
 )
-
-# Removed specific get_performance_database, get_llm_database, get_classifications_database
-# as they are now accessed via the consolidated database object
 from backend.timezone_utils import format_singapore_datetime
 import logging
 
@@ -45,66 +41,82 @@ class StatsInterface:
     """
 
     def __init__(self):
-        # All database access now goes through the consolidated database instance
         self.db = get_consolidated_database()
         self.sanitizer = InputSanitizer()
 
     def _generate_mermaid_flowchart(self, metrics: Dict[str, Any]) -> str:
-        """Generates a Mermaid.js flowchart string from performance metrics."""
-        flowchart_str = "graph TD\n"
-
-        # Overall startup
-        startup_time = metrics.get("app_startup", {}).get("avg_startup_time", 0)
-        flowchart_str += f"A[App Startup] --> B(Avg: {startup_time:.2f}s)\n"
-
-        # LLM Summary
+        mermaid_blocks = []
+        # 1. Startup times (graph)
+        if metrics.get("app_startup", {}).get("total_startups", 0) > 0:
+            avg = metrics["app_startup"].get("avg_startup_time", 0)
+            mermaid_blocks.append(
+                f"graph TD\n    A[App Startup Times] --> B[Avg Startup: {avg:.2f}s]"
+            )
+        # 2. LLM summary (pie)
         llm_summary = metrics.get("llm_performance_summary", [])
         if llm_summary:
-            flowchart_str += "B --> C{LLM Performance}\n"
-            for i, model in enumerate(llm_summary):
-                model_name = model.get("model_name", "N/A")
-                total_tokens = model.get("total_tokens", 0)
-                avg_latency = (
-                    model.get("avg_latency_ms", 0) / 1000
-                )  # Convert to seconds
-                flowchart_str += f"C --> C{i + 1}[{model_name} <br> Tokens: {total_tokens} <br> Latency: {avg_latency:.2f}s]\n"
-
-        # API Calls
+            pie_entries = []
+            for model in llm_summary:
+                name = model.get("model_name", "Unknown")
+                count = model.get("total_calls", 0)
+                pie_entries.append(f"{name} : {count}")
+            if pie_entries:
+                mermaid_blocks.append(
+                    "pie title LLM Model Usage\n" + "\n".join(pie_entries)
+                )
+        # 3. API Calls (pie by endpoint-method)
         api_summary = metrics.get("api_call_summary", [])
         if api_summary:
-            flowchart_str += "B --> D{API Calls}\n"
-            for i, api in enumerate(api_summary):
-                endpoint = api.get("endpoint", "N/A")
-                method = api.get("method", "N/A")
-                total_calls = api.get("total_calls", 0)
-                avg_duration = (
-                    api.get("avg_duration_ms", 0) / 1000
-                )  # Convert to seconds
-                flowchart_str += f"D --> D{i + 1}[{endpoint} {method} <br> Calls: {total_calls} <br> Avg Duration: {avg_duration:.2f}s]\n"
-
-        # Classifications
+            pie_entries = []
+            for api in api_summary:
+                endpoint = api.get("endpoint", "Unknown")
+                method = api.get("method", "Unknown")
+                count = api.get("total_calls", 0)
+                pie_entries.append(f"{endpoint} {method} : {count}")
+            if pie_entries:
+                mermaid_blocks.append("pie title API Calls\n" + "\n".join(pie_entries))
+        # 4. File classification (pie)
         classification_summary = metrics.get("classification_summary", [])
         if classification_summary:
-            flowchart_str += "B --> E{File Classifications}\n"
-            for i, classification in enumerate(classification_summary):
-                result = classification.get("classification_result", "N/A")
-                total_count = classification.get("total_count", 0)
-                flowchart_str += f"E --> E{i + 1}[{result} <br> Count: {total_count}]\n"
-
-        return flowchart_str
+            count = {}
+            for c in classification_summary:
+                label = str(c.get("classification_result", "Other"))
+                count[label] = count.get(label, 0) + 1
+            pie_lines = [f"{k} : {v}" for k, v in count.items()]
+            if pie_lines:
+                mermaid_blocks.append(
+                    "pie title Classification Results\n" + "\n".join(pie_lines)
+                )
+        # 5. User stats: search queries and others (bar)
+        user_stats = metrics.get("user_stats", {})
+        if user_stats:
+            bar_lines = []
+            for k, v in user_stats.items():
+                bar_lines.append(f"{k} : {v}")
+            if bar_lines:
+                mermaid_blocks.append("bar title User Stats\n" + "\n".join(bar_lines))
+        # Return them separated
+        return "\n\n".join([f"```mermaid\n{b}\n```" for b in mermaid_blocks])
 
     def get_user_statistics(
         self, username: str
-    ) -> Tuple[str, str, str, str, Optional[gr.File]]:
+    ) -> Tuple[str, str, str, Optional[gr.File]]:
         """
         Retrieves comprehensive statistics for a given user.
+        Always returns _some_ content (never blank).
         """
         if not username:
-            return "Please log in to view statistics.", "{}", "", "", None
+            return (
+                "Please log in to view statistics.",
+                "",
+                "Please log in.",
+                None,
+            )
+
+        from sqlite3 import OperationalError
 
         sanitized_username = self.sanitizer.sanitize_username(username)
         stats: Dict[str, Any] = {"username": sanitized_username}
-
         try:
             # Fetch user-specific LLM performance
             llm_summary = self.db.get_llm_performance_summary(
@@ -116,7 +128,7 @@ class StatsInterface:
             api_summary = self.db.get_api_call_summary(username=sanitized_username)
             stats["api_call_summary"] = api_summary
 
-            # Fetch chat statistics (fix: use correct queries)
+            # Fetch chat statistics
             total_sessions_result = self.db.execute_query(
                 "SELECT COUNT(*) FROM chat_sessions WHERE username = ?",
                 (sanitized_username,),
@@ -140,10 +152,8 @@ class StatsInterface:
             )
             stats["classification_summary"] = classification_summary
 
-            # Fetch overall app startup times (not user specific, but relevant to system health)
-            app_startups = self.db.get_app_startup_records(
-                limit=100
-            )  # Get a good sample
+            # Fetch overall app startup times (not user specific)
+            app_startups = self.db.get_app_startup_records(limit=100)
             if app_startups:
                 startup_times = [s["startup_time_seconds"] for s in app_startups]
                 stats["app_startup"] = {
@@ -160,15 +170,56 @@ class StatsInterface:
                     "max_startup_time": 0.0,
                 }
 
-            # Generate Mermaid flowchart and format with markdown formatter
+            # Safer uploaded_files and audio_files with fallback; returns (count, avg_size)
+            def _safe_stat_query(sql, params, default):
+                try:
+                    rows = self.db.execute_query(sql, params)
+                    if rows and len(rows[0]) > 1:
+                        return rows[0][0], float(rows[0][1]) if rows[0][
+                            1
+                        ] is not None else 0.0
+                    elif rows:
+                        return rows[0][0], 0.0
+                    return default
+                except OperationalError as oe:  # Table missing
+                    logger.warning(
+                        f"[StatsInterface] Table missing for query {sql}: {oe}"
+                    )
+                    return default
+                except Exception:
+                    return default
+
+            total_uploaded_files, avg_uploaded_file_size = _safe_stat_query(
+                "SELECT COUNT(*), COALESCE(AVG(file_size),0) FROM uploaded_files WHERE username = ?",
+                (sanitized_username,),
+                (0, 0.0),
+            )
+            total_audio_files, avg_audio_file_size = _safe_stat_query(
+                "SELECT COUNT(*), COALESCE(AVG(file_size),0) FROM uploaded_files WHERE username = ? AND file_type LIKE 'audio/%'",
+                (sanitized_username,),
+                (0, 0.0),
+            )
+
+            stats["files_uploaded"] = {
+                "total_files": total_uploaded_files,
+                "avg_file_size": avg_uploaded_file_size,
+            }
+            stats["audio_files_uploaded"] = {
+                "total_audio_files": total_audio_files,
+                "avg_audio_file_size": avg_audio_file_size,
+            }
+
+            # Fetch user stats (e.g. search queries)
+            stats["user_stats"] = self.db.get_all_user_stats(sanitized_username)
+
             from backend.markdown_formatter import format_markdown
 
             raw_mermaid_chart = self._generate_mermaid_flowchart(stats)
-            mermaid_chart = format_markdown(
-                f"""```mermaid\n\n{raw_mermaid_chart}\n\n```"""
-            )
+            mermaid_chart = format_markdown(raw_mermaid_chart)
+            # Fallback: If mermaid_chart is empty or only whitespace, show a message
+            if not mermaid_chart.strip():
+                mermaid_chart = "No diagram data available."
 
-            # Generate PDF report using consolidated database function
             try:
                 pdf_report_path = self.db.generate_pdf_report(sanitized_username, stats)
             except Exception as pdf_exc:
@@ -176,29 +227,28 @@ class StatsInterface:
                 pdf_report_path = None
 
             status_message = f"Statistics for {username} loaded successfully."
+
+            # Only return status_md, mermaid_md, pretty_stats_md, file
             return (
-                status_message,
-                json.dumps(stats, indent=2),
-                mermaid_chart,
-                self._format_stats_for_display(stats),
+                status_message,  # markdown
+                mermaid_chart,  # markdown
+                self._format_stats_for_display(stats),  # markdown
                 gr.File(value=pdf_report_path, visible=True)
                 if pdf_report_path
-                else gr.File(visible=False),
+                else gr.File(visible=False),  # file
             )
         except Exception as e:
             logger.error(f"Error retrieving statistics for {username}: {e}")
+
             return (
-                f"Error retrieving statistics: {e}",
-                "{}",
+                f"Error retrieving statistics: {e}",  # markdown
                 "",
                 f"Failed to load statistics: {e}",
                 gr.File(visible=False),
             )
 
     def _format_stats_for_display(self, stats: Dict[str, Any]) -> str:
-        """Formats the statistics into a human-readable string for Gradio Markdown."""
         display_text = "### User Statistics\n\n"
-
         display_text += f"**User:** {stats.get('username', 'N/A')}\n\n"
 
         # App Startup
@@ -259,6 +309,17 @@ class StatsInterface:
         )
         display_text += f"- Total Messages: {chat_stats.get('total_messages', 0)}\n\n"
 
+        # File Upload & Audio Statistics
+        files_uploaded = stats.get("files_uploaded", {})
+        audio_files_uploaded = stats.get("audio_files_uploaded", {})
+        display_text += "#### File Upload Statistics\n"
+        display_text += (
+            f"- Total Files Uploaded: {files_uploaded.get('total_files', 0)}\n"
+            f"- Average File Size: {files_uploaded.get('avg_file_size', 0):.1f} bytes\n"
+            f"- Total Audio Files Uploaded: {audio_files_uploaded.get('total_audio_files', 0)}\n"
+            f"- Average Audio File Size: {audio_files_uploaded.get('avg_audio_file_size', 0):.1f} bytes\n\n"
+        )
+
         # File Classification
         classification_summary = stats.get("classification_summary", [])
         if classification_summary:
@@ -274,5 +335,13 @@ class StatsInterface:
             display_text += "\n"
         else:
             display_text += "#### Recent File Classifications\n- No file classification data available.\n\n"
+
+        # User Stats (Custom)
+        user_stats = stats.get("user_stats", {})
+        if user_stats and any(user_stats.values()):
+            display_text += "#### Custom User Statistics\n"
+            for key, val in user_stats.items():
+                display_text += f"- {key.replace('_', ' ').title()}: {val}\n"
+            display_text += "\n"
 
         return display_text

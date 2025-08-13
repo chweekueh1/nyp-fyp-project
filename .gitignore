@@ -1,5 +1,6 @@
 # Ignore virtual environment
 .venv/
+.sanity-venv/
 .env
 *.tar
 

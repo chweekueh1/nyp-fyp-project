@@ -25,35 +25,26 @@ from contextlib import contextmanager
 from infra_utils import get_chatbot_dir
 from .timezone_utils import get_utc_timestamp  # Ensure this is imported for timestamps
 
-# Set up logging
 logger = logging.getLogger(__name__)
 
 
-# Database file path
 def get_database_path(db_name: str) -> str:
     """
     Returns the path to the specified database file.
-
     Args:
         db_name (str): The name of the database file (e.g., 'main_db').
-
     Returns:
         str: The path to the database file.
-
     Raises:
         ValueError: If the db_name is invalid or the path cannot be determined.
     """
-    # Sanitize database name to prevent path traversal
     if not re.match(r"^[a-zA-Z0-9_]+$", db_name):
         raise ValueError(f"Invalid database name: {db_name}")
 
-    # If running in Docker or benchmark mode and db_name is 'users', use a temp directory to avoid persistence
-    # This logic from original consolidated_database.py seems specific to 'users' but for a single DB,
-    # it implies the primary DB. Let's make it for the main consolidated DB if needed.
     if (
         os.environ.get("BENCHMARK_MODE")
         and os.environ.get("DOCKER_BUILD")
-        and db_name == "main_db"  # Assuming "main_db" is the consolidated one
+        and db_name == "main_db"
     ):
         db_dir = "/tmp/data/sqlite"
     else:
@@ -65,90 +56,47 @@ def get_database_path(db_name: str) -> str:
 
 
 class InputSanitizer:
-    """
-    Provides methods for sanitizing user inputs to prevent SQL injection and other attacks.
-    """
-
     @staticmethod
     def sanitize_username(input_string: str) -> str:
-        """
-        Sanitizes a username string.
-        Allows alphanumeric characters, underscores, and hyphens.
-        """
         if not isinstance(input_string, str):
             return ""
-        # Remove any characters not allowed in a username (alphanumeric, _, -)
         sanitized_string = re.sub(r"[^a-zA-Z0-9_-]", "", input_string)
         return sanitized_string.strip()
 
     @staticmethod
     def sanitize_email(input_string: str) -> str:
-        """
-        Sanitizes an email address string.
-        Performs basic validation and sanitization.
-        """
         if not isinstance(input_string, str):
             return ""
-        # A more robust regex for email validation
         email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if re.fullmatch(email_regex, input_string):
-            # If it matches, we can be reasonably sure it's safe, but strip whitespace
             return input_string.strip()
-        return ""  # Return empty string for invalid email format
+            return ""
 
     @staticmethod
     def sanitize_string(input_string: str, max_length: Optional[int] = None) -> str:
-        """
-        Sanitizes a general string input to prevent common injection attacks.
-        This method is primarily for displaying or logging, not for direct SQL parameters.
-        For SQL, always use parameterized queries.
-
-        Args:
-            input_string (str): The string to sanitize.
-            max_length (Optional[int]): The maximum allowed length for the sanitized string.
-                                        If the string exceeds this length, it will be truncated.
-                                        Defaults to None (no length limit).
-        """
         if not isinstance(input_string, str):
             return ""
-        # Basic sanitization: escape single quotes and potentially problematic characters
-        # For display, you might use html.escape, but for general text processing, this is a start.
         sanitized_string = (
             input_string.replace("'", "''").replace("--", "").replace(";", "")
         )
-        # Remove common control characters that could mess with display or logs
         sanitized_string = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", sanitized_string)
         sanitized_string = sanitized_string.strip()
-
-        # Apply max_length if provided
         if max_length is not None and isinstance(max_length, int) and max_length >= 0:
             return sanitized_string[:max_length]
-
         return sanitized_string
 
     @staticmethod
     def sanitize_text(input_string: str) -> str:
-        """
-        Sanitizes a string to prevent common injection attacks.
-        This method is primarily for displaying or logging, not for direct SQL parameters.
-        For SQL, always use parameterized queries.
-        """
         if not isinstance(input_string, str):
             return ""
-        # Basic sanitization: escape single quotes and potentially problematic characters
-        # For display, you might use html.escape, but for general text processing, this is a start.
         sanitized_string = (
             input_string.replace("'", "''").replace("--", "").replace(";", "")
         )
-        # Remove common control characters that could mess with display or logs
         sanitized_string = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", sanitized_string)
         return sanitized_string.strip()
 
     @staticmethod
     def sanitize_integer(input_value: Any) -> Optional[int]:
-        """
-        Converts input to an integer, returning None if not a valid integer.
-        """
         try:
             return int(input_value)
         except (ValueError, TypeError):
@@ -156,9 +104,6 @@ class InputSanitizer:
 
     @staticmethod
     def sanitize_float(input_value: Any) -> Optional[float]:
-        """
-        Converts input to a float, returning None if not a valid float.
-        """
         try:
             return float(input_value)
         except (ValueError, TypeError):
@@ -166,9 +111,6 @@ class InputSanitizer:
 
     @staticmethod
     def sanitize_boolean(input_value: Any) -> bool:
-        """
-        Converts input to a boolean.
-        """
         if isinstance(input_value, bool):
             return input_value
         if isinstance(input_value, str):
@@ -180,53 +122,30 @@ class InputSanitizer:
 
 class ConsolidatedDatabase:
     def generate_pdf_report(self, username, stats):
-        """
-        Placeholder for PDF report generation. Returns a dummy file path.
-        """
-        # TODO: Implement actual PDF generation logic
         return None
-
-    """
-    Consolidated SQLite database handler.
-
-    This class manages connections and operations for a single SQLite database file
-    containing all application-related tables. It provides a secure interface with
-    input sanitization and SQL injection prevention.
-    """
 
     def __init__(self, db_path: str = None):
         if db_path is None:
-            self.db_path = get_database_path("main_db")  # Use a single main DB file
+            self.db_path = get_database_path("main_db")
         else:
             self.db_path = db_path
-        self.db_name = os.path.basename(self.db_path).replace(
-            ".db", ""
-        )  # For logging or debug
+        self.db_name = os.path.basename(self.db_path).replace(".db", "")
         self._init_database()
 
     @contextmanager
     def get_db_connection(self):
-        """
-        Get a database connection.
-        """
         conn = None
         try:
             conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row  # Return rows as dict-like objects
+            conn.row_factory = sqlite3.Row
             yield conn
         finally:
             if conn:
                 conn.close()
 
     def _init_database(self):
-        """
-        Initialize the database with all required tables.
-        """
         with self.get_db_connection() as conn:
             cursor = conn.cursor()
-
-            # --- Users Table (from both consolidated_database.py and sqlite_database.py) ---
-            # Merging columns, prioritizing the more comprehensive set from sqlite_database.py
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,8 +162,6 @@ class ConsolidatedDatabase:
                     login_failures INTEGER DEFAULT 0
                 )
             """)
-
-            # --- User Activity Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_activity (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,9 +172,16 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- Chat Sessions Table (from both consolidated_database.py and sqlite_database.py) ---
-            # Merging columns, prioritizing the more comprehensive set from sqlite_database.py
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_stats (
+                    username TEXT NOT NULL,
+                    stat_type TEXT NOT NULL,
+                    value INTEGER DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (username, stat_type),
+                    FOREIGN KEY (username) REFERENCES users(username)
+                )
+            """)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,9 +195,6 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- Chat Messages Table (from both consolidated_database.py and sqlite_database.py) ---
-            # Merging columns, prioritizing the more comprehensive set from sqlite_database.py
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -283,19 +204,15 @@ class ConsolidatedDatabase:
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
-                    updated_at TEXT NOT NULL, -- Added to match updated_at pattern
-                    token_count INTEGER DEFAULT 0, -- From llm_messages table, can be useful here
-                    metadata TEXT, -- For any extra info
+                    updated_at TEXT NOT NULL,
+                    token_count INTEGER DEFAULT 0,
+                    metadata TEXT,
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
                 )
             """)
-            # Add index for (session_id, username) for efficient lookups
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_username ON chat_messages (session_id, username)
             """)
-
-            # --- Classifications Table (from both consolidated_database.py and sqlite_database.py) ---
-            # Merging columns, prioritizing the more comprehensive set from sqlite_database.py
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS classifications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -311,8 +228,6 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- LLM Sessions Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS llm_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -323,28 +238,15 @@ class ConsolidatedDatabase:
                     model_used TEXT,
                     total_tokens INTEGER DEFAULT 0,
                     total_messages INTEGER DEFAULT 0,
-                    updated_at TEXT NOT NULL, -- Added for consistency
+                    updated_at TEXT NOT NULL,
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- LLM Messages Table (from consolidated_database.py) ---
-            # Note: The logic for chat_messages above already covers message content.
-            # This table might be redundant if chat_messages covers all message types.
-            # However, if 'llm_messages' is specifically for LLM-related internal logs
-            # or different structure, we'll keep it. For now, consolidating to chat_messages.
-            # If explicit separate LLM message tracking is needed, this table can be
-            # re-added with unique purpose. Assuming chat_messages covers this for now.
-            # Removed: LLM_messages table, as its columns are largely covered by chat_messages.
-            # If there's a specific need for LLM interaction logging distinct from
-            # user chat, it should be re-evaluated.
-
-            # --- LLM Embeddings Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS llm_embeddings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
-                    content_type TEXT NOT NULL, -- e.g., 'document', 'chat_message'
+                    content_type TEXT NOT NULL,
                     content_id TEXT NOT NULL,
                     embedding_vector BLOB NOT NULL,
                     created_at TEXT NOT NULL,
@@ -352,12 +254,10 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- App Startups Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS app_startups (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT, -- Can be NULL for initial app startup
+                    username TEXT,
                     timestamp TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     duration_ms INTEGER,
@@ -366,12 +266,10 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- API Calls Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS api_calls (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT, -- Can be NULL for unauthenticated calls
+                    username TEXT,
                     endpoint TEXT NOT NULL,
                     method TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
@@ -382,24 +280,35 @@ class ConsolidatedDatabase:
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- Database Operations Table (from consolidated_database.py) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS database_operations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    operation_type TEXT NOT NULL, -- e.g., 'INSERT', 'UPDATE', 'DELETE', 'QUERY'
+                    operation_type TEXT NOT NULL,
                     table_name TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     duration_ms INTEGER,
                     rows_affected INTEGER,
-                    username TEXT, -- Optional, if linked to a user action
+                    username TEXT,
                     details TEXT,
                     FOREIGN KEY (username) REFERENCES users(username)
                 )
             """)
-
-            # --- Indexes ---
+            # Insert uploaded_files table and index
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS uploaded_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_size INTEGER,
+                    file_type TEXT,
+                    uploaded_at TEXT NOT NULL,
+                    FOREIGN KEY (username) REFERENCES users(username)
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_uploaded_files_username ON uploaded_files (username)"
+            )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_users_username ON users (username)"
             )
@@ -433,16 +342,11 @@ class ConsolidatedDatabase:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_database_operations_table_name ON database_operations (table_name)"
             )
-
             conn.commit()
 
     def execute_query(
         self, query: str, params: Optional[Tuple] = None
     ) -> List[sqlite3.Row]:
-        """
-        Executes a SELECT query and returns the results.
-        Always use parameterized queries to prevent SQL injection.
-        """
         if params is None:
             params = ()
         try:
@@ -457,10 +361,6 @@ class ConsolidatedDatabase:
             raise
 
     def execute_update(self, query: str, params: Optional[Tuple] = None) -> int:
-        """
-        Executes an INSERT, UPDATE, or DELETE query and returns the number of rows affected.
-        Always use parameterized queries to prevent SQL injection.
-        """
         if params is None:
             params = ()
         try:
@@ -475,11 +375,39 @@ class ConsolidatedDatabase:
             )
             raise
 
-    # --- User Management Methods ---
+    def increment_user_stat(self, username: str, stat_type: str, increment: int = 1):
+        sanitized_username = InputSanitizer.sanitize_username(username)
+        sanitized_stat_type = InputSanitizer.sanitize_string(stat_type)
+        current_timestamp = get_utc_timestamp()
+        query = """
+            INSERT INTO user_stats (username, stat_type, value, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(username, stat_type) DO UPDATE SET value = value + excluded.value, updated_at = excluded.updated_at
+        """
+        params = (
+            sanitized_username,
+            sanitized_stat_type,
+            increment,
+            current_timestamp,
+        )
+        return self.execute_update(query, params)
+
+    def get_user_stat(self, username: str, stat_type: str) -> int:
+        sanitized_username = InputSanitizer.sanitize_username(username)
+        sanitized_stat_type = InputSanitizer.sanitize_string(stat_type)
+        query = "SELECT value FROM user_stats WHERE username = ? AND stat_type = ?"
+        result = self.execute_query(query, (sanitized_username, sanitized_stat_type))
+        return result[0]["value"] if result else 0
+
+    def get_all_user_stats(self, username: str) -> dict:
+        sanitized_username = InputSanitizer.sanitize_username(username)
+        query = "SELECT stat_type, value FROM user_stats WHERE username = ?"
+        results = self.execute_query(query, (sanitized_username,))
+        return {row["stat_type"]: row["value"] for row in results}
+
     def add_user(
         self, username, hashed_password, email, is_test_user=0
     ) -> Optional[int]:
-        """Adds a new user to the database."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_email = InputSanitizer.sanitize_email(email)
         current_timestamp = get_utc_timestamp()
@@ -512,14 +440,12 @@ class ConsolidatedDatabase:
             raise
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
-        """Retrieves a user by username."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = "SELECT * FROM users WHERE username = ?"
         result = self.execute_query(query, (sanitized_username,))
         return dict(result[0]) if result else None
 
     def update_user_last_login(self, username: str):
-        """Updates a user's last login timestamp and increments login count."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         current_timestamp = get_utc_timestamp()
         query = """
@@ -534,7 +460,6 @@ class ConsolidatedDatabase:
             )
 
     def update_user_password(self, username: str, new_hashed_password: str) -> bool:
-        """Updates a user's password."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         current_timestamp = get_utc_timestamp()
         query = (
@@ -546,7 +471,6 @@ class ConsolidatedDatabase:
         return rows_affected > 0
 
     def record_login_failure(self, username: str):
-        """Records a login failure for a user."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = """
             UPDATE users SET login_failures = login_failures + 1, updated_at = ? WHERE username = ?
@@ -555,7 +479,6 @@ class ConsolidatedDatabase:
         self.execute_update(query, (current_timestamp, sanitized_username))
 
     def reset_login_failures(self, username: str):
-        """Resets login failures for a user upon successful login."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = """
             UPDATE users SET login_failures = 0, last_login_success = ?, updated_at = ? WHERE username = ?
@@ -566,7 +489,6 @@ class ConsolidatedDatabase:
         )
 
     def get_user_login_failures(self, username: str) -> int:
-        """Gets the number of login failures for a user."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = "SELECT login_failures FROM users WHERE username = ?"
         result = self.execute_query(query, (sanitized_username,))
@@ -575,7 +497,6 @@ class ConsolidatedDatabase:
     def record_user_activity(
         self, username: str, activity_type: str, details: Optional[str] = None
     ):
-        """Records user activity."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_activity_type = InputSanitizer.sanitize_string(activity_type)
         sanitized_details = InputSanitizer.sanitize_text(details) if details else None
@@ -594,11 +515,9 @@ class ConsolidatedDatabase:
             ),
         )
 
-    # --- Chat Session Management Methods ---
     def create_chat_session(
         self, username: str, session_id: str, session_name: str
     ) -> int:
-        """Creates a new chat session."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         sanitized_session_name = InputSanitizer.sanitize_string(session_name)
@@ -619,14 +538,12 @@ class ConsolidatedDatabase:
         return self.execute_update(query, params)
 
     def get_chat_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves a chat session by ID."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         query = "SELECT * FROM chat_sessions WHERE session_id = ?"
         result = self.execute_query(query, (sanitized_session_id,))
         return dict(result[0]) if result else None
 
     def get_chat_sessions_by_username(self, username: str) -> List[Dict[str, Any]]:
-        """Retrieves all chat sessions for a given user."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = (
             "SELECT * FROM chat_sessions WHERE username = ? ORDER BY updated_at DESC"
@@ -635,14 +552,12 @@ class ConsolidatedDatabase:
         return [dict(row) for row in results]
 
     def update_chat_session_timestamp(self, session_id: str):
-        """Updates the updated_at timestamp of a chat session."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         current_timestamp = get_utc_timestamp()
         query = "UPDATE chat_sessions SET updated_at = ? WHERE session_id = ?"
         self.execute_update(query, (current_timestamp, sanitized_session_id))
 
     def update_chat_session_message_count(self, session_id: str, increment: int = 1):
-        """Increments the message count for a chat session."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         current_timestamp = get_utc_timestamp()
         query = """
@@ -653,6 +568,7 @@ class ConsolidatedDatabase:
     def add_chat_message(
         self,
         session_id: str,
+        username: str,
         message_index: int,
         role: str,
         content: str,
@@ -660,17 +576,19 @@ class ConsolidatedDatabase:
     ) -> int:
         """Adds a new message to a chat session."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
+        sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_role = InputSanitizer.sanitize_string(role)
         sanitized_content = InputSanitizer.sanitize_text(content)
         current_timestamp = get_utc_timestamp()
         metadata_json = json.dumps(metadata) if metadata else None
 
         query = """
-            INSERT INTO chat_messages (session_id, message_index, role, content, timestamp, updated_at, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (session_id, username, message_index, role, content, timestamp, updated_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             sanitized_session_id,
+            sanitized_username,
             message_index,
             sanitized_role,
             sanitized_content,
@@ -678,19 +596,16 @@ class ConsolidatedDatabase:
             current_timestamp,
             metadata_json,
         )
-        # Increment message count on session
         self.update_chat_session_message_count(session_id, 1)
         return self.execute_update(query, params)
 
     def get_chat_messages(self, session_id: str) -> List[Dict[str, Any]]:
-        """Retrieves all messages for a given chat session."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         query = "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY message_index ASC"
         results = self.execute_query(query, (sanitized_session_id,))
         return [dict(row) for row in results]
 
     def delete_chat_session(self, session_id: str) -> int:
-        """Deletes a chat session and its associated messages."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         messages_deleted = self.execute_update(
             "DELETE FROM chat_messages WHERE session_id = ?", (sanitized_session_id,)
@@ -704,7 +619,6 @@ class ConsolidatedDatabase:
         return sessions_deleted
 
     def delete_all_chat_sessions_for_user(self, username: str) -> int:
-        """Deletes all chat sessions and their messages for a given user."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sessions_to_delete = self.get_chat_sessions_by_username(sanitized_username)
         total_sessions_deleted = 0
@@ -724,7 +638,6 @@ class ConsolidatedDatabase:
         )
         return total_sessions_deleted
 
-    # --- Classification Management Methods ---
     def add_classification_result(
         self,
         username: str,
@@ -735,7 +648,6 @@ class ConsolidatedDatabase:
         file_size: Optional[int] = None,
         extraction_method: Optional[str] = None,
     ) -> int:
-        """Adds a new classification result."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_file_path = InputSanitizer.sanitize_string(file_path)
         sanitized_classification_result = InputSanitizer.sanitize_string(
@@ -755,7 +667,6 @@ class ConsolidatedDatabase:
             else None
         )
         current_timestamp = get_utc_timestamp()
-
         query = """
             INSERT INTO classifications (username, file_path, classification_result, sensitivity_level,
                                          security_level, created_at, updated_at, file_size, extraction_method)
@@ -777,7 +688,6 @@ class ConsolidatedDatabase:
     def get_classifications_by_username(
         self, username: str, limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Retrieves classification results for a given user."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         query = """
             SELECT file_path, classification_result, sensitivity_level, security_level,
@@ -790,11 +700,9 @@ class ConsolidatedDatabase:
         results = self.execute_query(query, (sanitized_username, limit))
         return [dict(row) for row in results]
 
-    # --- LLM Session and Embeddings Management Methods ---
     def create_llm_session(
         self, username: str, session_id: str, model_used: str
     ) -> int:
-        """Creates a new LLM session."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         sanitized_model_used = InputSanitizer.sanitize_string(model_used)
@@ -815,7 +723,6 @@ class ConsolidatedDatabase:
     def update_llm_session(
         self, session_id: str, end_time: str, total_tokens: int, total_messages: int
     ) -> int:
-        """Updates an LLM session with end time, tokens, and message count."""
         sanitized_session_id = InputSanitizer.sanitize_string(session_id)
         current_timestamp = get_utc_timestamp()
         query = """
@@ -834,7 +741,6 @@ class ConsolidatedDatabase:
     def add_llm_embedding(
         self, username: str, content_type: str, content_id: str, embedding_vector: bytes
     ) -> int:
-        """Adds a new LLM embedding."""
         sanitized_username = InputSanitizer.sanitize_username(username)
         sanitized_content_type = InputSanitizer.sanitize_string(content_type)
         sanitized_content_id = InputSanitizer.sanitize_string(content_id)
@@ -853,7 +759,6 @@ class ConsolidatedDatabase:
         )
         return self.execute_update(query, params)
 
-    # --- Performance Tracking Methods ---
     def add_app_startup_record(
         self,
         username: Optional[str],
@@ -861,7 +766,6 @@ class ConsolidatedDatabase:
         os_info: str,
         python_version: str,
     ) -> int:
-        """Adds a record for application startup time."""
         sanitized_username = (
             InputSanitizer.sanitize_username(username) if username else None
         )
@@ -891,7 +795,6 @@ class ConsolidatedDatabase:
         status_code: int,
         error_message: Optional[str] = None,
     ) -> int:
-        """Adds a record for API call performance."""
         sanitized_username = (
             InputSanitizer.sanitize_username(username) if username else None
         )
@@ -918,7 +821,6 @@ class ConsolidatedDatabase:
         return self.execute_update(query, params)
 
     def get_llm_performance_summary(self, username: Optional[str] = None) -> list:
-        """Returns LLM performance summary for a user or all users."""
         logger.info(
             f"[DEBUG] get_llm_performance_summary called for username={username}"
         )
@@ -936,7 +838,6 @@ class ConsolidatedDatabase:
         return [dict(row) for row in results]
 
     def get_api_call_summary(self, username: Optional[str] = None) -> list:
-        """Returns API call performance summary for a user or all users."""
         logger.info(f"[DEBUG] get_api_call_summary called for username={username}")
         query = """
             SELECT endpoint, method, COUNT(*) as total_calls,
@@ -956,14 +857,12 @@ class ConsolidatedDatabase:
     def get_document_classifications_by_user(
         self, username: str, limit: int = 10
     ) -> list:
-        """Returns recent file classification results for a user."""
         logger.info(
             f"[DEBUG] get_document_classifications_by_user called for username={username}"
         )
         return self.get_classifications_by_username(username, limit)
 
     def get_app_startup_records(self, limit: int = 100) -> list:
-        """Returns recent app startup records."""
         logger.info(f"[DEBUG] get_app_startup_records called with limit={limit}")
         query = """
             SELECT *, (duration_ms / 1000.0) as startup_time_seconds
@@ -983,7 +882,6 @@ class ConsolidatedDatabase:
         username: Optional[str] = None,
         details: Optional[str] = None,
     ) -> int:
-        """Adds a record for database operation performance."""
         sanitized_operation_type = InputSanitizer.sanitize_string(operation_type)
         sanitized_table_name = InputSanitizer.sanitize_string(table_name)
         sanitized_username = (
@@ -1008,14 +906,10 @@ class ConsolidatedDatabase:
         return self.execute_update(query, params)
 
 
-# Global database instance (lazy loading, single instance for all SQLite needs)
 _consolidated_db = None
 
 
 def get_consolidated_database() -> ConsolidatedDatabase:
-    """
-    Get the single, consolidated SQLite database instance.
-    """
     global _consolidated_db
     if _consolidated_db is None:
         _consolidated_db = ConsolidatedDatabase(get_database_path("main_db"))

@@ -1,6 +1,7 @@
-# app.py
-
 import os
+import sys
+import time
+import platform
 import asyncio
 import gradio as gr
 from gradio_modules.login_and_register import login_interface, handle_primary_btn_click
@@ -9,7 +10,7 @@ from backend.main import init_backend
 
 def load_custom_css():
     css = ""
-    styles_dir = "styles"
+    styles_dir = "/app/styles"
     if os.path.isdir(styles_dir):
         for filename in os.listdir(styles_dir):
             if filename.endswith(".css"):
@@ -19,15 +20,37 @@ def load_custom_css():
 
 
 async def main():
+    # --- App startup analytics ---
+    t0 = time.time()
     await init_backend()
+    try:
+        from backend.consolidated_database import get_consolidated_database
+
+        db = get_consolidated_database()
+        os_info = (
+            f"{platform.system()} {platform.release()}"
+            if hasattr(platform, "system")
+            else "unknown"
+        )
+        python_version = (
+            sys.version.split()[0] if hasattr(sys, "version") else "unknown"
+        )
+        duration_ms = int((time.time() - t0) * 1000)
+        db.add_app_startup_record(
+            username=None,
+            duration_ms=duration_ms,
+            os_info=os_info,
+            python_version=python_version,
+        )
+    except Exception as startup_exc:
+        print(f"[WARN] Failed to log app startup analytics: {startup_exc}")
+    # --- End app startup analytics ---
+
     print("[DEBUG] Initializing all Gradio interfaces before app launch...")
     import logging
 
     logger = logging.getLogger(__name__)
 
-    # Only import and initialize interfaces inside lazy loader functions below
-
-    # Fetch and log launch config from performance_utils
     from performance_utils import perf_monitor
 
     launch_metrics = (
@@ -38,14 +61,15 @@ async def main():
 
     print("[DEBUG] All interfaces initialized. Launching Gradio app...")
 
-    with gr.Blocks(title="NYP FYP Chatbot", css=load_custom_css()) as app:
+    css_str = load_custom_css()
+    with gr.Blocks(title="NYP FYP Chatbot", css=css_str) as app:
         logged_in_state = gr.State(False)
         username_state = gr.State("")
         is_register_mode_state = gr.State(False)
-        # Initialize all_chats_data_state as an empty dict to avoid NoneType errors
         all_chats_data_state = gr.State({})
+        current_time_state = gr.State("")
+        audio_history_state = gr.State([])
 
-        # Login/Register container
         with gr.Column(visible=True) as login_container:
             (
                 error_message,
@@ -69,7 +93,6 @@ async def main():
                 is_register_mode_state,
             )
 
-        # Load theme from flexcyon_theme.py
         try:
             from flexcyon_theme import apply_theme
 
@@ -77,7 +100,6 @@ async def main():
         except ImportError:
             pass
 
-        # Main app containers implemented directly here, now using gr.Tabs and gr.TabItem
         main_tabs = None
         with gr.Column(visible=False) as main_container:
             main_tabs = gr.Tabs()
@@ -87,8 +109,6 @@ async def main():
 
                     from backend.chat import (
                         get_chat_history,
-                        get_chat_metadata,
-                        get_chatbot_response,
                     )
                     from gradio_modules.chatbot import _handle_send_message
 
@@ -96,6 +116,19 @@ async def main():
                     chat_history = gr.Chatbot()
                     chat_input = gr.Textbox(label="Type your message...")
                     send_btn = gr.Button("Send")
+
+                    async def load_chat_history(username):
+                        if username:
+                            return await get_chat_history("default", username)
+                            return []
+
+                    username_state.change(
+                        fn=load_chat_history,
+                        inputs=[username_state],
+                        outputs=[chat_history],
+                        queue=True,
+                    )
+
                     send_btn.click(
                         fn=_handle_send_message,
                         inputs=[
@@ -106,162 +139,23 @@ async def main():
                             all_chats_data_state,
                         ],
                         outputs=[
-                            chat_history,
-                            chat_input,
-                            all_chats_data_state,
-                            chat_history,
-                            gr.State(),
+                            chat_history,  # Only update chat display once
+                            chat_input,  # Clear input
+                            all_chats_data_state,  # Update chat state
+                            gr.State(None),  # Ignore duplicate chat_history output
+                            current_time_state,  # Update time state
                         ],
                         queue=True,
                     )
 
-                    # Load chat history after login using async Gradio event
-                    async def load_chat_history(username):
-                        if username:
-                            return await get_chat_history("default", username)
-                        return []
-
-                    username_state.change(
-                        fn=load_chat_history,
-                        inputs=[username_state],
-                        outputs=[chat_history],
-                        queue=True,
-                    )
-                    new_chat_btn = gr.Button("New Chat")
-                    chat_dropdown = gr.Dropdown(
-                        label="Select Chat Session", choices=[], value=None
-                    )
-
-                    # State to hold current chat_id
-                    chat_id_state = gr.State("")
-
-                    # Load chat sessions for dropdown
-                    async def load_chat_sessions(username):
-                        if not username:
-                            return gr.update(choices=[], value=None)
-                        metadata = await get_chat_metadata(username)
-                        choices = [
-                            f"{v['session_name']} ({k[:8]})"
-                            for k, v in metadata.items()
-                        ]
-                        values = list(metadata.keys())
-                        dropdown_map = dict(zip(choices, values))
-                        chat_dropdown.dropdown_map = dropdown_map
-                        # Default to the most recent chat (first in metadata)
-                        value = choices[0] if choices else None
-                        return gr.update(choices=choices, value=value)
-
-                    username_state.change(
-                        fn=load_chat_sessions,
-                        inputs=[username_state],
-                        outputs=[chat_dropdown],
-                        queue=True,
-                    )
-
-                    # Load chat history for selected chat
-                    async def load_selected_chat_history(selected, username):
-                        if not username or not selected:
-                            return []
-                        chat_id = chat_dropdown.dropdown_map.get(selected, "")
-                        chat_id_state.value = chat_id
-                        return await get_chat_history(chat_id, username)
-
-                    chat_dropdown.change(
-                        fn=load_selected_chat_history,
-                        inputs=[chat_dropdown, username_state],
-                        outputs=[chat_history],
-                        queue=True,
-                    )
-
-                    # New chat button logic
-                    async def start_new_chat(username):
-                        from backend.chat import (
-                            get_chat_metadata,
-                            _update_chat_history,
-                            get_chat_history,
-                        )
-                        import uuid
-
-                        if not username:
-                            return [], gr.update()
-                        chat_id = f"chat_{uuid.uuid4().hex[:8]}"
-                        # Actually create the new chat session in backend (empty message, empty response)
-                        await _update_chat_history(chat_id, username, "", "")
-                        # Reload metadata and dropdown
-                        metadata = await get_chat_metadata(username)
-                        choices = [
-                            f"{v['session_name']} ({k[:8]})"
-                            for k, v in metadata.items()
-                        ]
-                        values = list(metadata.keys())
-                        dropdown_map = dict(zip(choices, values))
-                        chat_dropdown.dropdown_map = dropdown_map
-                        # Set dropdown to new chat
-                        new_choice = [
-                            c for c, k in dropdown_map.items() if k == chat_id
-                        ][0]
-                        # Load empty history for new chat
-                        history = await get_chat_history(chat_id, username)
-                        return history, gr.update(choices=choices, value=new_choice)
-
-                    new_chat_btn.click(
-                        fn=start_new_chat,
-                        inputs=[username_state],
-                        outputs=[chat_history, chat_dropdown],
-                        queue=True,
-                    )
-
-                    # Send message logic
-                    async def send_message(message):
-                        username = (
-                            username_state.value
-                            if hasattr(username_state, "value")
-                            else username_state
-                        )
-                        chat_id = (
-                            chat_id_state.value
-                            if hasattr(chat_id_state, "value")
-                            else chat_id_state
-                        )
-                        if not username or not chat_id:
-                            return [], ""
-                        # Use backend chat logic
-                        await get_chatbot_response(username, chat_id, message)
-                        # Reload chat history after sending
-                        history = await get_chat_history(chat_id, username)
-                        return history, ""
-
-                    send_btn.click(
-                        fn=send_message,
-                        inputs=[chat_input],
-                        outputs=[chat_history, chat_input],
-                        queue=True,
-                    )
-
                 with gr.TabItem("Files"):
-                    gr.Markdown("## 📁 File Upload & Management")
-                    from gradio_modules.file_upload import file_upload_ui
+                    from gradio_modules.file_management import file_management_interface
 
-                    file_upload = gr.File(label="Upload File")
-                    upload_btn = gr.Button("Upload")
-                    upload_status = gr.Markdown(visible=False)
-
-                    async def upload_file(file):
-                        result = await file_upload_ui(
-                            username_state,
-                            gr.State([]),
-                            gr.State(""),
-                            gr.State(""),
-                            gr.State([]),
-                        )
-                        return gr.update(visible=True, value=result)
-
-                    upload_btn.click(
-                        fn=upload_file,
-                        inputs=[file_upload],
-                        outputs=[upload_status],
-                        queue=True,
+                    # Only call file_management_interface, no duplicate file/classification UI
+                    file_management_block = file_management_interface(
+                        username_state, logged_in_state, all_chats_data_state
                     )
+                    file_management_block
 
                 with gr.TabItem("Audio"):
                     gr.Markdown("## 🎤 Audio Input")
@@ -287,40 +181,49 @@ async def main():
                     )
 
                 with gr.TabItem("Search"):
-                    gr.Markdown("## 🔎 Search Chat & Audio History")
-                    from gradio_modules.search_interface import _handle_search_query
+                    from gradio_modules.search_interface import search_interface
 
-                    search_query = gr.Textbox(label="Search Query")
-                    search_btn = gr.Button("Search")
-                    search_results = gr.Markdown(visible=False)
-
-                    async def search_history(query):
-                        result = await _handle_search_query(query)
-                        return gr.update(visible=True, value=result)
-
-                    search_btn.click(
-                        fn=search_history,
-                        inputs=[search_query],
-                        outputs=[search_results],
-                        queue=True,
+                    # Properly wire up search: pass username, all_chats_data_state, audio_history_state
+                    search_block = search_interface(
+                        username_state=username_state,
+                        all_chats_data_state=all_chats_data_state,
+                        audio_history_state=audio_history_state,
                     )
+                    search_block
 
                 with gr.TabItem("Stats"):
-                    gr.Markdown("## 📊 User Statistics & Performance Dashboard")
                     from gradio_modules.stats_interface import StatsInterface
 
                     stats_instance = StatsInterface()
-                    stats_md = gr.Markdown("Stats will appear here.")
+                    status_md = gr.Markdown("", visible=True)
+                    mermaid_md = gr.Markdown("", visible=True)
+                    pretty_stats_md = gr.Markdown("", visible=True)
                     refresh_btn = gr.Button("Refresh Stats")
 
-                    async def refresh_stats():
-                        result = await stats_instance.get_user_statistics()
-                        return gr.update(value=result)
+                    async def refresh_stats(username=None):
+                        user = username or (
+                            username_state.value
+                            if hasattr(username_state, "value")
+                            else username_state
+                        )
+                        if not user:
+                            return (
+                                "Please log in to view statistics.",
+                                "",
+                                "You must be logged in to view statistics.",
+                            )
+                        result = stats_instance.get_user_statistics(user)
+                        # Only return the first three outputs (no PDF)
+                        return result[:3]
 
                     refresh_btn.click(
                         fn=refresh_stats,
-                        inputs=[],
-                        outputs=[stats_md],
+                        inputs=[username_state],
+                        outputs=[
+                            status_md,
+                            mermaid_md,
+                            pretty_stats_md,
+                        ],
                         queue=True,
                     )
 
@@ -337,7 +240,6 @@ async def main():
                     change_pw_status = gr.Markdown(visible=False)
 
                     async def handle_change_password(current, new, confirm):
-                        # Use username from state
                         username = (
                             username_state.value
                             if hasattr(username_state, "value")
@@ -368,7 +270,6 @@ async def main():
                     logout_btn = gr.Button("Logout")
 
                     def do_logout():
-                        # Reset login state and username
                         return False, ""
 
                     logout_btn.click(
@@ -378,7 +279,6 @@ async def main():
                         queue=True,
                     )
 
-        # Toggle login/register mode
         def toggle_register_mode(current_mode):
             return not current_mode
 
@@ -389,7 +289,6 @@ async def main():
             queue=False,
         )
 
-        # Update UI elements when mode changes
         def update_auth_ui(is_reg):
             return (
                 gr.update(value="Register Account" if is_reg else "Login"),
@@ -430,11 +329,10 @@ async def main():
             queue=False,
         )
 
-        # Show/hide containers after login/logout
         def handle_login_state(logged_in, username):
             return (
-                gr.update(visible=not logged_in),  # login_container
-                gr.update(visible=logged_in),  # main_container
+                gr.update(visible=not logged_in),
+                gr.update(visible=logged_in),
             )
 
         logged_in_state.change(
@@ -444,11 +342,6 @@ async def main():
             queue=False,
         )
 
-        # Logout button logic (inside logout tab)
-        # Should set logged_in_state to False and username_state to ""
-        # ...existing code for logout_btn.click...
-
-        # Toggle password visibility
         show_password_btn.click(
             fn=lambda current_type, current_visibility_state: (
                 gr.update(type="text" if not current_visibility_state else "password"),
@@ -474,7 +367,6 @@ async def main():
             queue=False,
         )
 
-        # Login/Register button logic
         async def handle_and_update(*args):
             error_msg, logged_in, username_val = await handle_primary_btn_click(*args)
             if logged_in is True:

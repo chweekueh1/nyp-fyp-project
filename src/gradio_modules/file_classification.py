@@ -372,10 +372,7 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
 
     try:
         saved_path, original_filename = save_uploaded_file(file_obj, username)
-        # Update dropdown immediately after saving
         dropdown_update = refresh_file_dropdown(username)
-
-        # Perform classification logic
         (
             status_update,
             results_box_update,
@@ -387,11 +384,8 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
             loading_update,
             _,
             history_md_update,
-        ) = _perform_classification_logic(  # Use _ for the dropdown_no_change
-            saved_path, original_filename, username
-        )
+        ) = _perform_classification_logic(saved_path, original_filename, username)
 
-        # Combine the updates, ensuring file_dropdown is updated
         return (
             status_update,
             results_box_update,
@@ -401,7 +395,7 @@ def handle_upload_click(file_obj: Any, username: str) -> tuple:
             reasoning_result,
             summary_result,
             loading_update,
-            dropdown_update,  # Explicitly pass the dropdown update
+            dropdown_update,
             history_md_update,
         )
 
@@ -438,9 +432,7 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
     file_path = get_file_path(username, selected_file)
     if not file_path:
         return _get_error_return_state("File not found in your uploads.", username)
-
     try:
-        # Perform classification logic
         (
             status_update,
             results_box_update,
@@ -452,11 +444,8 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
             loading_update,
             _,
             history_md_update,
-        ) = _perform_classification_logic(  # Use _ for the dropdown_no_change
-            file_path, selected_file, username
-        )
+        ) = _perform_classification_logic(file_path, selected_file, username)
 
-        # Combine the updates, no dropdown update needed here
         return (
             status_update,
             results_box_update,
@@ -466,7 +455,7 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
             reasoning_result,
             summary_result,
             loading_update,
-            history_md_update,  # Only history is updated, dropdown is not affected here
+            history_md_update,
         )
     except Exception as e:
         perf_monitor.end_timer("file_classification_total")
@@ -475,17 +464,7 @@ def handle_classify_existing(selected_file: str, username: str) -> tuple:
 
 
 def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
-    """Save uploaded file to user's uploads directory.
-
-    :param file_obj: The file object to save
-    :type file_obj: Any
-    :param username: The username to save the file for
-    :type username: str
-    :return: Tuple of (saved_file_path, original_filename)
-    :rtype: Tuple[str, str]
-    :raises ValueError: If file object or username is missing, or file type not allowed
-    :raises IOError: If there's an error saving the file.
-    """
+    """Save uploaded file to user's uploads directory."""
     if not file_obj or not username:
         logger.error("Attempted to save file with missing file_obj or username.")
         raise ValueError("File object and username are required")
@@ -505,13 +484,31 @@ def save_uploaded_file(file_obj: Any, username: str) -> Tuple[str, str]:
         "%Y%m%d_%H%M%S_%f"
     )  # Added microseconds for more uniqueness
     file_ext = Path(original_filename).suffix
-    base_name = Path(original_filename).stem
-    unique_filename = f"{base_name}_{timestamp}{file_ext}"
+    unique_filename = f"base_name_{timestamp}{file_ext}"
     saved_path = os.path.join(uploads_dir, unique_filename)
 
     try:
         shutil.copy2(file_obj.name, saved_path)
         logger.info(f"File '{original_filename}' saved to '{saved_path}'")
+        # ---- NEW: Persist uploaded file in the database ----
+        try:
+            from backend.consolidated_database import get_consolidated_database
+
+            db = get_consolidated_database()
+            file_size = os.path.getsize(saved_path)
+            file_type = Path(original_filename).suffix.lower()
+            uploaded_at = datetime.now().isoformat()
+            db.execute_update(
+                """
+                INSERT INTO uploaded_files (username, file_path, file_size, file_type, uploaded_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (username, saved_path, file_size, file_type, uploaded_at),
+            )
+        except Exception as db_exc:
+            logger.warning(f"Could not persist uploaded file record: {db_exc}")
+        # -----------------------------------------------
+
     except Exception as e:
         logger.error(
             f"Failed to save file '{original_filename}' to '{saved_path}': {e}",
