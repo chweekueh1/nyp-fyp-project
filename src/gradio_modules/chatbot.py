@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 Chatbot Interface Module for the NYP FYP CNC Chatbot.
 
@@ -11,16 +10,24 @@ The module integrates with Gradio to provide a web-based chat interface with:
 - Integration with backend chat and authentication systems
 """
 
-import gradio as gr
+#!/usr/bin/env python3
+"""
+Chatbot Interface Module for the NYP FYP CNC Chatbot.
+
+This module provides the main chatbot interface for the NYP FYP CNC Chatbot application.
+Users can send messages.
+The module integrates with Gradio to provide a web-based chat interface with:
+- Real-time messaging with LLM-powered responses
+- User-friendly UI components and state management
+- Integration with backend chat and authentication systems
+"""
+
 import logging
-from datetime import datetime
+import difflib
+import gradio as gr
+from backend.chat import get_chatbot_response, get_consolidated_database
 
 logger = logging.getLogger(__name__)
-
-from backend.chat import (
-    get_chatbot_response,
-    get_consolidated_database,
-)
 
 
 async def _handle_send_message(
@@ -34,40 +41,47 @@ async def _handle_send_message(
     db = get_consolidated_database()
 
     def to_gradio_pairs(history):
+        # Returns list of [user, bot] pairs for gr.Chatbot
         pairs = []
-        last_user = None
+        current_pair = [None, None]
         for entry in history:
-            if entry.get("role") == "user":
-                last_user = entry.get("content", "")
-            elif entry.get("role") == "assistant" and last_user is not None:
-                pairs.append([last_user, entry.get("content", "")])
-                last_user = None
-        if last_user is not None:
-            pairs.append([last_user, ""])
+            if entry["role"] == "user":
+                if current_pair[0] is not None or current_pair[1] is not None:
+                    pairs.append(tuple(current_pair))
+                    current_pair = [None, None]
+                current_pair[0] = entry["content"]
+            elif entry["role"] == "assistant":
+                current_pair[1] = entry["content"]
+                pairs.append(tuple(current_pair))
+                current_pair = [None, None]
+        if current_pair[0] is not None or current_pair[1] is not None:
+            pairs.append(tuple(current_pair))
         return pairs
-
-    import difflib
 
     if not user_message or not username:
         history = db.get_chat_messages(chat_id)
-        yield (
+        return (
             to_gradio_pairs(history),
-            "",
+            "",  # Clear user input box
             gr.State({}),
             to_gradio_pairs(history),
             gr.update(),
         )
 
     history = db.get_chat_messages(chat_id)
-    logger.info(f"Sending message for user {username}, chat {chat_id}: {user_message}")
+    # Add user message to DB and history
+    db.add_chat_message(chat_id, username, len(history), "user", user_message)
+    history = db.get_chat_messages(chat_id)  # Refresh to include user message
+    # Track API call for chat message
+    db.add_api_call_record(
+        username=username,
+        endpoint="chat/send_message",
+        method="POST",
+        duration_ms=0,
+        status_code=200,
+        error_message=None,
+    )
 
-    # Save user message ONLY if not a duplicate (last message is not the same)
-    if (
-        not history
-        or history[-1].get("role") != "user"
-        or history[-1].get("content") != user_message
-    ):
-        db.add_chat_message(chat_id, username, len(history), "user", user_message)
     # Debug: difflib matching score
     for msg in history:
         score = difflib.SequenceMatcher(
@@ -82,71 +96,40 @@ async def _handle_send_message(
         full_response = ""
         async for chunk in response_generator:
             full_response += chunk
-            yield (
-                to_gradio_pairs(
-                    history
-                    + [
-                        {"role": "user", "content": user_message},
-                        {"role": "assistant", "content": full_response},
-                    ]
-                ),
-                gr.update(value=""),
-                gr.State({}),
-                to_gradio_pairs(
-                    history
-                    + [
-                        {"role": "user", "content": user_message},
-                        {"role": "assistant", "content": full_response},
-                    ]
-                ),
-                datetime.now().isoformat(),
+            # Track LLM call for each chunk
+            db.add_api_call_record(
+                username=username,
+                endpoint="chatbot/llm_response",
+                method="STREAM",
+                duration_ms=0,
+                status_code=200,
+                error_message=None,
             )
-        history = db.get_chat_messages(chat_id)
-        yield (
-            to_gradio_pairs(history),
-            gr.update(value=""),
+        # Add assistant reply to DB and history
+        db.add_chat_message(chat_id, username, len(history), "assistant", full_response)
+        updated_history = db.get_chat_messages(chat_id)
+        return (
+            to_gradio_pairs(updated_history),  # gr.Chatbot history
+            "",  # Clear user input box
             gr.State({}),
-            to_gradio_pairs(history),
-            datetime.now().isoformat(),
-        )
-    except Exception as e:
-        logger.error(
-            f"Error getting chatbot response for {username}, chat {chat_id}: {e}",
-            exc_info=True,
-        )
-        history = db.get_chat_messages(chat_id)
-        yield (
-            to_gradio_pairs(
-                history + [{"role": "assistant", "content": f"Error: {e}"}]
-            ),
-            gr.update(value=""),
-            gr.State({}),
-            to_gradio_pairs(
-                history + [{"role": "assistant", "content": f"Error: {e}"}]
-            ),
+            to_gradio_pairs(updated_history),
             gr.update(),
         )
-
-
-async def _handle_clear_chat(username: str, chat_id: str, *_) -> tuple:
-    chat_id = "default"
-    db = get_consolidated_database()
-    logger.info(f"Clearing chat for user: {username}, chat_id: {chat_id}")
-    try:
-        db.delete_chat_session(chat_id)
-        yield (
-            gr.update(value=[]),
+    except Exception as e:
+        logger.error(f"Error during chatbot response: {e}", exc_info=True)
+        return (
+            to_gradio_pairs(history),
+            f"Error: {str(e)}",
             gr.State({}),
-            chat_id,
-            gr.update(value=f"Chat {chat_id}"),
-            None,
+            to_gradio_pairs(history),
+            gr.update(),
         )
     except Exception as e:
-        logger.warning(f"Exception clearing chat: {e}")
-        yield (
-            gr.update(value=[]),
+        logger.error(f"Error during chatbot response: {e}", exc_info=True)
+        return (
+            to_gradio_pairs(history),
+            f"Error: {str(e)}",
             gr.State({}),
-            chat_id,
-            gr.update(value=f"Chat {chat_id}"),
-            None,
+            to_gradio_pairs(history),
+            gr.update(),
         )

@@ -100,16 +100,12 @@ async def main():
         except ImportError:
             pass
 
-        main_tabs = None
         with gr.Column(visible=False) as main_container:
             main_tabs = gr.Tabs()
             with main_tabs:
                 with gr.TabItem("Chat"):
                     gr.Markdown("## 💬 Chatbot")
-
-                    from backend.chat import (
-                        get_chat_history,
-                    )
+                    from backend.chat import get_chat_history
                     from gradio_modules.chatbot import _handle_send_message
 
                     chat_id_state = gr.State("")
@@ -120,7 +116,7 @@ async def main():
                     async def load_chat_history(username):
                         if username:
                             return await get_chat_history("default", username)
-                            return []
+                        return []
 
                     username_state.change(
                         fn=load_chat_history,
@@ -128,7 +124,6 @@ async def main():
                         outputs=[chat_history],
                         queue=True,
                     )
-
                     send_btn.click(
                         fn=_handle_send_message,
                         inputs=[
@@ -139,11 +134,11 @@ async def main():
                             all_chats_data_state,
                         ],
                         outputs=[
-                            chat_history,  # Only update chat display once
-                            chat_input,  # Clear input
-                            all_chats_data_state,  # Update chat state
-                            gr.State(None),  # Ignore duplicate chat_history output
-                            current_time_state,  # Update time state
+                            chat_history,
+                            chat_input,
+                            all_chats_data_state,
+                            gr.State(None),
+                            current_time_state,
                         ],
                         queue=True,
                     )
@@ -151,7 +146,6 @@ async def main():
                 with gr.TabItem("Files"):
                     from gradio_modules.file_management import file_management_interface
 
-                    # Only call file_management_interface, no duplicate file/classification UI
                     file_management_block = file_management_interface(
                         username_state, logged_in_state, all_chats_data_state
                     )
@@ -183,7 +177,6 @@ async def main():
                 with gr.TabItem("Search"):
                     from gradio_modules.search_interface import search_interface
 
-                    # Properly wire up search: pass username, all_chats_data_state, audio_history_state
                     search_block = search_interface(
                         username_state=username_state,
                         all_chats_data_state=all_chats_data_state,
@@ -213,7 +206,6 @@ async def main():
                                 "You must be logged in to view statistics.",
                             )
                         result = stats_instance.get_user_statistics(user)
-                        # Only return the first three outputs (no PDF)
                         return result[:3]
 
                     refresh_btn.click(
