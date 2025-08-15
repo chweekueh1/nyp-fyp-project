@@ -61,6 +61,7 @@ RUN apk add --no-cache \
     libxext \
     libssl3 \
     freetype \
+    ffmpeg \
     && update-ca-certificates \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone

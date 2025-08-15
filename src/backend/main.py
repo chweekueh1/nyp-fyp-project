@@ -131,6 +131,16 @@ async def init_backend() -> None:
             classification_module = get_classification()
             if classification_module:
                 logger.info("✅ Classification module initialized.")
+                # Ensure classification workflow is initialized
+                try:
+                    from llm.classificationModel import (
+                        initialize_classification_workflow,
+                    )
+
+                    initialize_classification_workflow()
+                    logger.info("✅ Classification workflow initialized.")
+                except Exception as e:
+                    logger.error(f"Error initializing classification workflow: {e}")
             perf_monitor.end_timer("classification_module_init")
         except Exception as e:
             logger.error(f"Error initializing classification module: {e}")

@@ -602,7 +602,9 @@ def highlight_match(text, needle):
         return text
 
     def _replace(m):
-        return f'<mark style="background:yellow;font-weight:bold">{m.group(0)}</mark>'
+        return (
+            f'<mark style="background:#ffff00aa;font-weight:bold">{m.group(0)}</mark>'
+        )
 
     pattern = re.compile(re.escape(needle), re.IGNORECASE)
     return pattern.sub(_replace, text)

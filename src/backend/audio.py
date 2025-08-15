@@ -7,7 +7,6 @@ Contains audio transcription and processing functions.
 import os
 import logging
 import os.path
-import tempfile
 from typing import Dict, Any, Optional
 from .rate_limiting import (
     check_rate_limit,
@@ -75,6 +74,19 @@ async def transcribe_audio(
     Returns:
         Dict[str, Any]: A dictionary containing the transcript or an error message.
     """
+    # Validate audio file type using magic number (simple check)
+    import mimetypes
+    import subprocess
+    import shutil
+    from tempfile import NamedTemporaryFile
+
+    mime_type, _ = mimetypes.guess_type(filename)
+    if not mime_type or not mime_type.startswith("audio"):
+        logger.warning(f"Rejected non-audio file for user {username}: {filename}")
+        return {
+            "error": "Invalid file type. Only audio files are supported for transcription."
+        }
+
     if not _ensure_client_initialized():
         return {"error": "OpenAI client not initialized. Cannot transcribe audio."}
 
@@ -84,40 +96,71 @@ async def transcribe_audio(
             "error": "Rate limit exceeded for audio transcription. Please try again later."
         }
 
-        if not audio_data_bytes or len(audio_data_bytes) == 0:
-            logger.warning(
-                f"Empty audio file received for transcription: {filename} by user: {username}"
-            )
-            return {
-                "error": "Audio file is empty. Please provide a valid audio recording."
-            }
+    if not audio_data_bytes or len(audio_data_bytes) == 0:
+        logger.warning(
+            f"Empty audio file received for transcription: {filename} by user: {username}"
+        )
+        return {"error": "Audio file is empty. Please provide a valid audio recording."}
 
     start_time = os.monotonic()
     temp_file = None
+    norm_file = None
+    wav_file = None
     try:
         from . import config
 
-        # Determine file extension from original filename or default to .mp3
+        # Write original audio to temp file
         _, ext = os.path.splitext(filename)
-        if not ext:
-            ext = ".mp3"
-
-        # Create a temporary file to write the audio bytes
-        # delete=False means we manually delete it in the finally block
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        temp_file = NamedTemporaryFile(delete=False, suffix=ext)
         temp_file.write(audio_data_bytes)
-        temp_file.close()  # Close the file handle so config.client can open it
+        temp_file.close()
+        input_path = temp_file.name
 
-        file_to_transcribe_path = temp_file.name
+        # Convert to wav if not already wav
+        if ext.lower() != ".wav":
+            ffmpeg_path = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
+            wav_file = NamedTemporaryFile(delete=False, suffix=".wav")
+            wav_file.close()
+            convert_cmd = [ffmpeg_path, "-y", "-i", input_path, wav_file.name]
+            try:
+                subprocess.run(
+                    convert_cmd,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                input_path = wav_file.name
+            except Exception as e:
+                logger.error(f"FFmpeg conversion failed: {e}")
+                return {"error": "Failed to convert audio to WAV format."}
+
+        # Normalize audio to at least -6 dB using ffmpeg
+        norm_file = NamedTemporaryFile(delete=False, suffix=".wav")
+        norm_file.close()
+        ffmpeg_path = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
+        norm_cmd = [
+            ffmpeg_path,
+            "-y",
+            "-i",
+            input_path,
+            "-filter:a",
+            "volume=6dB",
+            norm_file.name,
+        ]
+        try:
+            subprocess.run(
+                norm_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        except Exception as e:
+            logger.error(f"FFmpeg normalization failed: {e}")
+            return {"error": "Failed to normalize audio volume."}
+
+        file_to_transcribe_path = norm_file.name
         logger.info(
-            f"Transcribing audio file: {filename} (temp: {file_to_transcribe_path}) for user: {username}"
+            f"Transcribing normalized audio file: {filename} (temp: {file_to_transcribe_path}) for user: {username}"
         )
 
-        # Placeholder for duration calculation
-        duration_seconds = 0.0
-        # In a production system, a library like pydub or soundfile would be used
-        # to get the actual duration of the audio file.
-
+        duration_seconds = 0.0  # Placeholder
         with open(file_to_transcribe_path, "rb") as f:
             transcript = config.client.audio.transcriptions.create(
                 model="whisper-1", file=f
@@ -126,7 +169,6 @@ async def transcribe_audio(
         end_time = os.monotonic()
         duration_ms = int((end_time - start_time) * 1000)
 
-        # Record API call
         db = _get_db()
         db.add_api_call_record(
             username=username,
@@ -139,7 +181,7 @@ async def transcribe_audio(
 
         return {
             "transcript": transcript,
-            "file_path": filename,  # Return original filename
+            "file_path": filename,
             "processed_at": get_utc_timestamp(),
             "duration_seconds": duration_seconds,
             "model_used": "whisper-1",
@@ -160,12 +202,13 @@ async def transcribe_audio(
         )
         return {"error": f"Error transcribing audio: {e}"}
     finally:
-        # Ensure the temporary file is deleted
-        if temp_file and os.path.exists(temp_file.name):
-            try:
-                os.unlink(temp_file.name)
-            except Exception as e:
-                logger.warning(f"Failed to delete temporary file {temp_file.name}: {e}")
+        # Ensure all temp files are deleted
+        for f in [temp_file, norm_file, wav_file]:
+            if f and os.path.exists(f.name):
+                try:
+                    os.unlink(f.name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary file {f.name}: {e}")
 
 
 async def audio_to_text(

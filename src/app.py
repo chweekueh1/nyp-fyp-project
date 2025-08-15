@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import platform
 import asyncio
 import gradio as gr
 from gradio_modules.login_and_register import login_interface, handle_primary_btn_click
@@ -23,10 +22,41 @@ async def main():
     # --- App startup analytics ---
     t0 = time.time()
     await init_backend()
+    # Ensure classification workflow is initialized after backend init
     try:
-        from backend.consolidated_database import get_consolidated_database
+        # Import required modules and objects
+        from llm.classificationModel import (
+            initialize_classification_workflow,
+        )
+        from backend.database import get_classification_db
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-        db = get_consolidated_database()
+        try:
+            # Import required modules and objects
+            import llm.classificationModel as cm
+            from llm.classificationModel import initialize_classification_workflow
+            from backend.database import get_classification_db
+            from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+            import os
+
+            # Set up LLM and DB globals for classificationModel
+            cm.llm = ChatOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            cm.db = get_classification_db()
+            cm.embedding = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
+
+            # Now initialize workflow
+            initialize_classification_workflow()
+            print("[DEBUG] Classification workflow initialized.")
+            # Mark backend as initialized for file handling and other modules
+            from backend.file_handling import set_backend_initialized
+
+            set_backend_initialized(True)
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize classification workflow: {e}")
+        # Restore missing db and os_info assignments
+        import platform
+
+        db = None
         os_info = (
             f"{platform.system()} {platform.release()}"
             if hasattr(platform, "system")
@@ -36,12 +66,19 @@ async def main():
             sys.version.split()[0] if hasattr(sys, "version") else "unknown"
         )
         duration_ms = int((time.time() - t0) * 1000)
-        db.add_app_startup_record(
-            username=None,
-            duration_ms=duration_ms,
-            os_info=os_info,
-            python_version=python_version,
-        )
+        try:
+            from backend.consolidated_database import get_consolidated_database
+
+            db = get_consolidated_database()
+        except Exception:
+            db = None
+        if db:
+            db.add_app_startup_record(
+                username=None,
+                duration_ms=duration_ms,
+                os_info=os_info,
+                python_version=python_version,
+            )
     except Exception as startup_exc:
         print(f"[WARN] Failed to log app startup analytics: {startup_exc}")
     # --- End app startup analytics ---
@@ -143,6 +180,16 @@ async def main():
                         queue=True,
                     )
 
+                with gr.TabItem("Search"):
+                    from gradio_modules.search_interface import search_interface
+
+                    search_block = search_interface(
+                        username_state=username_state,
+                        all_chats_data_state=all_chats_data_state,
+                        audio_history_state=audio_history_state,
+                    )
+                    search_block
+
                 with gr.TabItem("Files"):
                     from gradio_modules.file_management import file_management_interface
 
@@ -153,9 +200,7 @@ async def main():
 
                 with gr.TabItem("Audio"):
                     gr.Markdown("## 🎤 Audio Input")
-                    from gradio_modules.audio_input import (
-                        transcribe_and_respond_wrapper,
-                    )
+                    from backend.audio import audio_to_text
 
                     audio_input = gr.Audio(label="Record or Upload Audio")
                     transcribe_btn = gr.Button("Transcribe & Chat")
@@ -164,8 +209,14 @@ async def main():
                     )
 
                     async def transcribe_audio(audio):
-                        result = await transcribe_and_respond_wrapper(audio)
-                        return result
+                        # Pass UI state and audio file path to backend.audio.audio_to_text
+                        ui_state = {
+                            "username": username_state.value
+                            if hasattr(username_state, "value")
+                            else username_state
+                        }
+                        result = await audio_to_text(ui_state, audio)
+                        return result.get("transcript", "")
 
                     transcribe_btn.click(
                         fn=transcribe_audio,
@@ -173,16 +224,6 @@ async def main():
                         outputs=[transcript_output],
                         queue=True,
                     )
-
-                with gr.TabItem("Search"):
-                    from gradio_modules.search_interface import search_interface
-
-                    search_block = search_interface(
-                        username_state=username_state,
-                        all_chats_data_state=all_chats_data_state,
-                        audio_history_state=audio_history_state,
-                    )
-                    search_block
 
                 with gr.TabItem("Stats"):
                     from gradio_modules.stats_interface import StatsInterface

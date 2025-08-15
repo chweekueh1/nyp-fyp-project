@@ -16,8 +16,21 @@ from .rate_limiting import check_rate_limit
 from .database import get_classification
 from .timezone_utils import get_utc_timestamp
 
+
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Backend initialization state
+_backend_initialized = False
+
+
+def set_backend_initialized(state: bool = True):
+    global _backend_initialized
+    _backend_initialized = state
+
+
+def is_backend_initialized() -> bool:
+    return _backend_initialized
 
 
 async def detectFileType_async(file_path: str) -> str | None:
@@ -92,6 +105,13 @@ async def handle_uploaded_file(ui_state: dict) -> dict:
     :rtype: dict
     """
     print(f"[DEBUG] backend.handle_uploaded_file called with ui_state: {ui_state}")
+    if not is_backend_initialized():
+        logger.error("Backend not initialized. Cannot process file uploads.")
+        return {
+            "status": "error",
+            "message": "Backend not initialized. Please wait for startup to complete.",
+            "debug": "Backend not initialized.",
+        }
     username = ui_state.get("username")
     file_obj = ui_state.get("file_obj")
 
@@ -244,6 +264,16 @@ async def data_classification(content: str, keywords: Optional[str] = None) -> d
     :return: Classification result with details.
     :rtype: dict
     """
+    # Import workflow from classificationModel
+    from llm.classificationModel import workflow
+
+    if workflow is None:
+        logger.error(
+            "Classification workflow not initialized. Ensure LLM and DB are set up in app.py."
+        )
+        return {
+            "error": "Classification workflow not initialized. Please contact admin."
+        }
     try:
         # Get classification functions lazily
         classification_funcs = get_classification()
@@ -268,7 +298,6 @@ async def data_classification(content: str, keywords: Optional[str] = None) -> d
             "classification": result,
             "content_length": len(filtered_content),
         }
-
     except Exception as e:
         logger.error(f"Error in data_classification: {e}")
         return {"error": str(e)}

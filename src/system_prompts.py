@@ -175,10 +175,7 @@ def get_chat_system_prompt() -> str:
         and file analysis.
     -   **Data Security Levels & Sensitivity Categories**: Provides a clear list of
         classification labels that the chatbot understands and should refer to.
-    -   **Mermaid Chart Support**: Crucially, it instructs the LLM on how to generate
-        Mermaid syntax for various diagram types (Flowcharts, Sequence, Class, Gantt,
-        Pie, Mind Map, ER Diagrams) when asked to create visual representations. It
-        provides detailed rules for syntax generation, clarity, and explanation.
+    -   **Mermaid Chart Support**: You can generate Mermaid diagrams for charts, flows, and visualizations when requested. Always wrap Mermaid syntax in proper code blocks (```mermaid ... ```), and explain the diagram in plain text. The backend will render these diagrams in the UI.
     -   **Answering Guidelines**: Directs the LLM to use only retrieved context (``{context}``)
         for answers, to respond respectfully and ethically, and to handle questions not
         found in the vector database by either using its best judgment (if NYP CNC related)
@@ -212,6 +209,7 @@ def get_chat_system_prompt() -> str:
         "- **Sensitive Normal**: Standard security measures\n"
         "- **Sensitive High**: Enhanced security protocols\n"
         "## Mermaid Chart Support\n"
+        "You can generate Mermaid diagrams for charts, flows, and visualizations when requested. Always wrap Mermaid syntax in proper code blocks (```mermaid ... ```), and explain the diagram in plain text. The backend will render these diagrams in the UI.\n"
         "When asked to create charts, diagrams, or visual representations, generate proper Mermaid syntax that can be rendered by Gradio's Markdown component. "
         "The backend automatically validates and formats Mermaid diagrams for proper rendering.\n\n"
         "**Markdown Formatting Notice**:\n"

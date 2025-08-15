@@ -1,7 +1,6 @@
 import os
 import asyncio
 import gradio as gr
-from backend.audio import transcribe_audio
 from backend.chat import get_chatbot_response
 from backend.consolidated_database import get_consolidated_database
 
@@ -21,13 +20,11 @@ def transcribe_and_respond_wrapper(audio_input, username_state, audio_history_st
         )
     username = username_state
     try:
-        with open(audio_input, "rb") as f:
-            audio_bytes = f.read()
-        filename = os.path.basename(audio_input)
-        loop = asyncio.get_event_loop()
-        transcription_result = loop.run_until_complete(
-            transcribe_audio(audio_bytes, filename, username)
-        )
+        # Directly call backend.audio.audio_to_text with UI state and file path
+        from backend.audio import audio_to_text
+
+        ui_state = {"username": username}
+        transcription_result = asyncio.run(audio_to_text(ui_state, audio_input))
         transcript = transcription_result.get("transcript", "")
         status = "Transcription successful." if transcript else "Transcription failed."
         response = ""
@@ -43,9 +40,13 @@ def transcribe_and_respond_wrapper(audio_input, username_state, audio_history_st
                 response += chunk
         history = audio_history_state if isinstance(audio_history_state, list) else []
         history.append(
-            {"audio": filename, "transcript": transcript, "response": response}
+            {
+                "audio": os.path.basename(audio_input),
+                "transcript": transcript,
+                "response": response,
+            }
         )
-        history_md = f"**Audio:** {filename}\n**Transcript:** {transcript}\n**Response:** {response}"
+        history_md = f"**Audio:** {os.path.basename(audio_input)}\n**Transcript:** {transcript}\n**Response:** {response}"
         return transcript, response, status, "", None, None, history, history_md
     except Exception as e:
         return (

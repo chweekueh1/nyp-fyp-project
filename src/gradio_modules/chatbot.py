@@ -99,14 +99,22 @@ async def _handle_send_message(
         full_response = ""
         async for chunk in response_generator:
             full_response += chunk
+        # Pass response through markdown formatter
+        from backend.markdown_formatter import format_markdown
+
+        formatted_response = format_markdown(full_response)
         # Persist assistant response asynchronously
-        await save_message_async(chat_id, username, "assistant", full_response)
+        await save_message_async(chat_id, username, "assistant", formatted_response)
         updated_history = db.get_chat_messages(chat_id)
+        # Replace bot reply in last pair with formatted response
+        pairs = to_gradio_pairs(updated_history)
+        if pairs and pairs[-1][1] is not None:
+            pairs[-1] = (pairs[-1][0], formatted_response)
         return (
-            to_gradio_pairs(updated_history),
+            pairs,
             "",
             gr.State({}),
-            to_gradio_pairs(updated_history),
+            pairs,
             gr.update(),
         )
     except Exception as e:
