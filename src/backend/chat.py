@@ -389,51 +389,60 @@ async def rename_chat_session(
 async def save_message_async(
     chat_id: str, username: str, role: str, content: str
 ) -> bool:
+    import asyncio
+
     db = _get_chat_db_manager()
     sanitized_chat_id = InputSanitizer.sanitize_string(chat_id)
     sanitized_username = InputSanitizer.sanitize_username(username)
     sanitized_role = InputSanitizer.sanitize_string(role)
     sanitized_content = InputSanitizer.sanitize_text(content)
     timestamp = get_utc_timestamp()
+    loop = asyncio.get_event_loop()
     try:
-        session_exists_query = (
-            "SELECT COUNT(*) FROM chat_sessions WHERE session_id = ? AND username = ?"
+        # Check if session exists using execute_query
+        # session_exists_query = "SELECT COUNT(*) as count FROM chat_sessions WHERE session_id = ? AND username = ?"
+        # result = await loop.run_in_executor(
+        #     None,
+        #     db.execute_query,
+        #     session_exists_query,
+        #     (sanitized_chat_id, sanitized_username),
+        # )
+        new_session_name = (
+            (content[:50] + "..." if len(content) > 50 else content)
+            if role == "user"
+            else f"Chat {chat_id[:8]}"
         )
-        exists = db.fetch_one(
-            session_exists_query, (sanitized_chat_id, sanitized_username)
-        )[0]
+        sanitized_session_name = InputSanitizer.sanitize_text(new_session_name)
+        create_session_query = """
+            INSERT OR IGNORE INTO chat_sessions (session_id, username, session_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        await loop.run_in_executor(
+            None,
+            db.execute_update,
+            create_session_query,
+            (
+                sanitized_chat_id,
+                sanitized_username,
+                sanitized_session_name,
+                timestamp,
+                timestamp,
+            ),
+        )
+        # Always update timestamp after insert/ignore
+        update_session_query = """
+            UPDATE chat_sessions SET updated_at = ? WHERE session_id = ? AND username = ?
+        """
+        await loop.run_in_executor(
+            None,
+            db.execute_update,
+            update_session_query,
+            (timestamp, sanitized_chat_id, sanitized_username),
+        )
 
-        if exists == 0:
-            new_session_name = (
-                (content[:50] + "..." if len(content) > 50 else content)
-                if role == "user"
-                else f"Chat {chat_id[:8]}"
-            )
-            sanitized_session_name = InputSanitizer.sanitize_text(new_session_name)
-            create_session_query = """
-                INSERT INTO chat_sessions (session_id, username, session_name, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            """
-            db.execute_update(
-                create_session_query,
-                (
-                    sanitized_chat_id,
-                    sanitized_username,
-                    sanitized_session_name,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-        else:
-            update_session_query = """
-                UPDATE chat_sessions SET updated_at = ? WHERE session_id = ? AND username = ?
-            """
-            db.execute_update(
-                update_session_query,
-                (timestamp, sanitized_chat_id, sanitized_username),
-            )
-
-        history = db.get_chat_messages(sanitized_chat_id)
+        history = await loop.run_in_executor(
+            None, db.get_chat_messages, sanitized_chat_id
+        )
         if history:
             next_index = (
                 max((msg.get("message_index", -1) for msg in history), default=-1) + 1
@@ -442,10 +451,12 @@ async def save_message_async(
             next_index = 0
 
         query = """
-            INSERT INTO chat_messages (session_id, username, message_index, role, content, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (session_id, username, message_index, role, content, timestamp, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        db.execute_update(
+        await loop.run_in_executor(
+            None,
+            db.execute_update,
             query,
             (
                 sanitized_chat_id,
@@ -453,6 +464,7 @@ async def save_message_async(
                 next_index,
                 sanitized_role,
                 sanitized_content,
+                timestamp,
                 timestamp,
             ),
         )
@@ -511,39 +523,41 @@ async def search_chat_history(username: str, search_query: str) -> List[Dict[str
     needle = sanitized_search_query.lower()
     checked_lines_debug = []
     match_debug = []
+    threshold = 0.2  # Lowered threshold for fuzzy matching
     for user_row, assist_row in pairs:
         for row in [user_row, assist_row]:
             content = row["content"]
             role = row["role"]
-        lines = content.splitlines()
-        for lineno, line in enumerate(lines):
-            s = difflib.SequenceMatcher(None, line.lower(), needle)
-            fuzzy_score = s.ratio()
-            checked_lines_debug.append(
-                {"line": line, "role": role, "score": fuzzy_score}
-            )
-            if needle in line.lower():
-                highlighted = highlight_match(line, needle)
-                match_entry = {
-                    "type": "message",
-                    "session_name": row["session_name"],
-                    "content": highlighted,
-                    "role": row["role"],
-                    "timestamp": row["timestamp"],
-                    "session_id": row["session_id"],
-                    "line": lineno + 1,
-                    "fulltext": content,
-                    "fuzzy_score": fuzzy_score,
-                }
-                matches.append(match_entry)
-                match_debug.append(
-                    {
-                        "match": line,
-                        "score": fuzzy_score,
-                        "role": role,
-                        "session_id": row["session_id"],
-                    }
+            lines = content.splitlines()
+            for lineno, line in enumerate(lines):
+                s = difflib.SequenceMatcher(None, line.lower(), needle)
+                fuzzy_score = s.ratio()
+                checked_lines_debug.append(
+                    {"line": line, "role": role, "score": fuzzy_score}
                 )
+                # Case-insensitive substring match or fuzzy match above threshold
+                if needle in line.lower() or fuzzy_score >= threshold:
+                    highlighted = highlight_match(line, needle)
+                    match_entry = {
+                        "type": "message",
+                        "session_name": row["session_name"],
+                        "content": highlighted,
+                        "role": row["role"],
+                        "timestamp": row["timestamp"],
+                        "session_id": row["session_id"],
+                        "line": lineno + 1,
+                        "fulltext": content,
+                        "fuzzy_score": fuzzy_score,
+                    }
+                    matches.append(match_entry)
+                    match_debug.append(
+                        {
+                            "match": line,
+                            "score": fuzzy_score,
+                            "role": role,
+                            "session_id": row["session_id"],
+                        }
+                    )
     session_query = """
         SELECT session_name, session_id, created_at, updated_at
         FROM chat_sessions

@@ -346,7 +346,7 @@ def _perform_classification_logic(
         formatted_results["reasoning"],
         formatted_results["summary"],  # This will directly contain markdown
         hide_loading(),
-        gr.no_change(),  # Dropdown is refreshed by handle_upload_click/handle_classify_existing
+        gr.update(),  # Dropdown is refreshed by handle_upload_click/handle_classify_existing
         get_upload_history(username),
     )
 

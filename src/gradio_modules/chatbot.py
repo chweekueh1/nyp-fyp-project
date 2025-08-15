@@ -25,7 +25,11 @@ The module integrates with Gradio to provide a web-based chat interface with:
 import logging
 import difflib
 import gradio as gr
-from backend.chat import get_chatbot_response, get_consolidated_database
+from backend.chat import (
+    get_chatbot_response,
+    get_consolidated_database,
+    save_message_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,9 @@ async def _handle_send_message(
     _unused_chat_id: str,
     *_,
 ) -> tuple:
-    chat_id = "default"
+    import uuid
+
+    chat_id = f"chat_{uuid.uuid4().hex[:8]}"
     db = get_consolidated_database()
 
     def to_gradio_pairs(history):
@@ -46,9 +52,6 @@ async def _handle_send_message(
         current_pair = [None, None]
         for entry in history:
             if entry["role"] == "user":
-                if current_pair[0] is not None or current_pair[1] is not None:
-                    pairs.append(tuple(current_pair))
-                    current_pair = [None, None]
                 current_pair[0] = entry["content"]
             elif entry["role"] == "assistant":
                 current_pair[1] = entry["content"]
@@ -68,10 +71,9 @@ async def _handle_send_message(
             gr.update(),
         )
 
-    history = db.get_chat_messages(chat_id)
-    # Add user message to DB and history
-    db.add_chat_message(chat_id, username, len(history), "user", user_message)
-    history = db.get_chat_messages(chat_id)  # Refresh to include user message
+    # Persist user message asynchronously
+    await save_message_async(chat_id, username, "user", user_message)
+
     # Track API call for chat message
     db.add_api_call_record(
         username=username,
@@ -83,6 +85,7 @@ async def _handle_send_message(
     )
 
     # Debug: difflib matching score
+    history = db.get_chat_messages(chat_id)
     for msg in history:
         score = difflib.SequenceMatcher(
             None, user_message, msg.get("content", "")
@@ -96,32 +99,14 @@ async def _handle_send_message(
         full_response = ""
         async for chunk in response_generator:
             full_response += chunk
-            # Track LLM call for each chunk
-            db.add_api_call_record(
-                username=username,
-                endpoint="chatbot/llm_response",
-                method="STREAM",
-                duration_ms=0,
-                status_code=200,
-                error_message=None,
-            )
-        # Add assistant reply to DB and history
-        db.add_chat_message(chat_id, username, len(history), "assistant", full_response)
+        # Persist assistant response asynchronously
+        await save_message_async(chat_id, username, "assistant", full_response)
         updated_history = db.get_chat_messages(chat_id)
         return (
-            to_gradio_pairs(updated_history),  # gr.Chatbot history
-            "",  # Clear user input box
+            to_gradio_pairs(updated_history),
+            "",
             gr.State({}),
             to_gradio_pairs(updated_history),
-            gr.update(),
-        )
-    except Exception as e:
-        logger.error(f"Error during chatbot response: {e}", exc_info=True)
-        return (
-            to_gradio_pairs(history),
-            f"Error: {str(e)}",
-            gr.State({}),
-            to_gradio_pairs(history),
             gr.update(),
         )
     except Exception as e:

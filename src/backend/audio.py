@@ -84,6 +84,14 @@ async def transcribe_audio(
             "error": "Rate limit exceeded for audio transcription. Please try again later."
         }
 
+        if not audio_data_bytes or len(audio_data_bytes) == 0:
+            logger.warning(
+                f"Empty audio file received for transcription: {filename} by user: {username}"
+            )
+            return {
+                "error": "Audio file is empty. Please provide a valid audio recording."
+            }
+
     start_time = os.monotonic()
     temp_file = None
     try:
@@ -180,6 +188,12 @@ async def audio_to_text(
 
     if not audio_file_path or not os.path.exists(audio_file_path):
         return {"error": "No audio file provided or file does not exist."}
+
+        if os.path.getsize(audio_file_path) == 0:
+            logger.warning(f"Empty audio file detected at path: {audio_file_path}")
+            return {
+                "error": "Audio file is empty. Please provide a valid audio recording."
+            }
 
     try:
         with open(audio_file_path, "rb") as f:
