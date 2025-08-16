@@ -14,6 +14,7 @@ functions to support different deployment scenarios.
 """
 
 import logging
+import os
 from .utils import _ensure_db_and_folders_async
 from .database import (
     get_llm_functions,
@@ -78,6 +79,28 @@ async def init_backend() -> None:
         except Exception as e:
             logger.error(f"Error initializing LLM functions: {e}")
             raise
+
+        # Initialize OpenAI Whisper client for audio transcription
+        try:
+            perf_monitor.start_timer("openai_whisper_client_init")
+            from backend import config
+
+            if config.client is None:
+                import openai
+
+                openai_api_key = os.getenv("OPENAI_API_KEY")
+                if openai_api_key:
+                    config.client = openai.OpenAI(api_key=openai_api_key)
+                    logger.info(
+                        "✅ OpenAI Whisper client initialized for audio transcription."
+                    )
+                else:
+                    logger.warning(
+                        "OPENAI_API_KEY not set. Whisper client not initialized."
+                    )
+            perf_monitor.end_timer("openai_whisper_client_init")
+        except Exception as e:
+            logger.error(f"Error initializing OpenAI Whisper client: {e}")
 
         # Initialize DuckDB chat vector store
         try:

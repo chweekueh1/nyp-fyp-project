@@ -14,7 +14,7 @@ from infra_utils import get_chatbot_dir
 # Load environment variables
 
 
-# OpenAI client will be initialized in app.py and injected as needed
+# OpenAI client (used for Whisper and other OpenAI API calls) will be initialized in backend.main:init_backend
 client = None
 
 # Rate limiting configuration

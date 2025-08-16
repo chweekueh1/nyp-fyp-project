@@ -200,28 +200,44 @@ async def main():
 
                 with gr.TabItem("Audio"):
                     gr.Markdown("## 🎤 Audio Input")
-                    from backend.audio import audio_to_text
+                    from gradio_modules.audio_input import (
+                        transcribe_and_respond_wrapper,
+                    )
 
                     audio_input = gr.Audio(label="Record or Upload Audio")
                     transcribe_btn = gr.Button("Transcribe & Chat")
                     transcript_output = gr.Textbox(
                         label="Transcript", interactive=False
                     )
+                    chatbot_response_output = gr.Textbox(
+                        label="Chatbot Response", interactive=False
+                    )
+                    audio_history_md = gr.Markdown("No audio interactions yet.")
 
-                    async def transcribe_audio(audio):
-                        # Pass UI state and audio file path to backend.audio.audio_to_text
-                        ui_state = {
-                            "username": username_state.value
-                            if hasattr(username_state, "value")
-                            else username_state
-                        }
-                        result = await audio_to_text(ui_state, audio)
-                        return result.get("transcript", "")
+                    async def transcribe_audio_wrapper(audio, username, audio_history):
+                        result = await transcribe_and_respond_wrapper(
+                            audio, username, audio_history
+                        )
+                        transcript = result[0] if result[0] else result[2]
+                        chatbot_response = result[1] if len(result) > 1 else ""
+                        audio_history_val = result[6] if len(result) > 6 else []
+                        audio_history_md_val = (
+                            result[7]
+                            if len(result) > 7
+                            else "No audio interactions yet."
+                        )
+                        # Update state for audio history
+                        audio_history_state.value = audio_history_val
+                        return transcript, chatbot_response, audio_history_md_val
 
                     transcribe_btn.click(
-                        fn=transcribe_audio,
-                        inputs=[audio_input],
-                        outputs=[transcript_output],
+                        fn=transcribe_audio_wrapper,
+                        inputs=[audio_input, username_state, audio_history_state],
+                        outputs=[
+                            transcript_output,
+                            chatbot_response_output,
+                            audio_history_md,
+                        ],
                         queue=True,
                     )
 
