@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# This shebang line ensures the script is executable directly on Linux systems.
 """
 Setup Script for NYP FYP Chatbot
 
@@ -6,8 +8,6 @@ It is the main entry point for developers and CI to prepare and manage the proje
 """
 
 import contextlib
-#!/usr/bin/env python3
-# This shebang line ensures the script is executable directly on Linux systems.
 
 import os
 import sys
