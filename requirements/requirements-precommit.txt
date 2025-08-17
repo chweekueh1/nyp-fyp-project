@@ -1,0 +1,8 @@
+bandit>=1.7.0
+black>=24.0.0
+flake8>=7.0.0
+isort>=5.13.0
+mypy>=1.8.0
+# Pre-commit hooks and development tools
+pre-commit>=3.6.0
+safety>=2.3.0

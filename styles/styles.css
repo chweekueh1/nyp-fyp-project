@@ -1,0 +1,430 @@
+/* Custom theme colors */
+:root {
+    --flexcyon-primary: #FF6B6B;
+    --flexcyon-secondary: #4ECDC4;
+    --flexcyon-accent: #FFE66D;
+    --base-01: #1A1A1A;
+    --base-02: #2D2D2D;
+    --base-03: #3D3D3D;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B3B3B3;
+}
+
+/* Password toggle button */
+.password-toggle {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+}
+
+.password-toggle img {
+    width: 24px !important;
+    height: 24px !important;
+    object-fit: contain !important;
+}
+
+/* Gradio theme customization */
+.gradio-container {
+    background-color: var(--base-01) !important;
+    color: var(--text-primary) !important;
+    width: 60vw !important;
+}
+
+.gradio-interface {
+    background-color: var(--base-01) !important;
+}
+
+.gradio-input {
+    background-color: var(--base-02) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--base-03) !important;
+}
+
+.gradio-button {
+    background-color: var(--flexcyon-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+.gradio-button:hover {
+    background-color: var(--flexcyon-secondary) !important;
+}
+
+.gradio-chat {
+    background-color: var(--base-02) !important;
+}
+
+.gradio-chat-message {
+    background-color: var(--base-03) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Error messages */
+.error-message {
+    color: var(--flexcyon-primary) !important;
+    background-color: rgba(255, 107, 107, 0.1) !important;
+    border: 1px solid var(--flexcyon-primary) !important;
+    padding: 10px !important;
+    border-radius: 4px !important;
+    margin: 10px 0 !important;
+}
+
+/* Success messages */
+.success-message {
+    color: var(--flexcyon-secondary) !important;
+    background-color: rgba(78, 205, 196, 0.1) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    padding: 10px !important;
+    border-radius: 4px !important;
+    margin: 10px 0 !important;
+}
+
+/* Change password button styling */
+#main_change_password_btn {
+    background-color: var(--flexcyon-secondary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+}
+
+#main_change_password_btn:hover {
+    background-color: var(--flexcyon-primary) !important;
+    border-color: var(--flexcyon-primary) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Change password popup styling */
+#change_password_popup {
+    background-color: var(--base-02) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    margin: 10px 0 !important;
+}
+
+#change_password_popup .popup-header {
+    background-color: var(--base-03) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--base-03) !important;
+}
+
+#change_password_popup .popup-body {
+    background-color: var(--base-02) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Password toggle buttons in change password popup */
+#old_password_toggle,
+#new_password_toggle,
+#confirm_password_toggle {
+    background-color: var(--base-03) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 4px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+}
+
+#old_password_toggle:hover,
+#new_password_toggle:hover,
+#confirm_password_toggle:hover {
+    background-color: var(--flexcyon-secondary) !important;
+    border-color: var(--flexcyon-secondary) !important;
+}
+
+/* Password requirements styling */
+#password_requirements_info {
+    background-color: rgba(78, 205, 196, 0.1) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    margin: 16px 0 !important;
+    color: var(--text-secondary) !important;
+    font-size: 14px !important;
+}
+
+/* Enhanced Search Interface Styling */
+.search-interface-container {
+    background-color: var(--base-02) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 12px !important;
+    padding: 20px !important;
+    margin: 16px 0 !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.search-header-row {
+    margin-bottom: 16px !important;
+}
+
+.search-title {
+    color: var(--text-primary) !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.search-input-row {
+    margin-bottom: 12px !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.search-input {
+    background-color: var(--base-03) !important;
+    border: 2px solid var(--base-03) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+    transition: all 0.3s ease !important;
+}
+
+.search-input:focus {
+    border-color: var(--flexcyon-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1) !important;
+    outline: none !important;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 0.7 !important;
+}
+
+.search-button {
+    background-color: var(--flexcyon-secondary) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--flexcyon-secondary) !important;
+    border-radius: 8px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+}
+
+.search-button:hover {
+    background-color: var(--flexcyon-primary) !important;
+    border-color: var(--flexcyon-primary) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3) !important;
+}
+
+.clear-search-button {
+    background-color: var(--base-03) !important;
+    color: var(--text-secondary) !important;
+    border: 2px solid var(--base-03) !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+}
+
+.clear-search-button:hover {
+    background-color: var(--flexcyon-primary) !important;
+    border-color: var(--flexcyon-primary) !important;
+    color: var(--text-primary) !important;
+    transform: translateY(-1px) !important;
+}
+
+.search-stats-row {
+    margin-bottom: 16px !important;
+}
+
+.search-stats {
+    background-color: rgba(78, 205, 196, 0.1) !important;
+    border: 1px solid var(--flexcyon-secondary) !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    color: var(--flexcyon-secondary) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+}
+
+.search-results {
+    background-color: var(--base-03) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+    color: var(--text-primary) !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    max-height: 400px !important;
+    overflow-y: auto !important;
+}
+
+.search-results h1,
+.search-results h2,
+.search-results h3,
+.search-results h4,
+.search-results h5,
+.search-results h6 {
+    color: var(--flexcyon-secondary) !important;
+    margin-top: 16px !important;
+    margin-bottom: 8px !important;
+}
+
+.search-results strong {
+    color: var(--flexcyon-accent) !important;
+    font-weight: 600 !important;
+}
+
+.search-results em {
+    color: var(--text-secondary) !important;
+    font-style: italic !important;
+}
+
+.search-results code {
+    background-color: var(--base-01) !important;
+    color: var(--flexcyon-accent) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 13px !important;
+}
+
+.search-results pre {
+    background-color: var(--base-01) !important;
+    border: 1px solid var(--base-03) !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    overflow-x: auto !important;
+    margin: 12px 0 !important;
+}
+
+.search-results pre code {
+    background: none !important;
+    padding: 0 !important;
+    color: var(--text-primary) !important;
+}
+
+.search-results blockquote {
+    border-left: 4px solid var(--flexcyon-secondary) !important;
+    padding-left: 16px !important;
+    margin: 12px 0 !important;
+    color: var(--text-secondary) !important;
+    font-style: italic !important;
+}
+
+/* Search result highlighting */
+.search-results .highlight {
+    background-color: rgba(255, 230, 109, 0.2) !important;
+    padding: 2px 4px !important;
+    border-radius: 3px !important;
+    color: var(--flexcyon-accent) !important;
+}
+
+/* Enhanced search results styling */
+.search-results h2 {
+    color: var(--flexcyon-secondary) !important;
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    margin-bottom: 16px !important;
+    border-bottom: 2px solid var(--flexcyon-secondary) !important;
+    padding-bottom: 8px !important;
+}
+
+.search-results h3 {
+    color: var(--flexcyon-primary) !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    margin-top: 20px !important;
+    margin-bottom: 12px !important;
+    background-color: rgba(255, 107, 107, 0.1) !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    border-left: 4px solid var(--flexcyon-primary) !important;
+}
+
+.search-results blockquote {
+    border-left: 4px solid var(--flexcyon-secondary) !important;
+    padding: 12px 16px !important;
+    margin: 12px 0 !important;
+    background-color: rgba(78, 205, 196, 0.05) !important;
+    border-radius: 0 6px 6px 0 !important;
+    color: var(--text-primary) !important;
+    font-style: normal !important;
+    line-height: 1.5 !important;
+}
+
+.search-results code {
+    background-color: var(--base-01) !important;
+    color: var(--flexcyon-accent) !important;
+    padding: 3px 6px !important;
+    border-radius: 4px !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 13px !important;
+    border: 1px solid var(--base-03) !important;
+}
+
+.search-results strong {
+    color: var(--flexcyon-accent) !important;
+    font-weight: 600 !important;
+}
+
+.search-results hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(90deg, transparent, var(--flexcyon-secondary), transparent) !important;
+    margin: 20px 0 !important;
+}
+
+/* Score indicators styling */
+.search-results .score-high {
+    color: #28a745 !important;
+}
+
+.search-results .score-medium {
+    color: #ffc107 !important;
+}
+
+.search-results .score-low {
+    color: #dc3545 !important;
+}
+
+/* Responsive design for search interface */
+@media (max-width: 768px) {
+    .search-interface-container {
+        padding: 16px !important;
+        margin: 12px 0 !important;
+    }
+
+    .search-input-row {
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .search-button,
+    .clear-search-button {
+        width: 100% !important;
+    }
+
+    .search-results {
+        max-height: 300px !important;
+        font-size: 13px !important;
+    }
+}

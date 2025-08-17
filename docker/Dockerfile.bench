@@ -1,0 +1,125 @@
+# syntax=docker/dockerfile:1
+# Benchmark build - Alpine-friendly with comprehensive benchmarking tools
+FROM python:3.11-alpine
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    BENCHMARK_MODE="1" \
+    IN_DOCKER="1" \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=Asia/Singapore \
+    MAKEFLAGS="-j$(nproc)" \
+    PYTHONHASHSEED=random \
+    PIP_USE_PEP517=1 \
+    PIP_PREFER_BINARY=1
+
+# Build arguments
+ARG PARALLEL_JOBS=4
+ARG VENV_PATH=/home/appuser/.nypai-chatbot/venv-bench
+
+# Set environment variables from build args
+ENV PIP_JOBS=${PARALLEL_JOBS} \
+    VENV_PATH=${VENV_PATH}
+
+WORKDIR /app
+
+# Install system dependencies for benchmarking
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    zlib-dev \
+    curl \
+    tzdata \
+    ca-certificates \
+    git \
+    procps \
+    sysstat \
+    fontconfig \
+    libx11 \
+    libxrender \
+    libxext \
+    libssl3 \
+    freetype \
+    ttf-dejavu \
+    ttf-droid \
+    ttf-freefont \
+    ttf-liberation \
+    && update-ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
+# Create user and directories
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/{cache,vector_store/chroma_db,memory_persistence,nltk_data,chat_sessions,user_info,uploads,test_uploads,logs} && \
+    mkdir -p /app/data && \
+    chown -R appuser:appgroup /app && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /app
+
+# Switch to non-root user
+USER appuser
+
+# Create virtual environment
+RUN python3 -m venv ${VENV_PATH}
+ENV PATH="${VENV_PATH}/bin:$PATH" \
+    PYTHONPATH=/app
+
+# Copy requirements first for better caching
+COPY --chown=appuser:appgroup requirements/requirements-benchmark.txt .
+COPY --chown=appuser:appgroup src/ ./src/
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    chmod +x $HOME/.local/bin/uv && \
+    export PATH="$HOME/.local/bin:$PATH" && \
+    ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
+    ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements-benchmark.txt
+
+# Install hyperfine for system command benchmarks
+USER root
+RUN apk add --no-cache hyperfine
+USER appuser
+
+# Download NLTK stopwords corpus to the correct directory
+RUN ${VENV_PATH}/bin/python -c "import nltk; nltk.download('stopwords', download_dir='/home/appuser/.nypai-chatbot/data/nltk_data')"
+
+# Copy application code
+COPY --chown=appuser:appgroup src/ ./src/
+COPY --chown=appuser:appgroup styles/ ./styles/
+
+# Copy Docker build tracking files (if they exist)
+# Embed a shell script to copy only if the files exist
+RUN set -e; \
+    if [ -f src/docker_build_times.sqlite3 ]; then \
+        cp src/docker_build_times.sqlite3 ./docker_build_times.sqlite3; \
+        echo "Copied src/docker_build_times.sqlite3"; \
+    fi; \
+    if [ -f src/docker_build_times.json ]; then \
+        cp src/docker_build_times.json ./docker_build_times.json; \
+        echo "Copied src/docker_build_times.json"; \
+    fi; \
+    # Remove any benchmark_results.md file that may have been copied in from the host
+    if [ -f /app/data/benchmark_results.md ]; then \
+        rm -f /app/data/benchmark_results.md; \
+        echo "Removed stale /app/data/benchmark_results.md"; \
+    fi; \
+    # Ensure permissions after all copies
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/nltk_data || true; \
+    # Ensure permissions after all copies
+    chmod -R 777 /home/appuser/.nypai-chatbot/data/nltk_data || true
+
+# Set entrypoint and command for benchmarking
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-bench/bin/python"]
+CMD ["src/scripts/run_benchmarks.py"]
+
+# Print build information
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python /app/entrypoint.py" && \
+    echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
+    echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
+    echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)"

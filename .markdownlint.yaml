@@ -1,0 +1,16 @@
+# .markdownlint.yaml
+# Configuration for markdownlint-cli2
+
+# By default, all rules are enabled.
+# Set 'default: false' if you want to explicitly enable only the rules you list.
+# For ignoring specific rules, 'default: true' is usually easier.
+default: true
+
+# Disable the specific rules identified in your linting output
+MD013: false # Line length
+MD040: false # Fenced code blocks should have a language specified
+MD024: false # Multiple headings with the same content
+MD025: false # Multiple top-level headings in the same document
+MD041: false # First line in a file should be a top-level heading
+MD029: false # Ordered list item prefix
+MD036: false # Emphasis used instead of a heading

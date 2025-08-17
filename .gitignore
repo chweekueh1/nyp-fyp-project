@@ -1,17 +1,26 @@
 # Ignore virtual environment
 .venv/
+.sanity-venv/
+.env
+*.tar
 
 # Ignore Python cache
 __pycache__/
+.ruff_cache/
 
-# Ignore local dependencies
-dependencies/
+# Ignore logs
+logs/
+logs/*
+a.txt
 
-# Ignore certain data
-data/keyword/
-data/memory_persistence/
-data/vector_store/
-data/chat_sessions/
+# Ignore generated documentation files
+docs/modules/*.rst
+docs/_build/
+docs/_static/
+docs/_templates/
 
-#Ignore the log files
-app.log
+# Ignore any accidentally generated RST files on host
+*.rst
+!docs/index.rst
+!docs/conf.py
+data/

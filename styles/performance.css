@@ -1,0 +1,106 @@
+/* Optimized CSS for fast loading */
+
+/* Container optimizations */
+.gradio-container {
+    max-width: 1400px !important;
+    margin: 0 auto !important;
+    padding: 20px !important;
+}
+
+/* Make all interfaces wider and more consistent */
+.interface-section {
+    width: 100% !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+}
+
+/* Login and register interface styling */
+.login-container, .register-container {
+    max-width: 500px !important;
+    margin: 0 auto !important;
+    padding: 30px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* File classification interface styling */
+.file-classification-container {
+    width: 100% !important;
+    max-width: 1000px !important;
+    margin: 0 auto !important;
+}
+
+/* Audio interface styling */
+.audio-interface-container {
+    width: 100% !important;
+    max-width: 1000px !important;
+    margin: 0 auto !important;
+}
+
+/* Chat interface styling */
+.chat-interface-container {
+    width: 100% !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+}
+
+/* Fast loading spinner with GPU acceleration */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+    will-change: transform; /* GPU acceleration */
+}
+
+/* Optimized button styles */
+.fast-button {
+    min-width: 40px !important;
+    padding: 8px !important;
+    font-size: 16px !important;
+    border-radius: 6px !important;
+    background: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.fast-button:hover {
+    background: #e9ecef !important;
+    border-color: #adb5bd !important;
+}
+
+/* Tab optimizations */
+.tab-nav {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px 10px 0 0;
+}
+
+/* Progressive loading animations */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Optimize heavy elements */
+.chatbot-container {
+    contain: layout style paint;
+}
+
+/* Reduce reflows */
+.interface-section {
+    contain: layout;
+}

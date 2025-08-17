@@ -1,0 +1,40 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0 # Use the latest stable version
+  hooks:
+    - id: check-yaml
+    - id: end-of-file-fixer # Ensures files end with a newline and autofixes
+    - id: trailing-whitespace # Removes trailing whitespace and autofixes
+    - id: check-added-large-files # Prevents committing large files
+    - id: detect-private-key # Catches accidental private key commits
+    - id: debug-statements # Catches common debug statements (pdb, breakpoint)
+    - id: requirements-txt-fixer # Sorts and deduplicates requirements.txt
+    - id: check-toml
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version.
+  rev: v0.12.1
+  hooks:
+    # Run the linter.
+    - id: ruff-check
+      args: [--fix]
+    # Run the formatter.
+    - id: ruff-format
+- repo: https://github.com/DavidAnson/markdownlint-cli2
+  rev: v0.18.1
+  hooks:
+  - id: markdownlint-cli2
+    args: [--fix]
+    files: \.(md|markdown)$
+- repo: https://github.com/jsh9/pydoclint
+  rev: 0.6.7
+  hooks:
+    - id: pydoclint
+      args: [--style=sphinx, --check-return-types=False]
+- repo: https://github.com/commitizen-tools/commitizen
+  rev: v4.8.3
+  hooks:
+    - id: commitizen
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.27.2
+  hooks:
+    - id: gitleaks

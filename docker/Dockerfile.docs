@@ -1,0 +1,98 @@
+# syntax=docker/dockerfile:1
+# Documentation build - Alpine-friendly with documentation tools
+FROM python:3.11-alpine
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    IN_DOCKER="1" \
+    DOCS_MODE="true" \
+    DOCKER_MODE="docs" \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=Asia/Singapore \
+    MAKEFLAGS="-j$(nproc)" \
+    PYTHONHASHSEED=random \
+    PIP_USE_PEP517=1 \
+    PIP_PREFER_BINARY=1
+
+# Build arguments
+ARG PARALLEL_JOBS=4
+ARG VENV_PATH=/home/appuser/.nypai-chatbot/venv-docs
+
+# Set environment variables from build args
+ENV PIP_JOBS=${PARALLEL_JOBS} \
+    VENV_PATH=${VENV_PATH}
+
+WORKDIR /app
+
+# Install system dependencies for documentation
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    zlib-dev \
+    pandoc-cli \
+    poppler-utils \
+    curl \
+    tzdata \
+    ca-certificates \
+    git \
+    fontconfig \
+    libx11 \
+    libxrender \
+    libxext \
+    libssl3 \
+    freetype \
+    && update-ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
+# Create user and directories
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -s /bin/sh && \
+    mkdir -p /home/appuser/.nypai-chatbot/data/{cache,vector_store/chroma_db,memory_persistence,nltk_data,chat_sessions,user_info,uploads,test_uploads,logs} && \
+    mkdir -p /app/data && \
+    mkdir -p /app/docs/modules /app/docs/modules/src && \
+    chown -R appuser:appgroup /app && \
+    chown -R appuser:appgroup /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /home/appuser/.nypai-chatbot && \
+    chmod -R 755 /app
+
+# Switch to non-root user
+USER appuser
+
+# Create virtual environment
+RUN python3 -m venv ${VENV_PATH}
+ENV PATH="${VENV_PATH}/bin:$PATH" \
+    PYTHONPATH=/app
+
+# Copy requirements first for better caching
+COPY --chown=appuser:appgroup requirements/requirements-docs.txt .
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    chmod +x $HOME/.local/bin/uv && \
+    export PATH="$HOME/.local/bin:$PATH" && \
+    ${VENV_PATH}/bin/pip install --upgrade pip wheel setuptools && \
+    ${VENV_PATH}/bin/pip install uv && \
+    export VIRTUAL_ENV=${VENV_PATH} && \
+    uv pip install --upgrade pip wheel setuptools && \
+    uv pip install --prerelease=allow -r requirements-docs.txt
+
+# Copy application code
+COPY --chown=appuser:appgroup src/ ./src/
+
+# Copy the Sphinx docs and generate_docs script
+COPY --chown=appuser:appgroup src/docs/ ./docs/
+
+WORKDIR /app
+
+EXPOSE 8080
+
+# Set entrypoint and command for documentation
+ENTRYPOINT ["/home/appuser/.nypai-chatbot/venv-docs/bin/python", "docs/generate_docs.py"]
+
+# Print build information
+RUN echo "[BUILD] Using ENTRYPOINT: ${VENV_PATH}/bin/python docs/generate_docs.py" && \
+    echo "[BUILD] Python executable: ${VENV_PATH}/bin/python" && \
+    echo "[BUILD] Python version: $(${VENV_PATH}/bin/python --version)" && \
+    echo "[BUILD] Pip version: $(${VENV_PATH}/bin/pip --version)"

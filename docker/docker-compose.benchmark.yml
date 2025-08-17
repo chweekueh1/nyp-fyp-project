@@ -1,0 +1,22 @@
+services:
+  benchmark:
+    image: nyp-fyp-chatbot-bench
+    container_name: nyp-benchmark
+    environment:
+      - BENCHMARK_MODE=1
+      - IN_DOCKER=1
+      - PYTHONUNBUFFERED=1
+      - BENCHMARK_USER=system
+    volumes:
+      - ..:/app:rw
+      - ../data:/app/data:rw
+      - ../.env:/app/.env:ro
+    working_dir: /app
+    user: "1000:1000"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /home/appuser/.nypai-chatbot/venv-bench/bin/python src/scripts/run_benchmarks.py
+        # Clean up project root DB files after benchmarks
+        rm -f /app/chat /app/classifications /app/llm /app/performance /app/users
+    restart: "no"
