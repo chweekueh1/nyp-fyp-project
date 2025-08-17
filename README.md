@@ -56,7 +56,6 @@ To be implemented
 ### 📁 Data Storage
 
 User data is stored in ~/.nypai-chatbot/ (local) or /home/appuser/.nypai-chatbot/ (Docker).
-Test and production user data are separated.
 
 You would need to create the following under the project root since we are currently using a volume mount:
 
@@ -78,6 +77,8 @@ python setup.py --docs
 
 Docs available at <http://127.0.0.1:8080>
 
+> Technical detail: this just grabs docstrings and renders it in Sphinx.
+
 ### ⏳️ Benchmarking
 
 Benchmarks for various function and API calls in the codebase can be triggered via:
@@ -86,22 +87,32 @@ Benchmarks for various function and API calls in the codebase can be triggered v
 python setup.py --run-benchmarks
 ```
 
-It will output to the `<project root>/data` directory once complete.
+It will output to the `<project root>/data` directory as `benchmark.md` once complete. This directory also has a JSON and SQLITE file recording Docker build details.
 
 ### 🔧 Code Quality
 
 Pre-commit hooks with ruff for linting and formatting:
 
+**Note:** The pre-commit flag in the setup script might not work depending on the directory you are in when you invoke the script.
+
+If this is the case, make use of these steps instead
+
+Activate and create Python virtual environment named `.venv` and activate it. See [Python Docs](https://docs.python.org/3/library/venv.html) for more on virtual environments.
+
 ```bash
-python setup.py --pre-commit
+pip install -r requirements/requirements-precommit.txt
 ```
+
+Then you can run `git commit` and `git push` within the context of the virtual environment and it will automatically run the configure pre-commit hooks.
+
+You can also manually run the pre-commit hooks at any time. See [here](https://pre-commit.com/) for details.
+
 
 ### 🐛 Troubleshooting
 
 API Key Issues: Check .env and your OpenAI API key.
 Port Conflicts: Default is 7860; Gradio will use the next available port.
-Compiler Tools: On Windows, install MSVC Build Tools for ChromaDB.
-Dependencies: Pandoc and Tesseract OCR are required (handled by Docker).
+Dependencies: Pandoc, ffmpeg, hyperfine (handled by Docker).
 
 ### 📝 License
 
